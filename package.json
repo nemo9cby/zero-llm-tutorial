@@ -1,0 +1,13 @@
+{
+  "name": "zero-llm-tutorial",
+  "private": true,
+  "type": "module",
+  "description": "Build & check tooling for the interactive tutorial (widgets are dependency-free ES modules).",
+  "scripts": {
+    "check": "node tools/check_pages.mjs site",
+    "test:js": "node --test tests/js/"
+  },
+  "devDependencies": {
+    "playwright": "^1.58.0"
+  }
+}

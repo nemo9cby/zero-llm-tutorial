@@ -1,0 +1,126 @@
+<title>Artifact Runtime Probe</title>
+<style>
+  /* Layout: one centered column, a results table, and a copyable JSON block. */
+  :root {
+    --bg: #f6f7f4; --panel: #ffffff; --fg: #1d2420; --muted: #5d6a62; --line: #d9ded6;
+    --ok: #1f7a4d; --bad: #b3261e; --warn: #8a5a00; --accent: #2f5d8a;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #141815; --panel: #1c211d; --fg: #e4e9e2; --muted: #9aa69d; --line: #2e3530;
+      --ok: #5cc98f; --bad: #ff8a80; --warn: #e0b354; --accent: #8db7e0; color-scheme: dark; }
+  }
+  :root[data-theme="dark"] { --bg: #141815; --panel: #1c211d; --fg: #e4e9e2; --muted: #9aa69d; --line: #2e3530;
+    --ok: #5cc98f; --bad: #ff8a80; --warn: #e0b354; --accent: #8db7e0; color-scheme: dark; }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--sans); }
+  main { max-width: 860px; margin: 0 auto; padding-inline: 16px; padding-block: 24px 48px; display: grid; gap: 16px; }
+  h1 { font-size: 1.4rem; margin: 0; text-wrap: balance; }
+  p { margin: 0; color: var(--muted); max-width: 65ch; }
+  .table-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  td.detail { font-family: var(--mono); font-size: 12.5px; word-break: break-word; min-width: 0; }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font: 600 12px var(--mono); border: 1px solid currentColor; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); } .warn { color: var(--warn); } .pending { color: var(--muted); }
+  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  button { font: 600 14px var(--sans); padding: 6px 14px; border-radius: 6px; border: 1px solid var(--accent); background: transparent; color: var(--accent); cursor: pointer; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  pre { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; font: 12px/1.5 var(--mono); }
+</style>
+<main>
+  <h1>Artifact Runtime Probe</h1>
+  <p>Checks what this hosting frame allows for the tutorial's interactive cells: WebAssembly, workers, same-origin fetch, CDN access, WebGPU and cross-origin isolation. Expected values come from a local emulation of the documented CDN allowlist.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Check</th><th>Result</th><th>Detail</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table></div>
+  <div class="row"><button id="copy" type="button">Copy results as JSON</button><span id="copied" class="pending" aria-live="polite"></span></div>
+  <pre id="json">running…</pre>
+</main>
+<script type="module">
+const results = {};
+const rows = document.getElementById('rows');
+const SIMD_MATVEC = 'AGFzbQEAAAABCQFgBX9/f39/AAMCAQAFBAEAgAQHEAIDbWVtAgAGbWF0dmVjAAAKtQIBsgICBH8EewJAA0AgBSAETw0BIAAgBSADbEECdGohB/0MAAAAAAAAAAAAAAAAAAAAACEJ/QwAAAAAAAAAAAAAAAAAAAAAIQr9DAAAAAAAAAAAAAAAAAAAAAAhC/0MAAAAAAAAAAAAAAAAAAAAACEMQQAhBgJAA0AgBiADTw0BIAEgBkECdGohCCAJIAf9AAQAIAj9AAQA/eYB/eQBIQkgCiAH/QAEECAI/QAEEP3mAf3kASEKIAsgB/0ABCAgCP0ABCD95gH95AEhCyAMIAf9AAQwIAj9AAQw/eYB/eQBIQwgB0HAAGohByAGQRBqIQYMAAsLIAkgCv3kASALIAz95AH95AEhCSACIAVBAnRqIAn9HwAgCf0fAZIgCf0fAiAJ/R8DkpI4AgAgBUEBaiEFDAALCws=';
+const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`timeout after ${ms} ms`)), ms))]);
+
+function render(name, status, detail) {
+  results[name] = { status, detail };
+  let tr = document.getElementById('r-' + name);
+  if (!tr) { tr = document.createElement('tr'); tr.id = 'r-' + name; rows.appendChild(tr); }
+  tr.innerHTML = '';
+  const td = (txt, cls) => { const el = document.createElement('td'); if (cls) el.className = cls; el.textContent = txt; tr.appendChild(el); return el; };
+  td(name);
+  const pill = document.createElement('span'); pill.className = 'pill ' + status; pill.textContent = status;
+  tr.appendChild(document.createElement('td')).appendChild(pill);
+  td(detail, 'detail');
+  document.getElementById('json').textContent = JSON.stringify({ userAgent: navigator.userAgent, results }, null, 1);
+}
+async function check(name, fn, expectFail = false) {
+  render(name, 'pending', '…');
+  try { const d = await fn(); render(name, expectFail ? 'warn' : 'ok', String(d)); }
+  catch (e) { render(name, expectFail ? 'ok' : 'bad', (expectFail ? 'blocked as expected: ' : '') + (e && e.message || e)); }
+}
+
+await check('wasm-compile', async () => { await WebAssembly.compile(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0])); return 'WebAssembly allowed'; });
+await check('js-eval', async () => { (0, eval)('1 + 1'); return "'unsafe-eval' present"; });
+await check('wasm-simd-matvec', async () => {
+  const { instance } = await WebAssembly.instantiate(b64(SIMD_MATVEC));
+  const { matvec, mem } = instance.exports, f32 = new Float32Array(mem.buffer), nOut = 1536, nIn = 384;
+  for (let i = 0; i < nOut * nIn + nIn; i++) f32[i] = Math.random() - 0.5;
+  const W = f32.subarray(0, nOut * nIn), x = f32.subarray(nOut * nIn, nOut * nIn + nIn), y = new Float32Array(nOut);
+  const js = () => { for (let o = 0; o < nOut; o++) { let s = 0; for (let i = 0; i < nIn; i++) s += W[o * nIn + i] * x[i]; y[o] = s; } };
+  const sim = () => matvec(0, nOut * nIn * 4, (nOut * nIn + nIn) * 4, nIn, nOut);
+  const rate = (fn) => { fn(); let n = 0; const t0 = performance.now(); while (performance.now() - t0 < 300) { fn(); n++; } return 2 * nOut * nIn * n / (performance.now() - t0) / 1e6; };
+  return `1536x384 matvec: SIMD ${rate(sim).toFixed(1)} GFLOP/s vs plain JS ${rate(js).toFixed(1)} GFLOP/s`;
+});
+await check('blob-worker (classic)', () => new Promise((res, rej) => {
+  const w = new Worker(URL.createObjectURL(new Blob(['postMessage(6*7)'], { type: 'text/javascript' })));
+  w.onmessage = (e) => { res('worker replied ' + e.data); w.terminate(); }; w.onerror = () => rej(new Error('worker failed to start'));
+  setTimeout(() => rej(new Error('timeout')), 4000);
+}));
+await check('blob-worker (module)', () => new Promise((res, rej) => {
+  const w = new Worker(URL.createObjectURL(new Blob(['postMessage(typeof importScripts)'], { type: 'text/javascript' })), { type: 'module' });
+  w.onmessage = (e) => { res('module worker ok'); w.terminate(); }; w.onerror = () => rej(new Error('module worker failed'));
+  setTimeout(() => rej(new Error('timeout')), 4000);
+}));
+await check('fetch same-origin', async () => `HTTP ${(await fetch(location.href, { cache: 'no-store' })).status}`);
+await check('fetch cdn.jsdelivr.net', async () => `HTTP ${(await withTimeout(fetch('https://cdn.jsdelivr.net/npm/pyodide@314.0.7/package.json'), 8000)).status} (connect-src allows CDN)`, true);
+await check('import() from cdn.jsdelivr.net/npm', async () => `loadPyodide is ${typeof (await withTimeout(import('https://cdn.jsdelivr.net/npm/pyodide@314.0.7/pyodide.mjs'), 15000)).loadPyodide}`);
+await check('cross-origin isolation', async () => {
+  if (!self.crossOriginIsolated) throw new Error('crossOriginIsolated=false: no SharedArrayBuffer, so interrupts mean terminate+reboot');
+  return 'SharedArrayBuffer available';
+});
+await check('WebGPU', async () => {
+  if (!navigator.gpu) throw new Error('navigator.gpu missing');
+  const a = await navigator.gpu.requestAdapter();
+  if (!a) throw new Error('no adapter');
+  const i = a.info || {};
+  return `${i.vendor || '?'} / ${i.architecture || '?'}${i.isFallbackAdapter ? ' (software fallback)' : ''}`;
+});
+await check('Float16Array', async () => { if (typeof Float16Array !== 'function') throw new Error('missing: decode fp16 weights with a lookup table'); return 'native'; });
+await check('IndexedDB', () => new Promise((res, rej) => {
+  try { const r = indexedDB.open('probe', 1); r.onsuccess = () => { r.result.close(); res('open ok (cache weights/wheels here)'); }; r.onerror = () => rej(r.error); }
+  catch (e) { rej(e); }
+}));
+await check('Pyodide self-hosted (./pyodide/)', async () => {
+  const head = await fetch('pyodide/pyodide-lock.json', { cache: 'no-store' }).catch(() => null);
+  if (!head || !head.ok) throw new Error('not published with this probe (optional): add pyodide/* files to test');
+  const indexURL = new URL('pyodide/', location.href).href, t0 = performance.now();
+  const { loadPyodide } = await import(indexURL + 'pyodide.mjs');
+  const py = await withTimeout(loadPyodide({ indexURL }), 90000);
+  const t1 = performance.now();
+  await withTimeout(py.loadPackage('numpy'), 60000);
+  const v = py.runPython('import sys, numpy as np; f"Python {sys.version.split()[0]}, numpy {np.__version__}, sum={int(np.arange(10).sum())}"');
+  return `${v}; core ${Math.round(t1 - t0)} ms, numpy ${Math.round(performance.now() - t1)} ms`;
+});
+
+const copied = document.getElementById('copied');
+document.getElementById('copy').addEventListener('click', async () => {
+  const text = document.getElementById('json').textContent;
+  try { await navigator.clipboard.writeText(text); copied.textContent = 'Copied'; }
+  catch { const r = document.createRange(); r.selectNodeContents(document.getElementById('json')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); copied.textContent = 'Clipboard blocked: text selected, press Ctrl+C'; }
+});
+</script>

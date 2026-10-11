@@ -1,0 +1,3 @@
+[submodule "third_party/dlfs6"]
+	path = third_party/dlfs6
+	url = https://github.com/oreilly-japan/deep-learning-from-scratch-6.git

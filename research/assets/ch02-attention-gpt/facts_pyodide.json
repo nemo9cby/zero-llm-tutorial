@@ -1,0 +1,148 @@
+{
+ "meta": {
+  "pyodide": "314.0.7",
+  "numpy": "2.4.6",
+  "python": "3.14.2",
+  "boot_ms": 8523
+ },
+ "results": [
+  {
+   "id": "F01",
+   "ok": true,
+   "seconds": 2.02,
+   "output": "[ 0.49  0.    0.   26.71 72.62  0.18  0.  ] 78.66"
+  },
+  {
+   "id": "F02",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "dot: [7. 6. 2.] cos: [5. 5. 5.] nearest: [5. 5. 5.]"
+  },
+  {
+   "id": "F03",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "[87.5, 70.0, 60.0, 73.33, 80.0, 65.0, 90.0] true: [85.0, 70.0, 60.0, 75.0, 80.0, 65.0, 90.0]"
+  },
+  {
+   "id": "F04",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "naive : [nan  0.  0. nan nan  0.  0.]\nstable: [0. 0. 0. 0. 1. 0. 0.]"
+  },
+  {
+   "id": "F05",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "[0.09   0.2447 0.6652] [0.09   0.2447 0.6652] [0. 0. 1.]"
+  },
+  {
+   "id": "F06",
+   "ok": true,
+   "seconds": 0,
+   "output": "(3, 7) [1. 1. 1.] [78.66 69.76 61.2 ]"
+  },
+  {
+   "id": "F07",
+   "ok": true,
+   "seconds": 0,
+   "output": "[0.0e+00 3.8e-44 1.0e+00]\n[0.09003057 0.24472847 0.66524096]"
+  },
+  {
+   "id": "F08",
+   "ok": true,
+   "seconds": 0.17,
+   "output": "65.29 1.0201 64.0"
+  },
+  {
+   "id": "F09",
+   "ok": true,
+   "seconds": 3.74,
+   "output": "d=  16  unscaled: maxw=0.514 sat=0.01  |  scaled: maxw=0.045 sat=0.00\nd=  64  unscaled: maxw=0.759 sat=0.14  |  scaled: maxw=0.045 sat=0.00\nd= 256  unscaled: maxw=0.892 sat=0.44  |  scaled: maxw=0.044 sat=0.00\nd=1024  unscaled: maxw=0.946 sat=0.70  |  scaled: maxw=0.043 sat=0.00"
+  },
+  {
+   "id": "F11",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "no mask 8.881784197001252e-16\ncausal 7.868527045300903"
+  },
+  {
+   "id": "F12",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "[23.503971, 23.503971, 23.503971] [32. 32. 32.]"
+  },
+  {
+   "id": "F15",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "[[1.    0.    0.    0.    0.   ]\n [0.28  0.72  0.    0.    0.   ]\n [0.32  0.622 0.058 0.    0.   ]\n [0.146 0.176 0.221 0.457 0.   ]\n [0.096 0.426 0.056 0.154 0.268]]\nupper==0: True row sums: [1. 1. 1. 1. 1.]"
+  },
+  {
+   "id": "F18",
+   "ok": true,
+   "seconds": 0,
+   "output": "[nan nan nan]"
+  },
+  {
+   "id": "F19",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "softmax axis -1 -> max change at positions 0-2: 0.0\nsoftmax axis -2 -> max change at positions 0-2: 5.1186863891717005"
+  },
+  {
+   "id": "F26",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "(4, 6, 4) 0.0"
+  },
+  {
+   "id": "F27",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "right max change at positions 0-3: 0.0\nwrong max change at positions 0-3: 7.945126243720274"
+  },
+  {
+   "id": "F29",
+   "ok": true,
+   "seconds": 0,
+   "output": "7.105427357601002e-15"
+  },
+  {
+   "id": "F33",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "0.998697 0.998697"
+  },
+  {
+   "id": "F34",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "1.0639637319324417e-16 [0.999999 0.999999 0.999999 0.999999 0.999999]"
+  },
+  {
+   "id": "F36",
+   "ok": true,
+   "seconds": 0.15,
+   "output": "max|tanh-erf|=4.732e-04  min=-0.16997 at x=-0.752  GELU(0)=0.0"
+  },
+  {
+   "id": "F41",
+   "ok": true,
+   "seconds": 0,
+   "output": "11,121,640  untied: 11,505,640"
+  },
+  {
+   "id": "F51",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "best prev-token head (layer, head): (4, 3) 0.57 | L4H3 ' b'->' +': 0.9882 | layer-1 mean weight on token 0: 0.49"
+  },
+  {
+   "id": "F52",
+   "ok": true,
+   "seconds": 0.05,
+   "output": "(12, 50) 8.33490230167655e-08"
+  }
+ ]
+}

@@ -1,0 +1,381 @@
+{
+ "meta": {
+  "python": "3.12.9",
+  "platform": "win32",
+  "torch": "2.9.1+cpu",
+  "numpy": "1.26.4"
+ },
+ "results": [
+  {
+   "id": "F01",
+   "ok": true,
+   "seconds": 0.73,
+   "output": "[ 0.49  0.    0.   26.71 72.62  0.18  0.  ] 78.66",
+   "error": ""
+  },
+  {
+   "id": "F02",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "dot: [7. 6. 2.] cos: [5. 5. 5.] nearest: [5. 5. 5.]",
+   "error": ""
+  },
+  {
+   "id": "F03",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "[87.5, 70.0, 60.0, 73.33, 80.0, 65.0, 90.0] true: [85.0, 70.0, 60.0, 75.0, 80.0, 65.0, 90.0]",
+   "error": ""
+  },
+  {
+   "id": "F04",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "naive : [nan  0.  0. nan nan  0.  0.]\nstable: [0. 0. 0. 0. 1. 0. 0.]",
+   "error": ""
+  },
+  {
+   "id": "F05",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "[0.09   0.2447 0.6652] [0.09   0.2447 0.6652] [0. 0. 1.]",
+   "error": ""
+  },
+  {
+   "id": "F06",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "(3, 7) [1. 1. 1.] [78.66 69.76 61.2 ]",
+   "error": ""
+  },
+  {
+   "id": "F07",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "[0.0e+00 3.8e-44 1.0e+00]\n[0.09003057 0.24472847 0.66524096]",
+   "error": ""
+  },
+  {
+   "id": "F08",
+   "ok": true,
+   "seconds": 0.05,
+   "output": "65.29 1.0201 64.0",
+   "error": ""
+  },
+  {
+   "id": "F09",
+   "ok": true,
+   "seconds": 2.07,
+   "output": "d=  16  unscaled: maxw=0.514 sat=0.01  |  scaled: maxw=0.045 sat=0.00\nd=  64  unscaled: maxw=0.759 sat=0.14  |  scaled: maxw=0.045 sat=0.00\nd= 256  unscaled: maxw=0.892 sat=0.44  |  scaled: maxw=0.044 sat=0.00\nd=1024  unscaled: maxw=0.946 sat=0.70  |  scaled: maxw=0.043 sat=0.00",
+   "error": ""
+  },
+  {
+   "id": "F10",
+   "ok": true,
+   "seconds": 9.12,
+   "output": "score std: 0.1513 | last-row max weight: 0.00663 vs 1/256 = 0.00391",
+   "error": ""
+  },
+  {
+   "id": "F11",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "no mask 8.881784197001252e-16\ncausal 7.868527045300903",
+   "error": ""
+  },
+  {
+   "id": "F12",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "[23.503971, 23.503971, 23.503971] [32. 32. 32.]",
+   "error": ""
+  },
+  {
+   "id": "F13",
+   "ok": true,
+   "seconds": 0.47,
+   "output": "{1: 0.949, 8: 0.562, 64: 0.037}",
+   "error": ""
+  },
+  {
+   "id": "F14",
+   "ok": true,
+   "seconds": 0.33,
+   "output": "IndexError: index out of range in self",
+   "error": ""
+  },
+  {
+   "id": "F15",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "[[1.    0.    0.    0.    0.   ]\n [0.28  0.72  0.    0.    0.   ]\n [0.32  0.622 0.058 0.    0.   ]\n [0.146 0.176 0.221 0.457 0.   ]\n [0.096 0.426 0.056 0.154 0.268]]\nupper==0: True row sums: [1. 1. 1. 1. 1.]",
+   "error": ""
+  },
+  {
+   "id": "F16",
+   "ok": true,
+   "seconds": 0.02,
+   "output": "positions 0-2: 0.0 | positions 3-4: 0.857",
+   "error": ""
+  },
+  {
+   "id": "F17",
+   "ok": true,
+   "seconds": 0.02,
+   "output": "(2, 5, 256) 1.1920928955078125e-07",
+   "error": ""
+  },
+  {
+   "id": "F18",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "[nan nan nan]",
+   "error": ""
+  },
+  {
+   "id": "F19",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "softmax axis -1 -> max change at positions 0-2: 0.0\nsoftmax axis -2 -> max change at positions 0-2: 5.1186863891717005",
+   "error": ""
+  },
+  {
+   "id": "F20",
+   "ok": true,
+   "seconds": 13.69,
+   "output": "causal: 2.0803 | no mask: 0.2637 | ln 8 = 2.0794 | ln(8)/8 = 0.2599",
+   "error": ""
+  },
+  {
+   "id": "F21",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "True",
+   "error": ""
+  },
+  {
+   "id": "F22",
+   "ok": true,
+   "seconds": 0.04,
+   "output": "2.980232238769531e-07 64 98304 65536",
+   "error": ""
+  },
+  {
+   "id": "F23",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "0.0",
+   "error": ""
+  },
+  {
+   "id": "F24",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "(2, 4, 24) (2, 4, 3, 8) (2, 3, 4, 8) False",
+   "error": ""
+  },
+  {
+   "id": "F25",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "RuntimeError: view size is not compatible with input tensor's size and s\nTrue",
+   "error": ""
+  },
+  {
+   "id": "F26",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "(4, 6, 4) 0.0",
+   "error": ""
+  },
+  {
+   "id": "F27",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "right max change at positions 0-3: 0.0\nwrong max change at positions 0-3: 7.945126243720273",
+   "error": ""
+  },
+  {
+   "id": "F28",
+   "ok": true,
+   "seconds": 0.08,
+   "output": "1.341104507446289e-07 1.341104507446289e-07",
+   "error": ""
+  },
+  {
+   "id": "F29",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "3.552713678800501e-15",
+   "error": ""
+  },
+  {
+   "id": "F30",
+   "ok": true,
+   "seconds": 0.05,
+   "output": "training: True | equal: False | after eval(): True\ntensor([0.9292, 0.9914, 1.0367, 1.1111])",
+   "error": ""
+  },
+  {
+   "id": "F31",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "1048576 1048576",
+   "error": ""
+  },
+  {
+   "id": "F32",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "9.5367431640625e-07",
+   "error": ""
+  },
+  {
+   "id": "F33",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "0.998697 0.998697",
+   "error": ""
+  },
+  {
+   "id": "F34",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "1.0639637319324417e-16 [0.999999 0.999999 0.999999 0.999999 0.999999]",
+   "error": ""
+  },
+  {
+   "id": "F35",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "LN: 0.0 | BN: 3.033",
+   "error": ""
+  },
+  {
+   "id": "F36",
+   "ok": true,
+   "seconds": 0.08,
+   "output": "max|tanh-erf|=4.732e-04  min=-0.16997 at x=-0.752  GELU(0)=0.0",
+   "error": ""
+  },
+  {
+   "id": "F37",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "4.76837158203125e-07 0.0004737377166748047 GELU(approximate='none')",
+   "error": ""
+  },
+  {
+   "id": "F38",
+   "ok": true,
+   "seconds": 0.08,
+   "output": "['norm1.gamma', 'norm1.beta'] ['norm1.weight', 'norm1.bias']\nload_state_dict fails: Error(s) in loading state_dict for Block: Missing key(s) in state_dict: \"norm1.gamma\", \"no",
+   "error": ""
+  },
+  {
+   "id": "F39",
+   "ok": true,
+   "seconds": 0.04,
+   "output": "0.0",
+   "error": ""
+  },
+  {
+   "id": "F40",
+   "ok": true,
+   "seconds": 0.03,
+   "output": "1772928 1772928 1769472",
+   "error": ""
+  },
+  {
+   "id": "F41",
+   "ok": true,
+   "seconds": 0.0,
+   "output": "11,121,640  untied: 11,505,640",
+   "error": ""
+  },
+  {
+   "id": "F42",
+   "ok": true,
+   "seconds": 0.31,
+   "output": "11,121,640 11,505,640 True",
+   "error": ""
+  },
+  {
+   "id": "F43",
+   "ok": true,
+   "seconds": 0.44,
+   "output": "44509194 44486560",
+   "error": ""
+  },
+  {
+   "id": "F44",
+   "ok": true,
+   "seconds": 0.71,
+   "output": "tied value: 2.0\n0.02 1.0 0.0",
+   "error": ""
+  },
+  {
+   "id": "F45",
+   "ok": true,
+   "seconds": 0.92,
+   "output": "CE=6.9846  lnV=6.9078  lnV+s^2/2=6.9858  s=0.395",
+   "error": ""
+  },
+  {
+   "id": "F46",
+   "ok": true,
+   "seconds": 0.57,
+   "output": "0.0 0.768",
+   "error": ""
+  },
+  {
+   "id": "F47",
+   "ok": true,
+   "seconds": 1.22,
+   "output": "train equal: False | eval equal: True | batch vs alone: 1.8477439880371094e-06",
+   "error": ""
+  },
+  {
+   "id": "F48",
+   "ok": true,
+   "seconds": 11.04,
+   "output": "124,439,808 124,453,201 +13,393 = +13,393",
+   "error": ""
+  },
+  {
+   "id": "F49",
+   "ok": true,
+   "seconds": 1.51,
+   "output": "max|logits diff| with codebot's nn.GELU() (erf): 3.498e-04\nmax|logits diff| after switching to tanh-GELU  : 1.907e-06",
+   "error": ""
+  },
+  {
+   "id": "F50",
+   "ok": true,
+   "seconds": 3.29,
+   "output": "[304, 882, 40, 97, 44, 345, 285, 265, 307, 273, 347, 345, 10]\nCE on 32 train windows: 0.4014\n'def sort_list(lst):\\n    for i in range(len(lst) - 1):\\n        for j in'",
+   "error": ""
+  },
+  {
+   "id": "F51",
+   "ok": true,
+   "seconds": 0.01,
+   "output": "best prev-token head (layer, head): (4, 3) 0.57 | L4H3 ' b'->' +': 0.9882 | layer-1 mean weight on token 0: 0.49",
+   "error": ""
+  },
+  {
+   "id": "F52",
+   "ok": true,
+   "seconds": 0.05,
+   "output": "(12, 50) 8.33490231277878e-08",
+   "error": ""
+  },
+  {
+   "id": "F53",
+   "ok": true,
+   "seconds": 28.0,
+   "output": "0 7.0115\n25 0.5956\n50 0.0163",
+   "error": ""
+  }
+ ]
+}

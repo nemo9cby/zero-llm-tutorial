@@ -1,0 +1,27 @@
+.code .k { color: var(--syn-kw); }
+.code .kn { color: var(--syn-kw); }
+.code .kd { color: var(--syn-kw); }
+.code .kc { color: var(--syn-kw); }
+.code .ow { color: var(--syn-kw); }
+.code .nb { color: var(--syn-builtin); }
+.code .bp { color: var(--syn-builtin); }
+.code .s { color: var(--syn-str); }
+.code .s1 { color: var(--syn-str); }
+.code .s2 { color: var(--syn-str); }
+.code .sa { color: var(--syn-str); }
+.code .se { color: var(--syn-str); }
+.code .si { color: var(--syn-str); }
+.code .sd { color: var(--syn-str); }
+.code .c { color: var(--syn-comment); }
+.code .c1 { color: var(--syn-comment); }
+.code .cm { color: var(--syn-comment); }
+.code .ch { color: var(--syn-comment); }
+.code .m { color: var(--syn-num); }
+.code .mi { color: var(--syn-num); }
+.code .mf { color: var(--syn-num); }
+.code .mh { color: var(--syn-num); }
+.code .nf { color: var(--syn-fn); }
+.code .nc { color: var(--syn-fn); }
+.code .fm { color: var(--syn-fn); }
+.code .nd { color: var(--syn-fn); }
+.code .c, .code .c1, .code .cm { font-style: italic; }

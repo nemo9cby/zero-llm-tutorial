@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>从零构建大语言模型 · 从零构建大语言模型</title>
+<meta name="description" content="基于《ゼロから作るDeep Learning ❻ LLM編》的代码反向生成的可验证互动教程。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Serif+SC:wght@400;600;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,800;1,8..60,400&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/pygments.css">
+<script>
+  try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+</head>
+<body data-slug="index" data-packages="[&quot;numpy&quot;]">
+<a class="skip" href="#main">跳到正文</a>
+<header class="topbar">
+  <button class="nav-toggle" type="button" aria-controls="nav" aria-expanded="false">目录</button>
+  <a class="book-title" href="index.html">从零构建大语言模型</a>
+  <div class="topbar-tools">
+    <span class="verify-counter" hidden></span>
+    <button class="run-all" type="button" hidden>运行本页全部验证</button>
+    <button class="theme-toggle" type="button" aria-label="切换明暗主题">明 / 暗</button>
+  </div>
+</header>
+<div class="layout">
+  <nav id="nav" class="nav" aria-label="章节"><ol class="nav-chapters"><li class="kind-chapter"><a href="ch01.html"><span class="nav-num">1</span>分词器【基础篇】</a></li></ol></nav>
+  <main id="main" class="page">
+    <article class="chapter"><header class="cover">
+<h1 class="cover-title">从零构建<br>大语言模型</h1>
+<p class="cover-lede">从一个字符一个编号的分词器出发，亲手搭出 GPT，训练会写 Python 的 CodeBot、会讲故事的 StoryBot，再用多块 GPU 训练 WebBot。书里的每一个技术断言，都配有一段可以在你浏览器里运行的最小验证。</p>
+<p class="cover-byline">依据斋藤康毅《ゼロから作る Deep Learning ❻ LLM編》（O'Reilly Japan，2026）的全部源代码反向编写。原书代码以 MIT 许可发布。</p>
+</header>
+<h2 id="h-527322e7">如何使用这本教程</h2>
+<p>正文里有三种可以“动手”的东西。</p>
+<p><strong>验证</strong>：带编号的代码块，右侧有一枚印章。点击它，代码会在你的浏览器里运行（借助 Pyodide，无需安装任何东西），如果输出与构建时完全一致，印章就会盖下。每段验证都用 <code>assert</code> 把结论写死，所以“通过”意味着正文里的说法被你亲手确认过一次。</p>
+<p><strong>交互图</strong>：编号为“图 X-Y”的图都可以拖动、输入、点击。它们用来建立直觉，验证则负责把直觉钉牢。</p>
+<p><strong>本地验证与 GPU 实验</strong>：涉及 PyTorch 的结论，用 <code>uv run pytest</code> 在本地验证；需要 GPU 的训练，给出在本机、Modal、RunPod 或 Lambda 上运行的完整命令与成本估算。</p>
+<ol class="book-toc"><li class="toc-chapter"><a class="toc-title" href="ch01.html"><span class="toc-chnum">1</span>分词器【基础篇】：把文字变成数字</a><span class="toc-count">4 项验证</span><ol><li><a href="ch01.html#s1-1"><span class="toc-num">1.1</span>字符级分词器</a></li><li><a href="ch01.html#s1-2"><span class="toc-num">1.2</span>字节级分词器</a></li></ol></li></ol>
+</article>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" defer></script>
+<script type="module" src="js/runtime.js"></script>
+</body>
+</html>

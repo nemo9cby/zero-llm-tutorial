@@ -1,0 +1,94 @@
+[
+ {
+  "id": "F01",
+  "code": "\nimport numpy as np\nK = np.array([[8,2,3],[3,9,1],[1,2,9],[5,5,5],[7,6,2],[2,7,6],[9,1,1]], float)\nV = np.array([85,70,60,75,80,65,90], float)\ns = K @ np.array([6., 4., 5.])\nw = np.exp(s - s.max()); w /= w.sum()\nprint((w * 100).round(2), round(float(w @ V), 2))\n"
+ },
+ {
+  "id": "F02",
+  "code": "\nimport numpy as np\nK = np.array([[8,2,3],[3,9,1],[1,2,9],[5,5,5],[7,6,2],[2,7,6],[9,1,1]], float); q = np.array([6., 4., 5.])\nprint(\"dot:\", K[np.argmax(K @ q)], \"cos:\", K[np.argmax(K @ q / np.linalg.norm(K, axis=1))],\n      \"nearest:\", K[np.argmin(np.linalg.norm(K - q, axis=1))])\n"
+ },
+ {
+  "id": "F03",
+  "code": "\nimport numpy as np\nK = np.array([[8,2,3],[3,9,1],[1,2,9],[5,5,5],[7,6,2],[2,7,6],[9,1,1]], float); V = np.array([85,70,60,75,80,65,90.])\ndef soft(q, T):\n    s = K @ q / T; w = np.exp(s - s.max()); return float((w / w.sum()) @ V)\nprint([round(soft(k, 0.001), 2) for k in K], \"true:\", V.tolist())\n"
+ },
+ {
+  "id": "F04",
+  "code": "\nimport numpy as np\ns = np.array([71., 59, 59, 75, 76, 70, 63]) * 10        # 01's scores with features on a 0..100 scale\nwith np.errstate(over=\"ignore\", invalid=\"ignore\"):\n    print(\"naive :\", np.exp(s) / np.exp(s).sum())\ne = np.exp(s - s.max()); print(\"stable:\", (e / e.sum()).round(4))\n"
+ },
+ {
+  "id": "F05",
+  "code": "\nimport numpy as np\nsm = lambda x: np.exp(x - x.max()) / np.exp(x - x.max()).sum()\nx = np.array([1., 2., 3.])\nprint(sm(x).round(4), sm(x + 100).round(4), sm(100 * x).round(4))\n"
+ },
+ {
+  "id": "F06",
+  "code": "\nimport numpy as np\nK = np.array([[8,2,3],[3,9,1],[1,2,9],[5,5,5],[7,6,2],[2,7,6],[9,1,1]], float); V = np.array([[85],[70],[60],[75],[80],[65],[90.]])\nQ = np.array([[6,4,5],[2,8,3],[4,3,7]], float)\nS = Q @ K.T; W = np.exp(S - S.max(1, keepdims=True)); W /= W.sum(1, keepdims=True)\nprint(S.shape, W.sum(1), (W @ V).ravel().round(2))\n"
+ },
+ {
+  "id": "F07",
+  "code": "\nimport numpy as np\nfor x in (np.array([100., 200., 300.], dtype=np.float32), np.array([1., 2., 3.])):\n    e = np.exp(x - x.max()); print(e / e.sum())\n"
+ },
+ {
+  "id": "F08",
+  "code": "\nimport numpy as np\nrng = np.random.default_rng(0); d = 64\nq, k = rng.standard_normal((10000, d)), rng.standard_normal((10000, d))\ndots = (q * k).sum(1)\nprint(round(dots.var(), 2), round((dots / np.sqrt(d)).var(), 4), round(dots.var() / (dots / np.sqrt(d)).var(), 6))\n"
+ },
+ {
+  "id": "F09",
+  "code": "\nimport numpy as np\nrng = np.random.default_rng(0)\nfor d in (16, 64, 256, 1024):\n    raw = np.array([rng.standard_normal((256, d)) @ rng.standard_normal(d) for _ in range(200)])\n    out = []\n    for z in (raw, raw / np.sqrt(d)):\n        p = np.exp(z - z.max(1, keepdims=True)); p /= p.sum(1, keepdims=True)\n        out.append(f\"maxw={p.max(1).mean():.3f} sat={(p.max(1) > .99).mean():.2f}\")\n    print(f\"d={d:4d}  unscaled: {out[0]}  |  scaled: {out[1]}\")\n"
+ },
+ {
+  "id": "F11",
+  "code": "\nimport numpy as np\nrng = np.random.default_rng(0); C, E = 5, 8\nWq, Wk, Wv = (rng.standard_normal((E, E)) for _ in range(3)); x = rng.standard_normal((C, E))\ndef attn(x, causal):\n    s = (x @ Wq) @ (x @ Wk).T / np.sqrt(E)\n    if causal: s = np.where(np.tril(np.ones((C, C), bool)), s, -np.inf)\n    p = np.exp(s - s.max(1, keepdims=True)); p /= p.sum(1, keepdims=True); return p @ (x @ Wv)\nperm = [4, 2, 0, 1, 3]\nfor causal in (False, True):\n    print(\"causal\" if causal else \"no mask\", np.abs(attn(x[perm], causal) - attn(x, causal)[perm]).max())\n"
+ },
+ {
+  "id": "F12",
+  "code": "\nimport numpy as np\npos, i = np.arange(256)[:, None], np.arange(32)[None, :]\npe = np.zeros((256, 64)); ang = pos / 10000 ** (2 * i / 64); pe[:, 0::2] = np.sin(ang); pe[:, 1::2] = np.cos(ang)\nprint([round(float(pe[p] @ pe[p + 5]), 6) for p in (0, 37, 150)], (pe ** 2).sum(1)[:3])\n"
+ },
+ {
+  "id": "F15",
+  "code": "\nimport numpy as np\nC = 5; s = np.random.default_rng(0).standard_normal((C, C))\ns = np.where(np.tril(np.ones((C, C), bool)), s, -np.inf)\nw = np.exp(s - s.max(1, keepdims=True)); w /= w.sum(1, keepdims=True)\nprint(w.round(3)); print(\"upper==0:\", bool((np.triu(w, 1) == 0).all()), \"row sums:\", w.sum(1))\n"
+ },
+ {
+  "id": "F18",
+  "code": "\nimport numpy as np\ns = np.full(3, -np.inf)\nwith np.errstate(invalid=\"ignore\"): print(np.exp(s - s.max()) / np.exp(s - s.max()).sum())\n"
+ },
+ {
+  "id": "F19",
+  "code": "\nimport numpy as np\nrng = np.random.default_rng(0); C, E = 5, 8\nWq, Wk, Wv = (rng.standard_normal((E, E)) for _ in range(3))\nx = rng.standard_normal((C, E)); x2 = x.copy(); x2[3:] = rng.standard_normal((2, E))\ndef attn(x, axis):\n    s = np.where(np.tril(np.ones((C, C), bool)), (x @ Wq) @ (x @ Wk).T / np.sqrt(E), -np.inf)\n    p = np.exp(s - s.max(axis, keepdims=True)); p /= p.sum(axis, keepdims=True); return p @ (x @ Wv)\nfor axis in (-1, -2): print(\"softmax axis\", axis, \"-> max change at positions 0-2:\", np.abs(attn(x, axis) - attn(x2, axis))[:3].max())\n"
+ },
+ {
+  "id": "F26",
+  "code": "\nimport numpy as np\nrng = np.random.default_rng(0); C, E, H = 6, 16, 4; D = E // H\nWq, Wk, Wv = (rng.standard_normal((H * D, E)) for _ in range(3)); x = rng.standard_normal((C, E))\nmask = np.tril(np.ones((C, C), bool))\ndef attn(q, k, v):\n    s = np.where(mask, q @ np.swapaxes(k, -1, -2) / np.sqrt(D), -np.inf)\n    p = np.exp(s - s.max(-1, keepdims=True)); p /= p.sum(-1, keepdims=True); return p @ v\nsplit = lambda t: t.reshape(C, H, D).transpose(1, 0, 2)                      # (C, H*D) -> (H, C, D)\nbatched = attn(split(x @ Wq.T), split(x @ Wk.T), split(x @ Wv.T))\nloop = np.stack([attn(*(x @ W[h*D:(h+1)*D].T for W in (Wq, Wk, Wv))) for h in range(H)])\nprint(batched.shape, np.abs(batched - loop).max())\n"
+ },
+ {
+  "id": "F27",
+  "code": "\nimport numpy as np\nrng = np.random.default_rng(0); C, E, H = 6, 16, 4; D = E // H\nWq, Wk, Wv = (rng.standard_normal((H * D, E)) for _ in range(3))\nx = rng.standard_normal((C, E)); x2 = x.copy(); x2[4:] = rng.standard_normal((2, E))\ndef mha(x, split):\n    q, k, v = (split(x @ W.T) for W in (Wq, Wk, Wv))\n    s = np.where(np.tril(np.ones((C, C), bool)), q @ k.transpose(0, 2, 1) / np.sqrt(D), -np.inf)\n    p = np.exp(s - s.max(-1, keepdims=True)); p /= p.sum(-1, keepdims=True); return (p @ v).transpose(1, 0, 2).reshape(C, E)\nright = lambda t: t.reshape(C, H, D).transpose(1, 0, 2)\nwrong = lambda t: t.reshape(H, C, D)\nfor name, sp in ((\"right\", right), (\"wrong\", wrong)): print(name, \"max change at positions 0-3:\", np.abs(mha(x, sp) - mha(x2, sp))[:4].max())\n"
+ },
+ {
+  "id": "F29",
+  "code": "\nimport numpy as np\nrng = np.random.default_rng(0); C, H, D, E = 6, 4, 8, 32\nheads = rng.standard_normal((H, C, D)); Wo = rng.standard_normal((E, H * D))\nconcat = heads.transpose(1, 0, 2).reshape(C, H * D) @ Wo.T\nsummed = sum(heads[h] @ Wo[:, h*D:(h+1)*D].T for h in range(H))\nprint(np.abs(concat - summed).max())\n"
+ },
+ {
+  "id": "F33",
+  "code": "\nimport numpy as np\nx = np.random.default_rng(0).standard_normal((4, 384)) * 3 + 1.5\nz = lambda ddof: (x - x.mean(-1, keepdims=True)) / np.sqrt(x.var(-1, ddof=ddof, keepdims=True) + 1e-5)\nprint(round(float((z(1) / z(0)).mean()), 6), round(float(np.sqrt(383 / 384)), 6))\n"
+ },
+ {
+  "id": "F34",
+  "code": "\nimport numpy as np\nx = np.random.default_rng(0).standard_normal((5, 384)) * 3 + 2\ny = (x - x.mean(-1, keepdims=True)) / np.sqrt(x.var(-1, keepdims=True) + 1e-5)\nprint(np.abs(y.mean(-1)).max(), y.var(-1).round(6))\n"
+ },
+ {
+  "id": "F36",
+  "code": "\nimport math, numpy as np\nt = np.linspace(-6, 6, 120001)\nexact = 0.5 * t * (1 + np.vectorize(math.erf)(t / math.sqrt(2)))\ntanh = 0.5 * t * (1 + np.tanh(math.sqrt(2 / math.pi) * (t + 0.044715 * t ** 3)))\ni = exact.argmin()\nprint(f\"max|tanh-erf|={np.abs(tanh - exact).max():.3e}  min={exact[i]:.5f} at x={t[i]:.3f}  GELU(0)={exact[60000]:.1f}\")\n"
+ },
+ {
+  "id": "F41",
+  "code": "\nV, CTX, E, L, FF = 1000, 256, 384, 6, 1536\nblock = 2 * 2 * E + 4 * E * E + (E * FF + FF) + (FF * E + E)\nprint(f\"{V*E + V + CTX*E + L*block + 2*E:,}  untied: {2*V*E + V + CTX*E + L*block + 2*E:,}\")\n"
+ },
+ {
+  "id": "F51",
+  "code": "\nimport json, numpy as np\nA = np.array(json.load(open(\"ch02_attn_maps.json\", encoding=\"utf-8\"))[\"attn\"])     # (layer, head, query, key)\nprev = np.mean([A[:, :, t, t - 1] for t in range(1, A.shape[-1])], axis=0)\nprint(\"best prev-token head (layer, head):\", tuple(int(i) for i in np.unravel_index(prev.argmax(), prev.shape)), round(float(prev.max()), 2),\n      \"| L4H3 ' b'->' +':\", A[4, 3, 11, 10], \"| layer-1 mean weight on token 0:\", round(float(A[1, :, 1:, 0].mean()), 2))\n"
+ },
+ {
+  "id": "F52",
+  "code": "\nimport numpy as np\nfrom np_gpt import gpt_forward\nZ = np.load(\"pyodide_test/tiny_ref.npz\"); P = {k: Z[k].astype(np.float64) for k in Z.files if k not in (\"ids\", \"ref_logits\")}\nout = gpt_forward([int(i) for i in Z[\"ids\"]], P, n_layer=2, n_head=4)\nprint(out.shape, np.abs(out - Z[\"ref_logits\"]).max())\n"
+ }
+]

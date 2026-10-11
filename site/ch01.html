@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>分词器【基础篇】：把文字变成数字 · 从零构建大语言模型</title>
+<meta name="description" content="语言模型只认识整数。本章从“一个字符一个编号”这个最朴素的想法出发，一路走到 GPT 系列所用的 BPE 分词器，最后用它把 CodeBot 的训练数据编码成 token 序列。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Serif+SC:wght@400;600;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,800;1,8..60,400&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/pygments.css">
+<script>
+  try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+</head>
+<body data-slug="ch01" data-packages="[&quot;numpy&quot;, &quot;regex&quot;]">
+<a class="skip" href="#main">跳到正文</a>
+<header class="topbar">
+  <button class="nav-toggle" type="button" aria-controls="nav" aria-expanded="false">目录</button>
+  <a class="book-title" href="index.html">从零构建大语言模型</a>
+  <div class="topbar-tools">
+    <span class="verify-counter" hidden></span>
+    <button class="run-all" type="button" hidden>运行本页全部验证</button>
+    <button class="theme-toggle" type="button" aria-label="切换明暗主题">明 / 暗</button>
+  </div>
+</header>
+<div class="layout">
+  <nav id="nav" class="nav" aria-label="章节"><ol class="nav-chapters"><li class="kind-chapter current"><a href="ch01.html"><span class="nav-num">1</span>分词器【基础篇】</a><ol><li><a href="#s1-1">1.1 字符级分词器</a></li><li><a href="#s1-2">1.2 字节级分词器</a></li></ol></li></ol></nav>
+  <main id="main" class="page">
+    <article class="chapter"><header class="chapter-head"><div class="chapter-num">1</div><h1>分词器【基础篇】：把文字变成数字</h1><p class="chapter-lede">语言模型只认识整数。本章从“一个字符一个编号”这个最朴素的想法出发，一路走到 GPT 系列所用的 BPE 分词器，最后用它把 CodeBot 的训练数据编码成 token 序列。</p></header><h2 id="s1-1">1.1 字符级分词器</h2>
+<p>语言模型的输入是一串整数。在模型做任何“聪明”的事情之前，我们得先回答一个朴素的问题：一段文字，该怎样变成一串整数？承担这项工作的组件叫作<strong>分词器</strong>（tokenizer），它切分出来的每个单位叫作 <strong>token</strong>。</p>
+<p>最容易想到的做法，是给每个字符分配一个编号。好在这样的编号早已存在，它就是 Unicode 为每个字符规定的<strong>码位</strong>（code point）。Python 的 <code>ord()</code> 把字符变成码位，<code>chr()</code> 则把码位变回字符：</p>
+<figure class="listing" data-start="1"><figcaption><a class="listing-path" href="https://github.com/oreilly-japan/deep-learning-from-scratch-6/blob/c9b6e2ed531b08dd9f451a091a34e9645148e2e2/ch01/01_char_tokenizer.py#L1-L11" target="_blank" rel="noopener">ch01/01_char_tokenizer.py</a><span class="listing-range">第 1–11 行</span></figcaption><pre class="code"><code><span class="n">text</span> <span class="o">=</span> <span class="s2">"hello世界😁"</span>
+<span class="nb">print</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">text</span><span class="p">))</span>  <span class="c1"># ['h', 'e', 'l', 'l', 'o', '世', '界', '😁']</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="nb">ord</span><span class="p">(</span><span class="s1">'h'</span><span class="p">))</span>  <span class="c1"># 104</span>
+<span class="nb">print</span><span class="p">(</span><span class="nb">ord</span><span class="p">(</span><span class="s1">'😁'</span><span class="p">))</span>  <span class="c1"># 128513</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="nb">chr</span><span class="p">(</span><span class="mi">104</span><span class="p">))</span>    <span class="c1"># 'h'</span>
+<span class="nb">print</span><span class="p">(</span><span class="nb">chr</span><span class="p">(</span><span class="mi">128513</span><span class="p">))</span> <span class="c1"># '😁'</span>
+
+<span class="n">ids</span> <span class="o">=</span> <span class="p">[</span><span class="nb">ord</span><span class="p">(</span><span class="n">char</span><span class="p">)</span> <span class="k">for</span> <span class="n">char</span> <span class="ow">in</span> <span class="nb">list</span><span class="p">(</span><span class="n">text</span><span class="p">)]</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span>  <span class="c1"># [104, 101, 108, 108, 111, 19990, 30028, 128513]</span>
+</code></pre></figure><p><code>list(text)</code> 把字符串拆成了 8 个字符，连 emoji 也是完整的一个。把 <code>ord</code> 和 <code>chr</code> 包装成两个方法，就得到了一个完整的分词器：<code>encode</code> 把文字变成 id 列表，<code>decode</code> 把 id 列表还原成文字。</p>
+<figure class="listing" data-start="13"><figcaption><a class="listing-path" href="https://github.com/oreilly-japan/deep-learning-from-scratch-6/blob/c9b6e2ed531b08dd9f451a091a34e9645148e2e2/ch01/01_char_tokenizer.py#L13-L29" target="_blank" rel="noopener">ch01/01_char_tokenizer.py</a><span class="listing-range">第 13–29 行</span></figcaption><pre class="code"><code><span class="k">class</span><span class="w"> </span><span class="nc">CharTokenizer</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="nb">ord</span><span class="p">(</span><span class="n">char</span><span class="p">)</span> <span class="k">for</span> <span class="n">char</span> <span class="ow">in</span> <span class="n">text</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ids</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s1">''</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">chr</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ids</span><span class="p">])</span>
+
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">CharTokenizer</span><span class="p">()</span>
+<span class="n">text</span> <span class="o">=</span> <span class="s2">"hello世界😁"</span>
+
+<span class="c1"># エンコード</span>
+<span class="n">ids</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span>  <span class="c1"># [104, 101, 108, 108, 111, 19990, 30028, 128513]</span>
+
+<span class="c1"># デコード</span>
+<span class="n">decoded</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">decoded</span><span class="p">)</span>  <span class="c1"># hello世界😁</span>
+</code></pre></figure><p>先在浏览器里亲手确认两件事：<code>encode</code> 与 <code>decode</code> 互为逆运算；得到的 id 与书中代码注释里写的完全一致。点击右侧的印章或“在浏览器中运行”即可，第一次运行需要十几秒来加载浏览器内的 Python。</p>
+<div class="verify" id="v-1.1-a" data-cell="{&quot;id&quot;: &quot;1.1-a&quot;, &quot;golden&quot;: &quot;[104, 101, 108, 108, 111, 19990, 30028, 128513]\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 1.1-a</span><span class="verify-title">字符级分词器：编码与解码互为逆运算</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="k">class</span><span class="w"> </span><span class="nc">CharTokenizer</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">):</span>
+        <span class="k">return</span> <span class="p">[</span><span class="nb">ord</span><span class="p">(</span><span class="n">char</span><span class="p">)</span> <span class="k">for</span> <span class="n">char</span> <span class="ow">in</span> <span class="n">text</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ids</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s1">''</span><span class="o">.</span><span class="n">join</span><span class="p">([</span><span class="nb">chr</span><span class="p">(</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ids</span><span class="p">])</span>
+
+<span class="n">tok</span> <span class="o">=</span> <span class="n">CharTokenizer</span><span class="p">()</span>
+<span class="n">text</span> <span class="o">=</span> <span class="s2">"hello世界😁"</span>
+<span class="n">ids</span> <span class="o">=</span> <span class="n">tok</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">ids</span> <span class="o">==</span> <span class="p">[</span><span class="mi">104</span><span class="p">,</span> <span class="mi">101</span><span class="p">,</span> <span class="mi">108</span><span class="p">,</span> <span class="mi">108</span><span class="p">,</span> <span class="mi">111</span><span class="p">,</span> <span class="mi">19990</span><span class="p">,</span> <span class="mi">30028</span><span class="p">,</span> <span class="mi">128513</span><span class="p">]</span>
+<span class="k">assert</span> <span class="n">tok</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span> <span class="o">==</span> <span class="n">text</span>
+</code></pre><textarea class="verify-src" hidden>class CharTokenizer:
+    def encode(self, text):
+        return [ord(char) for char in text]
+
+    def decode(self, ids):
+        return &#x27;&#x27;.join([chr(i) for i in ids])
+
+tok = CharTokenizer()
+text = &quot;hello世界😁&quot;
+ids = tok.encode(text)
+print(ids)
+assert ids == [104, 101, 108, 108, 111, 19990, 30028, 128513]
+assert tok.decode(ids) == text
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>[104, 101, 108, 108, 111, 19990, 30028, 128513]
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>看起来一切顺利。那么字符级分词器的问题出在哪里？答案是<strong>词表大小</strong>（vocabulary size）。</p>
+<p>语言模型会为词表里的每个 id 准备一个向量，这些向量排成一张表，叫作嵌入矩阵（embedding matrix）。词表有多少个 id，这张表就有多少行。Unicode 的码位从 0 一直排到 <code>0x10FFFF</code>，如果每个码位都要占一行，表的行数就是 111 万多。我们在第 3 章训练的 CodeBot，每个 token 用 384 维的向量表示。算一算：</p>
+<div class="verify" id="v-1.1-b" data-cell="{&quot;id&quot;: &quot;1.1-b&quot;, &quot;golden&quot;: &quot;码位总数      : 1,114,112\n嵌入矩阵参数量: 427,819,008\nchr(0x110000) -&gt; chr() arg not in range(0x110000)\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 1.1-b</span><span class="verify-title">如果词表覆盖全部 Unicode 码位</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">vocab_size</span> <span class="o">=</span> <span class="mh">0x10FFFF</span> <span class="o">+</span> <span class="mi">1</span>   <span class="c1"># 码位 0 … 0x10FFFF</span>
+<span class="n">embed_dim</span> <span class="o">=</span> <span class="mi">384</span>             <span class="c1"># CodeBot 的嵌入维度（见第 3 章）</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"码位总数      : </span><span class="si">{</span><span class="n">vocab_size</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"嵌入矩阵参数量: </span><span class="si">{</span><span class="n">vocab_size</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">embed_dim</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">vocab_size</span> <span class="o">==</span> <span class="mi">1_114_112</span>
+
+<span class="k">try</span><span class="p">:</span>
+    <span class="nb">chr</span><span class="p">(</span><span class="mh">0x110000</span><span class="p">)</span>           <span class="c1"># 越过最大码位</span>
+<span class="k">except</span> <span class="ne">ValueError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"chr(0x110000) -&gt;"</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+</code></pre><textarea class="verify-src" hidden>vocab_size = 0x10FFFF + 1   # 码位 0 … 0x10FFFF
+embed_dim = 384             # CodeBot 的嵌入维度（见第 3 章）
+print(f&quot;码位总数      : {vocab_size:,}&quot;)
+print(f&quot;嵌入矩阵参数量: {vocab_size * embed_dim:,}&quot;)
+assert vocab_size == 1_114_112
+
+try:
+    chr(0x110000)           # 越过最大码位
+except ValueError as e:
+    print(&quot;chr(0x110000) -&gt;&quot;, e)
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>码位总数      : 1,114,112
+嵌入矩阵参数量: 427,819,008
+chr(0x110000) -&gt; chr() arg not in range(0x110000)
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>仅嵌入矩阵就有 4 亿多个参数，而整个 CodeBot 也才一千万出头。更糟的是，训练数据里绝大多数码位一次也不会出现，对应的那一行向量根本得不到训练。字符级分词器的路走不通，我们需要一张小而“满”的词表。</p>
+<aside class="callout callout-cs336"><div class="callout-title"><span class="callout-kind">CS336 对照</span><span class="callout-text">A1 §2.1 Unicode 标准</span></div>
+<p>CS336 作业 1 的第一组小题，问的正是这几件事：<code>chr(0)</code> 是什么字符、它的 <code>repr</code> 为什么和打印出来的样子不同、码位总共有多少个。思路和本节完全一致：在动手写分词器之前，先摸清 Unicode 的底细。</p>
+</aside>
+<h2 id="s1-2">1.2 字节级分词器</h2>
+<p>既然码位太多，那就往下走一层，看看字符在计算机里究竟是怎样存储的。Python 的 <code>str.encode(&quot;utf-8&quot;)</code> 会给出字符的 <strong>UTF-8</strong> 编码，也就是一串字节（byte）。一个字节只有 256 种取值，于是“词表”一下子缩小到了 256：</p>
+<figure class="listing" data-start="1"><figcaption><a class="listing-path" href="https://github.com/oreilly-japan/deep-learning-from-scratch-6/blob/c9b6e2ed531b08dd9f451a091a34e9645148e2e2/ch01/02_byte_tokenizer.py#L1-L13" target="_blank" rel="noopener">ch01/02_byte_tokenizer.py</a><span class="listing-range">第 1–13 行</span></figcaption><pre class="code"><code><span class="c1"># 'A' の場合</span>
+<span class="n">encoded</span> <span class="o">=</span> <span class="s1">'A'</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">encoded</span><span class="p">)</span>        <span class="c1"># b'A'</span>
+<span class="nb">print</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">encoded</span><span class="p">))</span>  <span class="c1"># [65]</span>
+
+<span class="c1"># 'あ' の場合</span>
+<span class="n">encoded</span> <span class="o">=</span> <span class="s1">'あ'</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">encoded</span><span class="p">)</span>        <span class="c1"># b'\xe3\x81\x82'</span>
+<span class="nb">print</span><span class="p">(</span><span class="nb">list</span><span class="p">(</span><span class="n">encoded</span><span class="p">))</span>  <span class="c1"># [227, 129, 130]</span>
+
+<span class="n">ids</span> <span class="o">=</span> <span class="p">[</span><span class="mi">65</span><span class="p">]</span>
+<span class="n">decoded</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">decoded</span><span class="p">)</span>   <span class="c1"># 'A'</span>
+</code></pre></figure><p><code>A</code> 只占一个字节 65，与它的码位相同；日文假名 <code>あ</code> 却变成了 227、129、130 三个字节。UTF-8 是一种<strong>变长编码</strong>：ASCII 字符占 1 个字节，大多数汉字和假名占 3 个字节，emoji 占 4 个字节。下面这张图可以任意改动文字，把鼠标移到某个字符上，就能看到它被拆成了哪几个字节。</p>
+<figure class="widget" id="fig-1-1" data-widget="tokentape" data-config="{&quot;text&quot;: &quot;hello世界😁&quot;}"><div class="widget-mount"><noscript>此交互图需要 JavaScript。</noscript></div><figcaption><span class="fignum">图 1-1</span>同一段文字，在字符级（上）和字节级（下）分词器眼中的样子。字节上方是十六进制写法，下方是 token id。</figcaption></figure><p>把 <code>encode</code> 和 <code>decode</code> 换成 UTF-8 编解码，就是字节级分词器：</p>
+<figure class="listing" data-start="16"><figcaption><a class="listing-path" href="https://github.com/oreilly-japan/deep-learning-from-scratch-6/blob/c9b6e2ed531b08dd9f451a091a34e9645148e2e2/ch01/02_byte_tokenizer.py#L16-L33" target="_blank" rel="noopener">ch01/02_byte_tokenizer.py</a><span class="listing-range">第 16–33 行</span></figcaption><pre class="code"><code><span class="k">class</span><span class="w"> </span><span class="nc">ByteTokenizer</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ids</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
+
+
+<span class="c1"># 使用例</span>
+<span class="n">tokenizer</span> <span class="o">=</span> <span class="n">ByteTokenizer</span><span class="p">()</span>
+<span class="n">text</span> <span class="o">=</span> <span class="s2">"hello世界😁"</span>
+
+<span class="c1"># エンコード</span>
+<span class="n">ids</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span>  <span class="c1"># [104, 101, 108, 108, 111, 228, 184, 150, 231, 149, 140, 240, 159, 152, 129]</span>
+
+<span class="c1"># デコード</span>
+<span class="n">decoded</span> <span class="o">=</span> <span class="n">tokenizer</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span>
+</code></pre></figure><p>同样亲手验证一遍。这一次，除了确认编解码互逆，我们还数一数每个字符占了几个字节：</p>
+<div class="verify" id="v-1.2-a" data-cell="{&quot;id&quot;: &quot;1.2-a&quot;, &quot;golden&quot;: &quot;&#x27;A&#x27;    码位     65  -&gt;  字节 [65]\n&#x27;é&#x27;    码位    233  -&gt;  字节 [195, 169]\n&#x27;あ&#x27;    码位  12354  -&gt;  字节 [227, 129, 130]\n&#x27;世&#x27;    码位  19990  -&gt;  字节 [228, 184, 150]\n&#x27;😁&#x27;    码位 128513  -&gt;  字节 [240, 159, 152, 129]\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 1.2-a</span><span class="verify-title">UTF-8 是变长编码：1、3、4 个字节</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="k">class</span><span class="w"> </span><span class="nc">ByteTokenizer</span><span class="p">:</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ids</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
+
+<span class="n">tok</span> <span class="o">=</span> <span class="n">ByteTokenizer</span><span class="p">()</span>
+<span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">"A"</span><span class="p">,</span> <span class="s2">"é"</span><span class="p">,</span> <span class="s2">"あ"</span><span class="p">,</span> <span class="s2">"世"</span><span class="p">,</span> <span class="s2">"😁"</span><span class="p">]:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">ch</span><span class="si">!r:</span><span class="s2">6</span><span class="si">}</span><span class="s2"> 码位 </span><span class="si">{</span><span class="nb">ord</span><span class="p">(</span><span class="n">ch</span><span class="p">)</span><span class="si">:</span><span class="s2">&gt;6</span><span class="si">}</span><span class="s2">  -&gt;  字节 </span><span class="si">{</span><span class="n">tok</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">ch</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+<span class="n">ids</span> <span class="o">=</span> <span class="n">tok</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"hello世界😁"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">ids</span> <span class="o">==</span> <span class="p">[</span><span class="mi">104</span><span class="p">,</span> <span class="mi">101</span><span class="p">,</span> <span class="mi">108</span><span class="p">,</span> <span class="mi">108</span><span class="p">,</span> <span class="mi">111</span><span class="p">,</span> <span class="mi">228</span><span class="p">,</span> <span class="mi">184</span><span class="p">,</span> <span class="mi">150</span><span class="p">,</span> <span class="mi">231</span><span class="p">,</span> <span class="mi">149</span><span class="p">,</span> <span class="mi">140</span><span class="p">,</span> <span class="mi">240</span><span class="p">,</span> <span class="mi">159</span><span class="p">,</span> <span class="mi">152</span><span class="p">,</span> <span class="mi">129</span><span class="p">]</span>
+<span class="k">assert</span> <span class="n">tok</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"hello世界😁"</span>
+<span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">256</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ids</span><span class="p">)</span>
+</code></pre><textarea class="verify-src" hidden>class ByteTokenizer:
+    def encode(self, text):
+        return list(text.encode(&quot;utf-8&quot;))
+
+    def decode(self, ids):
+        return bytes(ids).decode(&quot;utf-8&quot;)
+
+tok = ByteTokenizer()
+for ch in [&quot;A&quot;, &quot;é&quot;, &quot;あ&quot;, &quot;世&quot;, &quot;😁&quot;]:
+    print(f&quot;{ch!r:6} 码位 {ord(ch):&gt;6}  -&gt;  字节 {tok.encode(ch)}&quot;)
+
+ids = tok.encode(&quot;hello世界😁&quot;)
+assert ids == [104, 101, 108, 108, 111, 228, 184, 150, 231, 149, 140, 240, 159, 152, 129]
+assert tok.decode(ids) == &quot;hello世界😁&quot;
+assert all(0 &lt;= i &lt; 256 for i in ids)
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>&#x27;A&#x27;    码位     65  -&gt;  字节 [65]
+&#x27;é&#x27;    码位    233  -&gt;  字节 [195, 169]
+&#x27;あ&#x27;    码位  12354  -&gt;  字节 [227, 129, 130]
+&#x27;世&#x27;    码位  19990  -&gt;  字节 [228, 184, 150]
+&#x27;😁&#x27;    码位 128513  -&gt;  字节 [240, 159, 152, 129]
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>词表问题解决了，但代价随之而来：序列变长了。<code>hello世界😁</code> 用字符级分词器是 8 个 token，用字节级分词器则是 15 个。对中文来说，序列长度几乎变成原来的 3 倍。后面我们会看到，Transformer 的计算量随序列长度增长得很快，一次能看到的上下文长度也有上限，因此序列变长是实打实的损失。</p>
+<aside class="callout callout-warn"><div class="callout-title"><span class="callout-kind">注意</span><span class="callout-text">并非任意字节序列都能解码</span></div>
+<p>字节级分词器的 <code>decode</code> 有一个隐患：UTF-8 对字节的排列有严格的规矩，随便拼出来的一串字节不一定是合法的 UTF-8。语言模型在生成文本时，恰恰是一个 token 一个 token 地“随便拼”，完全可能只吐出半个汉字。</p>
+</aside>
+<div class="verify" id="v-1.2-b" data-cell="{&quot;id&quot;: &quot;1.2-b&quot;, &quot;golden&quot;: &quot;严格解码失败: unexpected end of data\n替换后: &#x27;�&#x27;\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 1.2-b</span><span class="verify-title">半个汉字无法解码</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">half</span> <span class="o">=</span> <span class="p">[</span><span class="mi">228</span><span class="p">,</span> <span class="mi">184</span><span class="p">]</span>            <span class="c1"># “世” 的前两个字节</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="nb">bytes</span><span class="p">(</span><span class="n">half</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
+<span class="k">except</span> <span class="ne">UnicodeDecodeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"严格解码失败:"</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">reason</span><span class="p">)</span>
+
+<span class="c1"># 用 errors="replace" 时，非法字节会变成替换字符 U+FFFD</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"替换后:"</span><span class="p">,</span> <span class="nb">repr</span><span class="p">(</span><span class="nb">bytes</span><span class="p">(</span><span class="n">half</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"replace"</span><span class="p">)))</span>
+</code></pre><textarea class="verify-src" hidden>half = [228, 184]            # “世” 的前两个字节
+try:
+    bytes(half).decode(&quot;utf-8&quot;)
+except UnicodeDecodeError as e:
+    print(&quot;严格解码失败:&quot;, e.reason)
+
+# 用 errors=&quot;replace&quot; 时，非法字节会变成替换字符 U+FFFD
+print(&quot;替换后:&quot;, repr(bytes(half).decode(&quot;utf-8&quot;, errors=&quot;replace&quot;)))
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>严格解码失败: unexpected end of data
+替换后: &#x27;�&#x27;
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>后面实现 BPE 分词器的 <code>decode</code> 时，我们还会回到这个问题。</p>
+<p>字符级分词器的词表太大，字节级分词器的序列太长。有没有办法兼得两者之长：以字节为基础保证任何文字都能编码，同时把经常一起出现的字节合并成一个 token，从而缩短序列？这正是下一节 BPE 的思路。</p>
+<div class="localcheck"><div class="localcheck-head"><span class="localcheck-label">本地验证（需要 PyTorch）</span><span class="localcheck-title">原书脚本的输出与注释逐行一致</span></div><pre class="cmd"><code>uv run pytest verify/test_ch01.py::test_char_and_byte_scripts_match_book_comments</code></pre><details><summary>查看测试代码 verify/test_ch01.py</summary><pre class="code"><code><span class="k">def</span><span class="w"> </span><span class="nf">test_char_and_byte_scripts_match_book_comments</span><span class="p">():</span>
+    <span class="c1"># 原书脚本里，每个 print 后面的注释写着预期输出；这里逐行核对。</span>
+    <span class="k">assert</span> <span class="n">run_dlfs6_script</span><span class="p">(</span><span class="s2">"ch01/01_char_tokenizer.py"</span><span class="p">)</span> <span class="o">==</span> <span class="p">[</span>
+        <span class="s2">"['h', 'e', 'l', 'l', 'o', '世', '界', '😁']"</span><span class="p">,</span>
+        <span class="s2">"104"</span><span class="p">,</span>
+        <span class="s2">"128513"</span><span class="p">,</span>
+        <span class="s2">"h"</span><span class="p">,</span>
+        <span class="s2">"😁"</span><span class="p">,</span>
+        <span class="s2">"[104, 101, 108, 108, 111, 19990, 30028, 128513]"</span><span class="p">,</span>
+        <span class="s2">"[104, 101, 108, 108, 111, 19990, 30028, 128513]"</span><span class="p">,</span>
+        <span class="s2">"hello世界😁"</span><span class="p">,</span>
+    <span class="p">]</span>
+    <span class="k">assert</span> <span class="n">run_dlfs6_script</span><span class="p">(</span><span class="s2">"ch01/02_byte_tokenizer.py"</span><span class="p">)</span> <span class="o">==</span> <span class="p">[</span>
+        <span class="s2">"b'A'"</span><span class="p">,</span>
+        <span class="s2">"[65]"</span><span class="p">,</span>
+        <span class="s2">"b'</span><span class="se">\\</span><span class="s2">xe3</span><span class="se">\\</span><span class="s2">x81</span><span class="se">\\</span><span class="s2">x82'"</span><span class="p">,</span>
+        <span class="s2">"[227, 129, 130]"</span><span class="p">,</span>
+        <span class="s2">"A"</span><span class="p">,</span>
+        <span class="s2">"[104, 101, 108, 108, 111, 228, 184, 150, 231, 149, 140, 240, 159, 152, 129]"</span><span class="p">,</span>
+        <span class="s2">"hello世界😁"</span><span class="p">,</span>
+    <span class="p">]</span>
+</code></pre></details></div><nav class="pager"></nav></article>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" defer></script>
+<script type="module" src="js/runtime.js"></script>
+</body>
+</html>

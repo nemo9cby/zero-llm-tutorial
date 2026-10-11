@@ -1,0 +1,6 @@
+{
+  "name": "ch02-pyodide-check",
+  "private": true,
+  "type": "module",
+  "dependencies": { "pyodide": "314.0.7" }
+}

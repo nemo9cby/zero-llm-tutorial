@@ -1,0 +1,10 @@
+research/private/
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+*.pt
+*.bin
+data/
+.DS_Store
+build/

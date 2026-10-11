@@ -1,0 +1,29 @@
+[project]
+name = "zero-llm-tutorial"
+version = "0.1.0"
+description = "从零构建大语言模型：基于《ゼロから作るDeep Learning ❻ LLM編》代码反向生成的可验证互动教程"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "numpy>=1.26",
+    "torch>=2.5.0",
+    "matplotlib>=3.7",
+    "tqdm>=4.65",
+    "regex>=2023.0.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+build = [
+    "markdown-it-py>=3.0",
+    "mdit-py-plugins>=0.4",
+    "pygments>=2.21.0",
+    "pyyaml>=6.0",
+]
+gpu = ["modal>=1.0", "wandb>=0.16"]
+
+[tool.uv]
+default-groups = ["dev", "build"]
+
+[tool.pytest.ini_options]
+testpaths = ["verify"]
+addopts = "-q"
