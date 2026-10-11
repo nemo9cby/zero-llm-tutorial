@@ -12,7 +12,10 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = [
+    "pytest>=8",
+    "tiktoken>=0.14.0",
+]
 build = [
     "markdown-it-py>=3.0",
     "mdit-py-plugins>=0.4",
@@ -27,3 +30,13 @@ default-groups = ["dev", "build"]
 [tool.pytest.ini_options]
 testpaths = ["verify"]
 addopts = "-q"
+
+# Windows readers get CUDA torch (PyPI only ships CPU wheels for Windows); Linux PyPI wheels already
+# bundle CUDA 13.0, macOS gets CPU/MPS. Verified on an RTX 3060 Ti (sm_86, driver 610.60).
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu130", marker = "sys_platform == 'win32'" }]
