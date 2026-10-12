@@ -16,5 +16,10 @@
    "05_pretrain",
    "08_dpo"
   ]
+ },
+ "codebot-grpo-evalfix-3060ti": {
+  "steps": [
+   "09_grpo"
+  ]
  }
 }
