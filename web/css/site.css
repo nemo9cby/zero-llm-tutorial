@@ -25,6 +25,8 @@
   --syn-fn: #1f6a86;
   --syn-builtin: #6b4fa0;
 
+  --tok0: #dbe4f2; --tok1: #dcefe4; --tok2: #f3e6cf; --tok3: #ecdff1; --tok4: #d9eef2; --tok5: #f2dcd9;
+
   --serif: "Source Serif 4", "Noto Serif SC", "Songti SC", "SimSun", serif;
   --mono: "JetBrains Mono", "Noto Sans SC", ui-monospace, "Cascadia Code", monospace;
   --measure: 40em;
@@ -39,6 +41,7 @@
     --shu-ink: #1a0d0b; --kincha: #e0a84a; --moss: #7cc49a; --plum: #c39ad3;
     --syn-kw: #92b2e6; --syn-str: #7cc49a; --syn-comment: #6f7a90; --syn-num: #d79ad0;
     --syn-fn: #7cc3dd; --syn-builtin: #b9a3e3;
+    --tok0: #24365a; --tok1: #1f4433; --tok2: #4a3a1e; --tok3: #3d2a49; --tok4: #1d4049; --tok5: #4b2724;
     color-scheme: dark;
   }
 }
@@ -48,10 +51,12 @@
   --shu-ink: #1a0d0b; --kincha: #e0a84a; --moss: #7cc49a; --plum: #c39ad3;
   --syn-kw: #92b2e6; --syn-str: #7cc49a; --syn-comment: #6f7a90; --syn-num: #d79ad0;
   --syn-fn: #7cc3dd; --syn-builtin: #b9a3e3;
+  --tok0: #24365a; --tok1: #1f4433; --tok2: #4a3a1e; --tok3: #3d2a49; --tok4: #1d4049; --tok5: #4b2724;
   color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
+*, *::before, *::after { font-variant-ligatures: none !important; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0; background: var(--paper); color: var(--ink);
@@ -78,6 +83,7 @@ button {
 }
 button:hover { border-color: var(--ink-3); }
 .nav-toggle { display: none; }
+.label-short { display: none; }
 
 .layout { display: grid; grid-template-columns: 17rem minmax(0, 1fr); }
 .nav {
@@ -116,11 +122,14 @@ p { margin: 0 0 1.1em; }
 strong { font-weight: 600; }
 code { font-family: var(--mono); font-variant-ligatures: none; font-size: .86em; background: var(--paper-2); padding: .05em .3em; border-radius: 3px; }
 hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; }
-table { border-collapse: collapse; margin: 1.5rem 0; font-size: .92rem; line-height: 1.6; display: block; overflow-x: auto; }
-th, td { border-bottom: 1px solid var(--rule); padding: .4rem .8rem .4rem 0; text-align: left; vertical-align: top; }
+table { position: relative; border-collapse: collapse; margin: 1.5rem 0; font-size: .92rem; line-height: 1.6; display: block; overflow-x: auto; }
+th, td { border-bottom: 1px solid var(--rule); padding: .4rem .8rem .4rem 0; text-align: left; vertical-align: top; min-width: 4.5em; }
+th:first-child, td:first-child { min-width: 6em; }
+.nowrap { white-space: nowrap; }
+.chapter p code, .chapter li code, .chapter td code, .chapter a { overflow-wrap: anywhere; }
 th { font-weight: 600; border-bottom-color: var(--ink-3); }
 blockquote { margin: 1.5rem 0; padding-left: 1rem; border-left: 2px solid var(--rule); color: var(--ink-2); }
-.math-block { margin: 1.2rem 0; overflow-x: auto; overflow-y: hidden; }
+.math-block { position: relative; margin: 1.2rem 0; overflow-x: auto; overflow-y: hidden; }
 
 /* ---------- code ---------- */
 pre { margin: 0; }
@@ -219,13 +228,8 @@ figure.widget figcaption { margin-top: .8rem; font-size: .88rem; color: var(--in
 .tok { display: inline-flex; flex-direction: column; align-items: center; border-radius: 3px; padding: 2px 5px 1px; min-width: 1.6em; }
 .tok b { font-weight: 400; white-space: pre; }
 .tok i { font-style: normal; font-size: 10.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.tok.c0 { background: #dbe4f2; } .tok.c1 { background: #dcefe4; } .tok.c2 { background: #f3e6cf; }
-.tok.c3 { background: #ecdff1; } .tok.c4 { background: #d9eef2; } .tok.c5 { background: #f2dcd9; }
-:root[data-theme="dark"] .tok.c0, :root[data-theme="dark"] .tok.c1, :root[data-theme="dark"] .tok.c2,
-:root[data-theme="dark"] .tok.c3, :root[data-theme="dark"] .tok.c4, :root[data-theme="dark"] .tok.c5 { filter: brightness(.38) saturate(1.4); color: #fff; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .tok { filter: brightness(.38) saturate(1.4); }
-}
+.tok.c0 { background: var(--tok0); } .tok.c1 { background: var(--tok1); } .tok.c2 { background: var(--tok2); }
+.tok.c3 { background: var(--tok3); } .tok.c4 { background: var(--tok4); } .tok.c5 { background: var(--tok5); }
 
 /* ---------- cover & book TOC (index page) ---------- */
 .cover { margin: 2rem 0 3.5rem; }
@@ -269,4 +273,9 @@ figure.widget figcaption { margin-top: .8rem; font-size: .88rem; color: var(--in
   .chapter-head h1 { font-size: 1.8rem; }
   .topbar .book-title { font-size: .85rem; }
   .verify-counter { display: none; }
+  .topbar { gap: .5rem; padding: 0 .6rem; }
+  .topbar-tools { gap: .4rem; }
+  .topbar button { padding: .15rem .45rem; white-space: nowrap; }
+  .label-long { display: none; }
+  .label-short { display: inline; }
 }

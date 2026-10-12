@@ -273,7 +273,7 @@ def make_md(state: dict) -> MarkdownIt:
         for i, tok in enumerate(st.tokens):
             if tok.type == "heading_open" and tok.tag in ("h2", "h3"):
                 text = st.tokens[i + 1].content
-                m = re.match(r"^(\d+(?:\.\d+)+)\s+(.*)$", text)
+                m = SECTION_RE.match(text)
                 hid = "s" + m.group(1).replace(".", "-") if m else "h-" + hashlib.md5(text.encode()).hexdigest()[:8]
                 tok.attrSet("id", hid)
                 if tok.tag == "h2":
@@ -284,7 +284,21 @@ def make_md(state: dict) -> MarkdownIt:
 
 # ---------------------------------------------------------------- verify cells
 
+# "2.3 标题", "A.2 标题", "II.1 标题", "G.4.1 标题" -> ids s2-3, sA-2, sII-1, sG-4-1
+SECTION_RE = re.compile(r"^((?:\d+|[A-Z]+)(?:\.\d+)+)\s+(.*)$")
+CUSTOM_FENCE_RE = re.compile(r"^(`{3,}|~{3,})(listing|verify|localcheck|widget)\b(.*)$", re.M)
+
 VERIFY_RE = re.compile(r"^```verify[ \t]+(.*?)\n(.*?)^```[ \t]*$", re.S | re.M)
+
+
+def check_fences(slug: str, body: str) -> None:
+    """A backtick inside a ```-fence info string makes CommonMark treat the line as text; the next
+    ``` then opens a stray block that swallows the following content. Refuse such sources."""
+    for m in CUSTOM_FENCE_RE.finditer(body):
+        if m.group(1).startswith("`") and "`" in m.group(3):
+            line = body.count("\n", 0, m.start()) + 1
+            raise BuildError(f"{slug}:{line}: backtick in the info string of a {m.group(2)} fence "
+                             f"(use quotes or 「」 in titles): {m.group(0)[:120]}")
 
 
 def collect_cells(body: str) -> list[dict]:
@@ -307,7 +321,8 @@ def run_cells(slug: str, cells: list[dict], out: Path) -> dict:
     if not cells:
         return {}
     BUILD.mkdir(exist_ok=True)
-    h = hashlib.sha256(json.dumps(cells, ensure_ascii=False).encode() + (WEB / "cell_harness.py").read_bytes())
+    h = hashlib.sha256(json.dumps(cells, ensure_ascii=False).encode() + (WEB / "cell_harness.py").read_bytes()
+                       + (ROOT / "tools" / "run_cells.py").read_bytes())
     for f in sorted({f for c in cells for f in c["files"]}):
         src = WEB / f
         if not src.is_file():
@@ -323,7 +338,7 @@ def run_cells(slug: str, cells: list[dict], out: Path) -> dict:
     inp.write_text(json.dumps({"cells": cells, "data_dir": str(out / "data")}, ensure_ascii=False),
                    encoding="utf-8")
     proc = subprocess.run(PYODIDE_MIRROR + [str(ROOT / "tools" / "run_cells.py"), str(inp)],
-                          capture_output=True, text=True, encoding="utf-8",
+                          capture_output=True, text=True, encoding="utf-8", errors="replace",
                           env={**__import__("os").environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"})
     if proc.returncode != 0:
         raise BuildError(f"cell runner crashed for {slug}:\n{proc.stderr[-3000:]}")
@@ -393,7 +408,7 @@ def neighbors(chapters: list[Chapter], ch: Chapter) -> str:
     return "".join(out)
 
 
-H2_RE = re.compile(r"^## +(\d+(?:\.\d+)+) +(.+?)\s*$", re.M)
+H2_RE = re.compile(r"^## +((?:\d+|[A-Z]+)(?:\.\d+)+) +(.+?)\s*$", re.M)
 
 
 def toc_html(chapters: list[Chapter]) -> str:
@@ -424,11 +439,20 @@ def build(only: str | None, run: bool, out: Path) -> None:
     for ch in chapters:
         if only and ch.slug not in only.split(","):
             continue
+        check_fences(ch.slug, ch.body)
         ch.cells = collect_cells(ch.body)
         results = run_cells(ch.slug, ch.cells, out) if run else {}
         state = {"commit": commit, "results": results, "fig": 0,
                  "chapter": ch.meta.get("chapter", ch.slug), "sections": ch.sections}
         html_body = make_md(state).render(ch.body)
+        n_verify = html_body.count('<div class="verify" id=')
+        if n_verify != len(ch.cells):
+            raise BuildError(f"{ch.slug}: {len(ch.cells)} verify cells in the source but {n_verify} rendered "
+                             "(a malformed fence above probably swallowed one)")
+        n_widgets = len(re.findall(r"^(?:`{3,}|~{3,})widget\b", ch.body, re.M))
+        if html_body.count('<figure class="widget"') != n_widgets:
+            n_fig = html_body.count('<figure class="widget"')
+            raise BuildError(f"{ch.slug}: {n_widgets} widget fences but {n_fig} rendered")
         rendered[ch.slug] = html_body.replace("<!-- toc -->", toc_html(chapters))
         print(f"  {ch.slug}: {len(ch.cells)} verify cells, {state['fig']} figures")
 

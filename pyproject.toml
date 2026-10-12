@@ -15,6 +15,7 @@ dependencies = [
 dev = [
     "pytest>=8",
     "tiktoken>=0.14.0",
+    "wandb>=0.16",
 ]
 build = [
     "markdown-it-py>=3.0",
@@ -30,6 +31,7 @@ default-groups = ["dev", "build"]
 [tool.pytest.ini_options]
 testpaths = ["verify"]
 addopts = "-q"
+markers = ["slow: environment probes or long-running checks (deselect with -m 'not slow')"]
 
 # Windows readers get CUDA torch (PyPI only ships CPU wheels for Windows); Linux PyPI wheels already
 # bundle CUDA 13.0, macOS gets CPU/MPS. Verified on an RTX 3060 Ti (sm_86, driver 610.60).

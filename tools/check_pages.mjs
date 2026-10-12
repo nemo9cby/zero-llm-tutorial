@@ -1,6 +1,6 @@
 // Headless browser check for built pages.
 //
-//   node tools/check_pages.mjs <site-dir> [slug ...] [--no-cells] [--shots <dir>]
+//   node tools/check_pages.mjs <site-dir> [slug ...] [--no-cells] [--shots <dir> [--widget-shots]]
 //
 // For each page: load it, fail on console errors / page errors / failed requests,
 // wait for every widget to mount, then click "运行本页全部验证" and wait until every
@@ -37,6 +37,20 @@ function serve(root) {
     fs.createReadStream(file).pipe(res);
   });
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
+}
+
+// --widget-shots: one screenshot per figure.widget, in light and dark, named <slug>-fig<N>-<width>-<theme>.png
+async function widgetShots(page, slug, width) {
+  const figs = await page.$$('figure.widget');
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
+    await page.waitForTimeout(250); // charts re-render on theme change
+    for (let i = 0; i < figs.length; i++) {
+      await figs[i].scrollIntoViewIfNeeded();
+      await figs[i].screenshot({ path: path.join(shotsDir, `${slug}-fig${i + 1}-${width}-${theme}.png`) });
+    }
+  }
+  await page.evaluate(() => { delete document.documentElement.dataset.theme; });
 }
 
 async function checkPage(browser, base, slug) {
@@ -89,11 +103,15 @@ async function checkPage(browser, base, slug) {
   if (shotsDir) {
     fs.mkdirSync(shotsDir, { recursive: true });
     await page.screenshot({ path: path.join(shotsDir, `${slug}-desktop.png`), fullPage: false });
+    if (flags.has('--widget-shots')) await widgetShots(page, slug, 'desktop');
   }
   await page.setViewportSize({ width: 375, height: 812 });
   await page.waitForTimeout(300);
   await overflow('375px');
-  if (shotsDir) await page.screenshot({ path: path.join(shotsDir, `${slug}-phone.png`), fullPage: false });
+  if (shotsDir) {
+    await page.screenshot({ path: path.join(shotsDir, `${slug}-phone.png`), fullPage: false });
+    if (flags.has('--widget-shots')) await widgetShots(page, slug, 'phone');
+  }
   await page.close();
   return { slug, widgets: widgets.length, cells, problems };
 }

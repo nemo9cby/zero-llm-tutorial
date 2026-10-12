@@ -1,11 +1,17 @@
 """Export a DLFS6 CodeBot checkpoint for the in-browser workbench (content/playground.md).
 
-    uv run python tools/export_codebot.py --ckpt third_party/dlfs6/codebot/model_pretrain.pt --name pretrain \
-        --label 预训练 --template none --source <url>
+The workbench's default weights are the tutorial's own run of the book's ch03 scripts (gpu/run_local.py; the
+manifest copies the producing step from web/data/runs/<run>/report.json into provenance.run_step):
 
-The same command exports the tutorial's own weights later, for example
-    uv run python tools/export_codebot.py --ckpt runs/codebot-3060ti/work/codebot/model_sft.pt \
-        --name mine-sft --label "SFT（本书在 RTX 3060 Ti 上训练）" --template alpaca --order 11
+    uv run python tools/export_codebot.py --ckpt runs/codebot-3060ti/work/codebot/model_sft.pt --name sft \
+        --label SFT --template alpaca --order 1 --description "..."
+
+The book's official checkpoints (Hugging Face, fetched by tools/fetch_data.py) go through the same command;
+a new --name adds an entry to the workbench's checkpoint switch:
+
+    uv run python tools/export_codebot.py --ckpt third_party/dlfs6/codebot/model_sft.pt --name official-sft \
+        --label "SFT（官方）" --template alpaca --order 11 \
+        --source https://huggingface.co/datasets/koki0702/zero-llm-data/blob/main/codebot/model_sft.pt
 
 Writes web/data/playground/<name>/
   manifest.json   format "dlfs6-codebot/1": config, provenance, packing, tensor table, shard list
@@ -259,14 +265,34 @@ def rel(path: Path) -> str:
         return path.name                           # outside the repo: do not leak a local absolute path
 
 
+def run_step(run: str, ckpt_rel: str) -> dict | None:
+    """The step of web/data/runs/<run>/report.json (gpu/run_local.py) whose script wrote this checkpoint."""
+    path = ROOT / "web/data/runs" / run / "report.json"
+    if not path.is_file():
+        return None
+    report = json.loads(path.read_text(encoding="utf-8"))
+    inner = ckpt_rel.split("/work/", 1)[-1]          # runs/<run>/work/codebot/model_sft.pt -> codebot/model_sft.pt
+    found = None
+    for step in report.get("steps", []):             # a re-run writes the file again: the last step wins
+        if inner in step.get("produced", []):
+            found = step
+    if found is None:
+        return None
+    host = report.get("host", {})
+    return {"report": f"data/runs/{run}/report.json", "script": found["script"], "started": found.get("started"),
+            "seconds": found.get("seconds"), "exit_code": found.get("exit_code"), "final": found.get("final"),
+            "gpu": host.get("gpu"), "torch": host.get("torch"), "dlfs6_commit": report.get("dlfs6_commit")}
+
+
 def provenance(ckpt: Path, source: str | None) -> dict:
     raw = ckpt.read_bytes()
-    parts = Path(rel(ckpt)).parts
+    where = rel(ckpt)
+    parts = Path(where).parts
     run = parts[1] if len(parts) > 2 and parts[0] == "runs" else None   # runs/<run>/work/... (gpu/run_local.py)
+    step = run_step(run, where) if run else None
     return {
-        "checkpoint": rel(ckpt), "checkpoint_bytes": len(raw), "checkpoint_sha256": hashlib.sha256(raw).hexdigest(),
-        "source": source, "run": run,
-        "run_report": f"data/runs/{run}/report.json" if run and (ROOT / "web/data/runs" / run / "report.json").is_file() else None,
+        "checkpoint": where, "checkpoint_bytes": len(raw), "checkpoint_sha256": hashlib.sha256(raw).hexdigest(),
+        "source": source, "run": run, "run_report": step["report"] if step else None, "run_step": step,
         "dlfs6_commit": git_rev(DLFS6), "tutorial_commit": git_rev(ROOT),
         "exported_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
         "exporter": "tools/export_codebot.py", "python": platform.python_version(),

@@ -2209,6 +2209,7 @@ build = [
 dev = [
     { name = "pytest" },
     { name = "tiktoken" },
+    { name = "wandb" },
 ]
 gpu = [
     { name = "modal" },
@@ -2235,6 +2236,7 @@ build = [
 dev = [
     { name = "pytest", specifier = ">=8" },
     { name = "tiktoken", specifier = ">=0.14.0" },
+    { name = "wandb", specifier = ">=0.16" },
 ]
 gpu = [
     { name = "modal", specifier = ">=1.0" },

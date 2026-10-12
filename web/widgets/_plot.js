@@ -52,6 +52,7 @@ function injectStyle() {
   document.head.append(h('style', {}, `
 .viz { position: relative; font: 12px/1.4 var(--serif); color: var(--ink-2); }
 .viz svg { display: block; width: 100%; overflow: visible; }
+.viz svg.viz-fixed { width: auto; max-width: 100%; height: auto; }
 .viz .grid line { stroke: var(--rule); stroke-width: 1; }
 .viz .axis text { fill: var(--ink-3); font-size: 11px; font-variant-numeric: tabular-nums; }
 .viz .axis-title { fill: var(--ink-2); font-size: 11.5px; }
@@ -105,8 +106,11 @@ function onResize(el, fn) {
 
 /**
  * Line chart.
- * opts: { series: [{name, points: [[x, y], ...]}], xLabel, yLabel, height=260, yMin, yMax,
- *         xFormat, yFormat, logY=false, refLines: [{y, label}], vLines: [{x, label}], table=true }
+ * opts: { series: [{name, points: [[x, y], ...], dash?: '4 3', width?: 2, markers?: false}], xLabel, yLabel,
+ *         height=260, yMin, yMax, xFormat, yFormat, logY=false, logX=false, xTicks?: number[],
+ *         refLines: [{y, label, labelAt?: 'right'|'left'}], vLines: [{x, label}], table=true }
+ * Direct end labels are drawn only when they fit in the right margin and do not collide;
+ * otherwise the legend carries identity.
  * Returns { update(newOpts) } so widgets can re-render with new data.
  */
 export function lineChart(root, opts) {
@@ -126,6 +130,7 @@ export function lineChart(root, opts) {
     const W = Math.max(width, 240), H = height;
     const all = series.flatMap((s) => s.points);
     const tf = (v) => (o.logY ? Math.log10(Math.max(v, 1e-12)) : v);
+    const gx = (v) => (o.logX ? Math.log10(Math.max(v, 1e-12)) : v);
     let x0 = Math.min(...all.map((p) => p[0])), x1 = Math.max(...all.map((p) => p[0]));
     let y0 = o.yMin ?? Math.min(...all.map((p) => p[1]), ...(o.refLines || []).map((r) => r.y));
     let y1 = o.yMax ?? Math.max(...all.map((p) => p[1]), ...(o.refLines || []).map((r) => r.y));
@@ -133,7 +138,8 @@ export function lineChart(root, opts) {
     const yt = o.logY ? null : niceTicks(y0, y1, 5);
     if (yt) { y0 = Math.min(y0, yt[0]); y1 = Math.max(y1, yt[yt.length - 1]); }
     const ty0 = tf(y0), ty1 = tf(y1) === ty0 ? ty0 + 1 : tf(y1);
-    const sx = (x) => m.l + ((x - x0) / (x1 - x0)) * (W - m.l - m.r);
+    const gx0 = gx(x0), gx1 = gx(x1) === gx(x0) ? gx(x0) + 1 : gx(x1);
+    const sx = (x) => m.l + ((gx(x) - gx0) / (gx1 - gx0)) * (W - m.l - m.r);
     const sy = (y) => m.t + (1 - (tf(y) - ty0) / (ty1 - ty0)) * (H - m.t - m.b);
     const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img', 'aria-label': o.ariaLabel || o.yLabel || '折线图' });
     const grid = svg('g', { class: 'grid' }), axis = svg('g', { class: 'axis' });
@@ -143,7 +149,10 @@ export function lineChart(root, opts) {
       grid.append(svg('line', { x1: m.l, x2: W - m.r, y1: sy(v), y2: sy(v) }));
       axis.append(svg('text', { x: m.l - 6, y: sy(v) + 4, 'text-anchor': 'end' }, fy(v)));
     }
-    for (const v of niceTicks(x0, x1, Math.max(2, Math.floor((W - m.l - m.r) / 90)))) {
+    const xTicks = o.xTicks || (o.logX
+      ? (() => { const out = []; for (let e = Math.ceil(gx0 - 1e-9); e <= gx1 + 1e-9; e++) out.push(10 ** e); return out; })()
+      : niceTicks(x0, x1, Math.max(2, Math.floor((W - m.l - m.r) / 90))));
+    for (const v of xTicks) {
       if (v < x0 || v > x1) continue;
       axis.append(svg('text', { x: sx(v), y: H - m.b + 16, 'text-anchor': 'middle' }, fx(v)));
     }
@@ -151,7 +160,11 @@ export function lineChart(root, opts) {
     s.append(grid, axis);
     for (const r of o.refLines || []) {
       s.append(svg('line', { x1: m.l, x2: W - m.r, y1: sy(r.y), y2: sy(r.y), stroke: 'var(--ink-3)', 'stroke-width': 1, 'stroke-dasharray': '2 3' }));
-      if (r.label) s.append(svg('text', { class: 'end-label', x: W - m.r - 4, y: sy(r.y) - 5, 'text-anchor': 'end' }, r.label));
+      if (r.label) {
+        const left = r.labelAt === 'left';
+        s.append(svg('text', { class: 'end-label', x: left ? m.l + 4 : W - m.r - 4, y: sy(r.y) - 5,
+          'text-anchor': left ? 'start' : 'end' }, r.label));
+      }
     }
     for (const v of o.vLines || []) {
       s.append(svg('line', { x1: sx(v.x), x2: sx(v.x), y1: m.t, y2: H - m.b, stroke: 'var(--ink-3)', 'stroke-width': 1, 'stroke-dasharray': '2 3' }));
@@ -159,13 +172,21 @@ export function lineChart(root, opts) {
     }
     series.forEach((ser, i) => {
       const d = ser.points.map((p, j) => `${j ? 'L' : 'M'}${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join('');
-      s.append(svg('path', { d, fill: 'none', stroke: seriesColor(i), 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+      s.append(svg('path', { d, fill: 'none', stroke: seriesColor(i), 'stroke-width': ser.width || 2,
+        'stroke-dasharray': ser.dash || null, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
+      if (ser.markers) {
+        for (const p of ser.points) {
+          s.append(svg('circle', { cx: sx(p[0]), cy: sy(p[1]), r: 4, fill: seriesColor(i), stroke: 'var(--paper)', 'stroke-width': 2 }));
+        }
+      }
     });
     // Direct end labels only when they stay apart; converging lines fall back to the legend.
     const ends = series.map((ser) => ser.points[ser.points.length - 1]).filter(Boolean);
     const ys = ends.map((p) => sy(p[1])).sort((a, b) => a - b);
     const apart = ys.every((y, j) => j === 0 || y - ys[j - 1] >= 13);
-    if (series.length > 1 && series.length <= 4 && apart) {
+    const textWidth = (t) => [...t].reduce((w, ch) => w + (ch.charCodeAt(0) > 0x2e80 ? 11.5 : 6.6), 0);
+    const fits = series.every((ser) => textWidth(ser.name) <= m.r - 8);
+    if (series.length > 1 && series.length <= 4 && apart && fits) {
       series.forEach((ser) => {
         const last = ser.points[ser.points.length - 1];
         if (last) s.append(svg('text', { class: 'end-label', x: sx(last[0]) + 6, y: sy(last[1]) + 4 }, ser.name));
@@ -229,6 +250,7 @@ export function barChart(root, opts) {
     box.replaceChildren();
     const { bars, height = 220 } = o;
     const fy = o.yFormat || fmtNum;
+    if (o.yLabel) box.append(h('div', { class: 'viz-ylabel' }, o.yLabel));
     const m = { l: 48, r: 10, t: 16, b: 34 };
     const W = Math.max(width, 240), H = height;
     const vmax = Math.max(0, ...bars.map((b) => b.value)), vmin = Math.min(0, ...bars.map((b) => b.value));
@@ -309,7 +331,7 @@ export function heatmap(root, opts) {
     const lab = 44;
     const cell = Math.max(10, Math.min(o.size || 34, Math.floor((Math.max(width, 200) - lab - 4) / C)));
     const W = lab + cell * C + 2, H = lab + cell * R + 2;
-    const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H, style: `max-width:100%;height:auto`, role: 'img',
+    const s = svg('svg', { class: 'viz-fixed', viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: 'img',
       'aria-label': o.ariaLabel || '热力图' });
     const axis = svg('g', { class: 'axis' });
     (o.colLabels || []).forEach((t, c) => axis.append(svg('text', { x: lab + cell * (c + 0.5), y: lab - 6, 'text-anchor': 'middle' }, t)));
@@ -335,9 +357,10 @@ export function heatmap(root, opts) {
         rect.addEventListener('pointerleave', () => tip.hide()); rect.addEventListener('blur', () => tip.hide());
         s.append(rect);
         if (cell >= 30 && !masked && o.showValues !== false) {
+          // The fills are theme-independent, so the label colour is chosen from the fill, not from --ink.
           const dark = o.scale === 'div' ? Math.abs(t) > 0.55 : t > 0.55;
           s.append(svg('text', { x: lab + cell * (c + 0.5), y: lab + cell * (r + 0.5) + 4, 'text-anchor': 'middle',
-            'font-size': 10, fill: dark ? '#fff' : 'var(--ink)', 'pointer-events': 'none' }, fv(v)));
+            'font-size': 10, fill: dark ? '#ffffff' : '#1b2233', 'pointer-events': 'none' }, fv(v)));
         }
       }
     }
