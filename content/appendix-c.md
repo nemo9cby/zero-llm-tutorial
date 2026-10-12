@@ -105,8 +105,9 @@ $$
 \begin{aligned}
 \mathbb E\big[(r - b)\,\mathbf s\big] &= \mathbb E[r\,\mathbf s] - b\,\mathbb E[\mathbf s]\\[-3pt]
 &\quad{\footnotesize\text{（期望的线性）}}\\[2pt]
-&= \nabla_\theta J(\theta) - b\cdot\mathbf 0 = \nabla_\theta J(\theta)\\[-3pt]
-&\quad{\footnotesize\text{（C.1 节的结论；引理）}}
+&= \nabla_\theta J(\theta) - b\cdot\mathbf 0\\[-3pt]
+&\quad{\footnotesize\text{（C.1 节的结论；引理）}}\\[2pt]
+&= \nabla_\theta J(\theta)
 \end{aligned}
 $$
 
@@ -132,14 +133,15 @@ $$
 \begin{aligned}
 V(b) &= \mathbb E\big[\|\mathbf g_b\|^2\big] - \big\|\mathbb E[\mathbf g_b]\big\|^2\\[-3pt]
 &\quad{\footnotesize\text{（方差的定义）}}\\[2pt]
-&= \mathbb E[r^2\|\mathbf s\|^2] - 2b\,\mathbb E[r\|\mathbf s\|^2] + b^2\,\mathbb E[\|\mathbf s\|^2] - \|\nabla J\|^2\\[-3pt]
+&= \mathbb E[r^2\|\mathbf s\|^2] - 2b\,\mathbb E[r\|\mathbf s\|^2]\\
+&\qquad + b^2\,\mathbb E[\|\mathbf s\|^2] - \|\nabla J\|^2\\[-3pt]
 &\quad{\footnotesize\text{（展开）}}\\[2pt]
 &= V(b^*) + \mathbb E[\|\mathbf s\|^2]\,(b - b^*)^2\\[-3pt]
 &\quad{\footnotesize\text{（对 }b\text{ 配方）}}
 \end{aligned}
 $$
 
-第一行是“方差 = 二阶矩 − 均值的平方”，用在向量的每个分量上再求和。第二行最后一项用到了 C.2 节：均值 $\mathbb E[\mathbf g_b] = \nabla J$，与 $b$ 无关。第三行的 $b^*$ 是
+第一行是“方差 = 二阶矩 − 均值的平方”，用在向量的每个分量上再求和。展开之后的最后一项 $\|\nabla J\|^2$ 用到了 C.2 节：均值 $\mathbb E[\mathbf g_b] = \nabla J$，与 $b$ 无关。最后一行的 $b^*$ 是
 
 $$
 b^* = \frac{\mathbb E\big[r\,\|\mathbf s\|^2\big]}{\mathbb E\big[\|\mathbf s\|^2\big]}
@@ -298,26 +300,31 @@ A_i &= r_i - \frac1G\sum_{j=1}^G r_j\\[-3pt]
 &\quad{\footnotesize\text{（组均值当基线）}}\\[2pt]
 &= \Big(1 - \frac1G\Big)\,r_i - \frac1G\sum_{j\ne i} r_j\\[-3pt]
 &\quad{\footnotesize\text{（把 }r_i\text{ 单独拿出来）}}\\[2pt]
-\mathbb E[A_i\,\mathbf s_i] &= \Big(1 - \frac1G\Big)\,\mathbb E[r_i\,\mathbf s_i] - \frac1G\sum_{j\ne i}\mathbb E[r_j\,\mathbf s_i]\\[-3pt]
+\mathbb E[A_i\,\mathbf s_i] &= \Big(1 - \frac1G\Big)\,\mathbb E[r_i\,\mathbf s_i]\\
+&\qquad - \frac1G\sum_{j\ne i}\mathbb E[r_j\,\mathbf s_i]\\[-3pt]
 &\quad{\footnotesize\text{（期望的线性）}}\\[2pt]
-&= \frac{G-1}{G}\,\nabla J - \frac1G\sum_{j\ne i}\mathbb E[r_j]\;\mathbb E[\mathbf s_i]\\[-3pt]
+&= \frac{G-1}{G}\,\nabla J\\
+&\qquad - \frac1G\sum_{j\ne i}\mathbb E[r_j]\;\mathbb E[\mathbf s_i]\\[-3pt]
 &\quad{\footnotesize\text{（C.1 节；独立）}}\\[2pt]
 &= \frac{G-1}{G}\,\nabla J\\[-3pt]
 &\quad{\footnotesize\text{（C.2 节的引理）}}
 \end{aligned}
 $$
 
-这里 $\mathbf s_i = \mathbf s(y_i)$。第四行有两处依据：第一项用到 C.1 节的 $\mathbb E[r\,\mathbf s] = \nabla J$；第二项里，$y_j$ 与 $y_i$ 是独立采样的，所以 $r_j$ 与 $\mathbf s_i$ 独立，乘积的期望可以拆成期望的乘积。第五行再用 C.2 节的引理 $\mathbb E[\mathbf s_i] = \mathbf 0$。
+这里 $\mathbf s_i = \mathbf s(y_i)$。标着“C.1 节；独立”的那一步有两处依据：第一项用到 C.1 节的 $\mathbb E[r\,\mathbf s] = \nabla J$；第二项里，$y_j$ 与 $y_i$ 是独立采样的，所以 $r_j$ 与 $\mathbf s_i$ 独立，乘积的期望可以拆成期望的乘积。最后一步再用 C.2 节的引理 $\mathbb E[\mathbf s_i] = \mathbf 0$。
 
-所以组均值基线并不是严格无偏的，但偏差只是一个常数倍：方向完全正确，长度缩小为 $(G-1)/G$。$G = 8$ 时是 $7/8$。再配合 Adam 这类对梯度尺度不敏感的优化器（[附录 D](appendix-d.html)），这个常数几乎没有影响。
+所以组均值基线并不是严格无偏的，但偏差只是一个常数倍：方向完全正确，长度缩小为 $(G-1)/G$。$G = 8$ 时是 $7/8$。再配合 Adam 这类对梯度尺度不敏感的优化器（[附录 D](appendix-d.html)），这个常数几乎没有影响。DLFS6 还把梯度裁剪到范数 1，这时 $7/8$ 的全部效果，相当于把裁剪的阈值放宽到 $8/7$（[D.4 节](appendix-d.html#sD-4)的提示框）。
 
-如果想要严格无偏，可以把自己排除在外，用其余 $G - 1$ 个回答的平均当基线，这叫 **RLOO**（REINFORCE Leave-One-Out）。上面第一行其实已经说明了两者的关系：
+如果想要严格无偏，可以把自己排除在外，用其余 $G - 1$ 个回答的平均当基线，这叫 **RLOO**（REINFORCE Leave-One-Out）。上面推导的第二行其实已经说明了两者的关系：
 
 $$
-A_i^{\text{GRPO}} = \frac{G-1}{G}\Big(r_i - \frac{1}{G-1}\sum_{j\ne i} r_j\Big) = \frac{G-1}{G}\,A_i^{\text{RLOO}}
+\begin{aligned}
+A_i^{\text{GRPO}} &= \frac{G-1}{G}\Big(r_i - \frac{1}{G-1}\sum_{j\ne i} r_j\Big)\\
+&= \frac{G-1}{G}\,A_i^{\text{RLOO}}
+\end{aligned}
 $$
 
-RLOO 的基线只依赖其他回答，与 $y_i$ 独立，满足 C.2 节的前提，所以严格无偏（[Ahmadian et al., 2024](https://arxiv.org/abs/2402.14740) 第 2.3 节；该估计量最早由 Kool 等人在 2019 年提出）。下面在 4 臂老虎机上枚举一组 $G$ 个回答的全部 $4^G$ 种可能，精确计算两种估计量的期望：
+RLOO 的基线只依赖其他回答，与 $y_i$ 独立，满足 C.2 节的前提，所以严格无偏（[Ahmadian et al., 2024](https://arxiv.org/abs/2402.14740) 第 2.3 节；该估计量最早由 Kool 等人在 2019 年提出；2026-10 查证）。下面在 4 臂老虎机上枚举一组 $G$ 个回答的全部 $4^G$ 种可能，精确计算两种估计量的期望：
 
 ```verify id=C-e title="枚举全部 4^G 种分组：GRPO 的期望是真梯度的 (G−1)/G，RLOO 恰好等于真梯度"
 from itertools import product

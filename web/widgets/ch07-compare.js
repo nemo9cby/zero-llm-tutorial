@@ -2,7 +2,7 @@
    再加一行“字节级”（不用分词器）作基线。
    config: { "presets": "data/ch07/presets.json", "preset": 0 }
    compare() is pure (no DOM) so tests/js/ch07-compare.test.mjs can check it against the book's Python code. */
-import { h, chip, fmt } from './_lib.js';
+import { h, chip, fmt, visible } from './_lib.js';
 import { Tokenizer, utf8Encode } from './_bpe.js';
 
 export const BOTS = Object.freeze([
@@ -56,7 +56,8 @@ export function tokenInfo(bot, index, id, bytes, lab) {
   const head = `${bot} 的第 ${fmt(index + 1)} 个 token：id ${fmt(id)}`;
   if (lab.special) return `${head}，特殊 token ${lab.text}`;
   const hex = [...bytes].map((x) => x.toString(16).padStart(2, '0')).join(' ');
-  return `${head}，字节 ${hex}` + (lab.partial ? '（单独不是完整的 UTF-8 字符）' : `（“${lab.text}”）`);
+  // spaces, newlines and tabs shown as on the chips (␣ ↵ ⇥)
+  return `${head}，字节 ${hex}` + (lab.partial ? '（单独不是完整的 UTF-8 字符）' : `（“${visible(lab.text)}”）`);
 }
 
 let styled = false;
@@ -85,8 +86,9 @@ function injectStyle() {
 .w-ch07-row .tok:focus-visible { outline: 2px solid var(--ai); outline-offset: 1px; }
 .w-ch07-row .tok.picked { box-shadow: 0 0 0 2px var(--ai); }
 .w-ch07-more { font-size: .8rem; color: var(--ink-3); }
-.w-ch07-pick { position: sticky; bottom: 0; z-index: 1; margin: .6rem 0 0; padding: .35rem 0; background: var(--paper);
+.w-ch07-pick { margin: .6rem 0 0; padding: .35rem 0; background: var(--paper);
   border-top: 1px solid var(--rule); font-size: .85rem; color: var(--ink-2); overflow-wrap: anywhere; min-height: 1.5em; }
+.w-ch07-pick.on { position: sticky; bottom: 0; z-index: 1; }
 .w-ch07-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 `));
 }
@@ -158,6 +160,7 @@ export async function mount(root, config = {}) {
     picked = el;
     el.classList.add('picked');
     pick.textContent = el.dataset.info;
+    pick.classList.add('on');            // from now on the line sticks to the bottom of the screen
   }
   rowsBox.addEventListener('mouseover', (e) => show(e.target.closest('.tok')));
   rowsBox.addEventListener('focusin', (e) => show(e.target.closest('.tok')));
@@ -220,6 +223,7 @@ export async function mount(root, config = {}) {
         h('span', { style: { width: `${maxTokens ? (100 * bytes) / maxTokens : 0}%` } })));
     picked = null;
     pick.textContent = HINT;
+    pick.classList.remove('on');         // the hint stays in place: it must not cover the text box
     rowsBox.replaceChildren(...BOTS.map((b, i) => row(b, toks[i], rows[i], maxTokens)), base);
     live.textContent = `${fmt(bytes)} 字节：` + BOTS.map((b, i) => `${b.label} ${fmt(rows[i].tokens)} 个 token`).join('，');
   }

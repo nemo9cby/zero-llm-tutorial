@@ -39,11 +39,28 @@ function numericalGrad(f, x, h = 1e-5) {
 /** L = sum(y * R) for a fixed random R, so dL/dy = R. */
 const dot = (y, R) => { let s = 0; for (let i = 0; i < R.length; i++) s += y[i] * R[i]; return s; };
 
-test('erf matches Python math.erf to about one ulp', () => {
-  const { x, erf: ref } = fixture('erf.json');
-  let worst = 0;
-  x.forEach((v, i) => { worst = Math.max(worst, Math.abs(erf(v) - ref[i])); });
-  assert.ok(worst <= 2.3e-16, `max |erf - math.erf| = ${worst}`);
+/** Position of a float64 on the number line, counted in float64 steps (so b - a is "how many ulps apart"). */
+const ordinal = (x) => {
+  const i = new BigInt64Array(Float64Array.of(x).buffer)[0];
+  return i < 0n ? -(i & 0x7fffffffffffffffn) : i;
+};
+const ulpsApart = (a, b) => { const d = ordinal(a) - ordinal(b); return Number(d < 0n ? -d : d); };
+const unb64 = (s) => { const b = Buffer.from(s, 'base64'); return new Float64Array(b.buffer.slice(b.byteOffset, b.byteOffset + b.length)); };
+
+test('erf is at most one ulp from the correctly rounded value (mpmath, 120 bits), on a grid and 10,000 random points in [-7, 7]', () => {
+  const fx = fixture('erf.json');
+  const x = unb64(fx.x), ref = unb64(fx.erf);
+  assert.equal(x.length, fx.n);
+  assert.ok(fx.n > 10_000);
+  let worst = 0, at = 0, exact = 0;
+  for (let i = 0; i < x.length; i++) {
+    const d = ulpsApart(erf(x[i]), ref[i]);
+    if (d > worst) { worst = d; at = x[i]; }
+    if (d === 0) exact += 1;
+  }
+  assert.ok(worst <= 1, `erf(${at}) is ${worst} ulps from the reference`);
+  assert.ok(exact / x.length > 0.9, `correctly rounded at ${exact} of ${x.length} points`);
+  assert.equal(ulpsApart(1, 1 - 2 ** -53), 1); // the ruler itself: 1 and the float64 just below it are one step apart
   assert.equal(erf(0), 0);
   assert.equal(erf(-7), -1);
 });

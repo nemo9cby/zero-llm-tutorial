@@ -2,7 +2,7 @@
    Messages in:  {type:'init', trainURL, valURL, config, seed, settings}  {type:'start'}  {type:'pause'}
                  {type:'reset'}  {type:'set', settings:{lr, maxSteps, mode, temperature, simd}}  {type:'sample'}
    Messages out: {type:'ready', ...facts}  {type:'progress', step, losses, evals, seconds}
-                 {type:'sample', step, prompt, text, val}  {type:'state', running, step, done}
+                 {type:'sample', step, prompt, text, val, overfit}  {type:'state', running, step, done}
                  {type:'reset', initialLoss, initialVal}  {type:'simd', on}  {type:'error', message} */
 import { CharTokenizer, createSession, paramCount, ngramBaselines, simdSupported, setSimd } from './_tinygpt.js';
 
@@ -20,7 +20,7 @@ function reset() {
   S.session = createSession({ trainIds, valIds, config: cfg, seed, batch: settings.batch, lr: settings.lr });
   S.session.mode = settings.mode;
   S.initialLoss = S.session.fixedBatchLoss();
-  S.lastVal = S.session.heldOutLoss();
+  S.lastVal = S.session.heldOutLoss(); // the whole held-out text, every character predicted once
   S.seconds = 0;
 }
 
@@ -38,12 +38,17 @@ async function init({ trainURL, valURL, config, seed = 0, settings }) {
   });
 }
 
+const OVERFIT_PROMPT = 8; // in overfit mode, sample from the first 8 characters of the memorized batch
+
 function sample() {
-  const { tok, settings, session } = S;
-  const ids = session.sample(tok.encode(settings.prompt), {
-    maxNewTokens: settings.sampleChars, temperature: settings.temperature, endId: tok.endId, stopAtEnd: false,
+  const { tok, settings, session, cfg } = S;
+  const overfit = session.mode === 'overfit';
+  const prompt = overfit ? Array.from(session.fixed.x.subarray(0, OVERFIT_PROMPT)) : tok.encode(settings.prompt);
+  const ids = session.sample(prompt, {
+    maxNewTokens: overfit ? cfg.ctx - OVERFIT_PROMPT : settings.sampleChars, temperature: settings.temperature,
+    endId: tok.endId, stopAtEnd: false,
   });
-  post({ type: 'sample', step: session.step, prompt: settings.prompt, text: tok.decode(ids), val: S.lastVal });
+  post({ type: 'sample', step: session.step, prompt: tok.decode(prompt), text: tok.decode(ids), val: S.lastVal, overfit });
 }
 
 function loop() {

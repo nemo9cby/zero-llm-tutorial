@@ -5,15 +5,16 @@ GRPODataset / calculate_reward / compute_probs / grpo_loss 都是原书的函数
 不需要 padding），统计上等价于逐条调用 256 次 generate()。超参数与脚本相同：lr 7e-6、G=8、batch 32、
 eps 0.2、每批数据更新 2 次、clip_grad_norm 1.0、AdamW。每轮写一行 JSON 指标，每 10 轮加一次 greedy 准确率。
 
-批量采样每条回答最多生成 max_new_tokens = 40 个 token（原书的 generate() 默认 1000）。只要没有回答写满 40 个
-token 还没停下，两者就完全等价，所以每轮都记下写满上限、被截断的回答条数（truncated、greedy_truncated），
-test_ch03.py::test_recorded_grpo_runs 断言它们全是 0。
+批量采样每条回答最多生成 max_new_tokens = 40 个 token（原书的 generate() 默认 1000）。写满 40 个 token 还没停下的
+回答会被截断，按已经写出的文字打分；除此之外，两者在统计上等价。所以每轮都记下被截断的回答条数（truncated，
+greedy 评测的记在 greedy_truncated）：页面上的 6 条运行一共采样 77,760 条回答，被截断的有 8 条，greedy 评测里没有，
+test_ch03.py::test_recorded_grpo_runs 核对这些数字。
 
     CUDA_VISIBLE_DEVICES=-1 uv run python verify/_ch03_grpo_replicate.py --iters 60 --seed 2 --tag base
     CUDA_VISIBLE_DEVICES=-1 uv run python verify/_ch03_grpo_replicate.py --iters 60 --seed 2 --tag nodrop --dropout-off
 
-页面上的 web/data/ch03/grpo_dropout/seed{0,1,2}_{base,nodrop}.jsonl 就是这类命令的输出（--seed 0、1、2，
-CPU，约 35 分钟一条）。
+页面上的 web/data/ch03/grpo_dropout/seed{0,1,2}_{base,nodrop}.jsonl 就是这类命令的输出（--seed 0、1、2）。
+在 i7-11700F 上三条同时跑、每条 4 个线程时，一条要 33–41 分钟（墙钟时间记在 grpo_dropout_runs.json 的 seconds 里）。
 """
 import argparse, json, sys, time
 from itertools import cycle

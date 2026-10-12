@@ -70,7 +70,7 @@ git bundle create zllm.bundle HEAD
    装回的还是 CUDA 13.0 版（<https://docs.astral.sh/uv/reference/cli/#uv-pip-install>）；钉住 `+cu126`
    则让选错版本时当场报错。之后写入 `UV_NO_SYNC=1`，免得 `uv run` 把它“修”回去。
 2. 安装 uv，克隆 bundle，取回并核对原书子模块。
-3. `uv sync --frozen`，然后在 GPU 上自检一行：torch 版本、CUDA 版本、几张什么卡、是否支持 bf16。
+3. `uv sync --frozen`，然后用一行 Python 在 GPU 上自检，打印 torch 版本、CUDA 版本、几张什么卡、是否支持 bf16。
 4. 没有 gcc 时装 `build-essential`：第 9 章的 `torch.compile` 要用 Triton 现场编译 kernel。
 5. `uv run python gpu/fetch.py <bots>`：只下载这些机器人的作业要读的文件（断点续传、核对字节数）。
 

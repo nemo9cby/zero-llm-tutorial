@@ -34,12 +34,14 @@ export async function mount(root, config = {}) {
     wait.remove();
   }
   const losses = rec.losses;
-  const pts = losses.map((v, i) => [i, v]).filter(([i]) => i < 40 || i % 4 === 0 || i === losses.length - 1);
+  // 每一步都画（不抽样），纵轴取对数：loss 降到 0.01 以下以后，每 18 步一次的尖峰仍然看得出来（验证 6.8-e）
+  const pts = losses.map((v, i) => [i, v]);
   const chartBox = h('div');
   root.append(chartBox);
   lineChart(chartBox, {
-    series: [{ name: 'DPO loss', points: pts }], xLabel: 'iteration', yLabel: 'DPO loss（每个 batch 8 条 pair）',
-    height: 230, yMin: 0, refLines: [{ y: Math.LN2, label: 'ln 2' }], table: false,
+    series: [{ name: 'DPO loss', points: pts, width: 1.5 }], xLabel: 'iteration',
+    yLabel: 'DPO loss（每个 batch 8 条 pair，对数刻度）', height: 230, logY: true, yMin: 0.001, yMax: 1,
+    refLines: [{ y: Math.LN2, label: 'ln 2' }], table: false,
   });
 
   const tp = rec.post.train_pairs, ho = rec.post.heldout_pairs;
@@ -51,7 +53,7 @@ export async function mount(root, config = {}) {
     h('div', {}, '第 0 步 loss ', h('b', {}, losses[0].toFixed(4)), '（ln 2 = 0.6931）'),
     h('div', {}, '最后 100 步的平均 loss ', h('b', {}, last100.toFixed(4))),
     h('div', {}, `训练 pair（${tp.n} 条）隐式奖励准确率 `, h('b', {}, tp.reward_acc.toFixed(3))),
-    h('div', {}, `留出 pair（${ho.n} 条）准确率 `, h('b', {}, `${hoK}/${ho.n}`), `，95% 区间 [${lo.toFixed(2)}, ${hi.toFixed(2)}]`),
+    h('div', {}, `留出 pair（${ho.n} 条）隐式奖励准确率 `, h('b', {}, `${hoK}/${ho.n}`), `，95% 区间 [${lo.toFixed(2)}, ${hi.toFixed(2)}]`),
     h('div', {}, 'chosen 的 log π − log π_ref 平均 ', h('b', {}, `${tp.chosen_shift_nats >= 0 ? '+' : ''}${tp.chosen_shift_nats.toFixed(1)}`), ' nats'),
     h('div', {}, 'rejected 的 log π − log π_ref 平均 ', h('b', {}, tp.rejected_shift_nats.toFixed(1)), ' nats'),
     h('div', {}, `留出 TinyStories 文本的 loss：`, h('b', {}, rec.post.lm_loss_pretrain.toFixed(4)), ' → ', h('b', {}, rec.post.lm_loss_dpo.toFixed(4))),

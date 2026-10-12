@@ -29,9 +29,9 @@ pyodide_packages: [numpy]
 | 本机 RTX 3060 Ti | 42 分钟（实测） | 约 1.8 小时（估算） | 放不下 |
 | 云端 | 不必上云 | Modal H100 实测：预训练 16 分钟，连同生成与 DPO 约 1.17 美元 | 单卡 H100 约 10.4 小时、28–45 美元（按探针实测外推） |
 
-表中的数字依次出自：参数量 [验证 G.2-b](#v-G.2-b)，训练 token [验证 G.2-c](#v-G.2-c)，计算量 [验证 G.2-e](#v-G.2-e)，本机 [验证 G.2-g](#v-G.2-g) 与 [验证 G.4-a](#v-G.4-a)，云端 [验证 G.2-h](#v-G.2-h) 与 [验证 G.2-j](#v-G.2-j)。
+表中的数字依次出自：参数量 [验证 G.2-b](#v-G.2-b)，训练 token [验证 G.2-c](#v-G.2-c)，计算量 [验证 G.2-e](#v-G.2-e)，本机 [验证 G.2-g](#v-G.2-g) 与 [验证 G.4-a](#v-G.4-a)，云端 [验证 G.2-h](#v-G.2-h)、[验证 G.2-j](#v-G.2-j) 与 [验证 G.5-a](#v-G.5-a)。
 
-这张表说了两件事。第一，CodeBot 在本机跑起来毫无压力；StoryBot 的显存够用，估计也能在本机跑完，不过我们还没有完整跑过（[G.4](#sG-4)）。第二，WebBot 的计算量是 StoryBot 的两百多倍，这一级必须上云，而且值得先花几毛钱做一次“探针”：只跑真实训练的前 200 步，读出速度（[G.2](#sG-2) 的最后一部分细说）。我们的探针花了约 0.27 美元，读出的速度比事前的估算慢 13%，全程因此从 9.1 小时变成了约 10.4 小时。
+这张表说了两件事。第一，CodeBot 在本机跑起来毫无压力；StoryBot 估计也能在本机跑完，不过我们还没有完整跑过（[G.4](#sG-4)）。第二，WebBot 的计算量是 StoryBot 的两百多倍，这一级必须上云，而且值得先花几毛钱做一次“探针”：只跑真实训练的前 200 步，读出速度（[G.2](#sG-2) 的最后一部分细说）。我们的探针花了约 0.27 美元，读出的速度比事前的估算慢 13%，全程因此从 9.1 小时变成了约 10.4 小时。
 
 真正跑过的运行，都记在下面这块“运行记录”里。每份报告回答三个问题：在哪里跑的（机器、GPU、PyTorch 版本），跑的是哪份代码（教程和原书的两个提交号），结果如何（每个脚本的用时、最后的指标和费用）。其中 `codebot-grpo-evalfix-3060ti` 是一次勘误实验：起点是 `codebot-3060ti` 的 SFT 检查点，只在 GRPO 的更新循环前加了一行 `model.eval()`（[勘误 E01](errata.html#e01)）。计划了但还没跑的运行，也连同命令一起列在后面。
 
@@ -341,7 +341,8 @@ print(f"CodeBot，本机 3060 Ti，MFU 30%：{c['wall_h'] * 60:.0f} 分钟")
 print(f"StoryBot，本机 3060 Ti，MFU 25%：{st['wall_h']:.2f} 小时")
 assert abs(h100 - 3.95) < 0.01
 assert 9.0 < e["wall_h"] < 9.2 and 35 < e["usd"] < 37
-assert round(c["wall_h"] * 60) == 39 and abs(st["wall_h"] - 1.76) < 0.005
+assert round(c["wall_h"] * 60) == 39
+assert abs(st["wall_h"] - 1.76) < 0.005
 
 rep = json.load(open("data/runs/codebot-3060ti/report.json",
                      encoding="utf-8"))
@@ -355,15 +356,19 @@ assert 0.25 < mfu < 0.30
 # 第 8 章的粗算：N 取全部参数，不算 Attention 与评估
 ch8 = 6 * wb["params"] * run_shape(wb)["train_tokens"]
 ch8_h = ch8 / (G["h100"]["bf16"] * 1e12 * 0.35) / 3600
-norms = wb["params"] - wb["vocab"] * wb["d"] - wb["n_mm"]
-print(f"同样按 MFU 35%，第 8 章的 6·N·D：{ch8_h:.1f} 小时；"
-      f"第 9 章的 N 多算了 {norms:,} 个 RMSNorm 权重")
-assert round(ch8_h, 1) == 9.6 and norms == 19_200
+print(f"同样按 MFU 35%，第 8 章的 6·N·D：{ch8_h:.1f} 小时")
+# 全部参数比 n_mm 多出的：只查表的 embedding，加 25 个 RMSNorm
+emb = wb["vocab"] * wb["d"]
+norms = (2 * wb["layers"] + 1) * wb["d"]
+print(f"全部参数比 n_mm 多 {wb['params'] - wb['n_mm']:,} 个："
+      f"embedding {emb:,}，RMSNorm {norms:,}")
+assert round(ch8_h, 1) == 9.6
+assert wb["params"] - wb["n_mm"] == emb + norms
 ```
 
 CodeBot 在本机的估算是 39 分钟，运行记录 `codebot-3060ti` 里的实测是 42 分钟，倒推出的 MFU 是 28%，和我们假设的 30% 很接近。这说明对这台机器、这个模型，30% 是个靠得住的数。换一台机器、换一个模型，就得重新量。
 
-同一个 WebBot，各章给出的估算并不完全一样，差别都出在口径上，三者也都假设 MFU 35%。第 8 章用 $6ND$ 粗算，$N$ 取全部 1.52 亿参数，不算 Attention 和评估，得到约 9.6 小时（[验证 8.1-f](ch08.html#v-8.1-f)）。第 9 章与这里一样去掉了只查表的 embedding，补上 Attention 与评估两项，约 9 小时（[验证 9.7-c](ch09.html#v-9.7-c)）；它的 $N$ 比这里的 $n_{\text{mm}}$ 多出 1.92 万个 RMSNorm 权重，影响可以忽略。这里的事前估算是 9.07 小时，而探针实测推得约 10.4 小时。
+WebBot 要跑多久，第 8 章也事前估过一次，数字和这里不一样，差别出在口径上。第 8 章用 $6ND$ 粗算，$N$ 取全部 1.52 亿参数，不算 Attention 和评估，按 MFU 35% 得到约 9.6 小时（[验证 8.1-f](ch08.html#v-8.1-f)）。这里的 $n_{\text{mm}}$ 少了 3,840 万个只查表的 embedding 参数和 1.92 万个 RMSNorm 权重，又补上了 Attention 与评估两项，得到 9.07 小时。两个估算后来都拿同一次探针校准过，第 8 章、第 9 章和这里推得的都是约 10.4 小时（[验证 8.1-g](ch08.html#v-8.1-g)、[验证 9.7-d](ch09.html#v-9.7-d)、[验证 G.2-j](#v-G.2-j)）。
 
 ### 小模型遇上快 GPU
 
@@ -384,7 +389,8 @@ assert plain["step_ms"] < 15 and floored["wall_h"] > 3 * plain["wall_h"]
 
 rep = json.load(open("data/runs/storybot-h100/report.json",
                      encoding="utf-8"))
-pre = next(x for x in rep["steps"] if x["script"] == "ch06/05_pretrain.py")
+pre = next(x for x in rep["steps"]
+           if x["script"] == "ch06/05_pretrain.py")
 # 日志最后几行里有一条完整评估的进度条：668 个 batch，平均速度
 bar = [ln for ln in pre["log_tail"] if "Validation" in ln][-1]
 n, rate = re.search(r"(\d+)/\d+ \[[^\]]*, ([\d.]+)it/s\]", bar).groups()
@@ -392,7 +398,8 @@ sb_eval_s = int(n) / float(rate)
 eff25 = G["h100"]["bf16"] * 1e12 * 0.25
 eval_model = flops(sb, s)[1] / s["evals"] / eff25
 step_ms = (pre["seconds"] - s["evals"] * sb_eval_s) / s["steps"] * 1e3
-print(f"实测 {pre['seconds'] / 60:.1f} 分钟：评估每次 {sb_eval_s:.1f} 秒"
+print(f"实测 {pre['seconds'] / 60:.1f} 分钟："
+      f"评估每次 {sb_eval_s:.1f} 秒"
       f"（按 FLOPs 只要 {eval_model:.1f} 秒）")
 print(f"训练每步约 {step_ms:.0f} 毫秒")
 # 固定开销比计算长得多
@@ -478,7 +485,8 @@ per_tok = 6 * wb["n_mm"] + 6 * 12 * 1024 * 768
 tok_s = timing["tokens_per_step"] / s_step
 peak = G["h100"]["bf16"] * 1e12
 mfu_probe = tok_s * per_tok / peak
-print(f"训练：每步 {s_step} 秒，{tok_s:,.0f} token/s，MFU {mfu_probe:.1%}")
+print(f"训练：每步 {s_step} 秒，{tok_s:,.0f} token/s，"
+      f"MFU {mfu_probe:.1%}")
 print(f"评估：{n_batches} 个 batch ÷ {rate} it/s = {eval_s:.0f} 秒")
 print(f"全程：{wall_h:.2f} 小时"
       f"（事前按 MFU 35% 估 {before['wall_h']:.2f} 小时）")
@@ -494,7 +502,8 @@ assert (round(min(usd.values())), round(max(usd.values()))) == (28, 45)
 
 rep = json.load(open(base + "report.json", encoding="utf-8"))
 probe_run = rep["steps"][0]
-print(f"探针本身：{probe_run['seconds']:.0f} 秒，约 {rep['cost_usd']} 美元")
+print(f"探针本身：{probe_run['seconds']:.0f} 秒，"
+      f"约 {rep['cost_usd']} 美元")
 assert probe_run["seconds"] < 300 and rep["cost_usd"] < 0.5
 # 误读最后一行：那是全程平均，含第一步的 141 秒
 last = probe_run["rate"]
@@ -738,7 +747,8 @@ assert story_gib < 1 and round(story_gib, 2) == 0.64
 
 eff30 = G["rtx3060ti"]["bf16"] * 1e12 * 0.30
 days = sum(flops(wb, run_shape(wb))) / eff30 / 86400
-print(f"就算放得下：WebBot 全程在 3060 Ti 上按 MFU 30% 也要 {days:.0f} 天")
+print(f"就算放得下：WebBot 全程在 3060 Ti 上"
+      f"按 MFU 30% 也要 {days:.0f} 天")
 assert 12 < days < 14
 ```
 
@@ -814,13 +824,14 @@ for oid in ["modal:t4", "modal:l4", "modal:a100-80", "modal:h100",
     print(f"{O[oid]['label']:16} {per_s:.6f} 美元/秒 = "
           f"{price(O[oid]):.2f} 美元/小时")
 modal = gpus["providers"]["modal"]
-cpu_mem = 2 * modal["usd_per_core_second"] + 8 * modal["usd_per_gib_second"]
+cpu_mem = (2 * modal["usd_per_core_second"]
+           + 8 * modal["usd_per_gib_second"])
 extra = 3600 * cpu_mem
 print(f"每张卡另配 2 核 CPU、8 GiB 内存：再加 {extra:.3f} 美元/小时")
 assert abs(price(O["modal:b200"]) - 6.25) < 0.01
 assert abs(extra - 0.158) < 0.001
 
-spent = 0
+spent = {}
 for run in ["storybot-h100", "webbot-probe"]:
     path = f"data/runs/{run}/report.json"
     rep = json.load(open(path, encoding="utf-8"))
@@ -829,9 +840,13 @@ for run in ["storybot-h100", "webbot-probe"]:
           f"{bill['usd_per_hour']} 美元/小时 = {rep['cost_usd']} 美元")
     # 记账用的时价 = GPU 的时价 + CPU 与内存的附加费
     assert abs(bill["usd_per_hour"] - (h100 + extra)) < 1e-3
-    spent += rep["cost_usd"]
+    # 费用 = 容器计时 × 时价
+    assert abs(bill["usd"] - bill["seconds"] / 3600
+               * bill["usd_per_hour"]) < 1e-4
+    spent[run] = rep["cost_usd"]
+assert spent == {"storybot-h100": 1.17, "webbot-probe": 0.27}
 # 两次加起来，不到 Starter 每月免费额度（30 美元）的 5%
-assert spent < 0.05 * 30
+assert sum(spent.values()) < 0.05 * 30
 ```
 
 还有两处细节。`gpu="H100"` 有时会被免费升级到 H200，做计时对比时可以写 `"H100!"` 固定型号；`"A100"` 也可能被升级到 80 GB 版，价格按 40 GB 算[^modalgpu]。
@@ -942,13 +957,15 @@ def usd_range(kind, col):
 # 两种算法下，最便宜的都是 RunPod Community 单卡
 for col in (2, 3):
     assert min(rows, key=lambda r: r[col])[1] == "runpod-community:h100"
-assert usd_range("单卡", 2) == (24, 39) and usd_range("单卡", 3) == (28, 45)
+assert usd_range("单卡", 2) == (24, 39)
+assert usd_range("单卡", 3) == (28, 45)
 assert usd_range("8 卡", 3) == (29, 43) and 1.3 < measured_h(s8) < 1.4
 assert abs(measured_h(s1) - wall_h) < 1e-9
 
 # Modal 的 CPU 与内存另算（G.5-a）
 modal_all_in = measured_h(s1) * (h100 + extra)
-print(f"Modal 加上 CPU 与内存：单卡全程按实测约 {modal_all_in:.1f} 美元")
+print(f"Modal 加上 CPU 与内存：单卡全程按实测"
+      f"约 {modal_all_in:.1f} 美元")
 assert round(modal_all_in, 1) == 42.7
 ```
 
@@ -1040,7 +1057,7 @@ uv run python gpu/register_run.py webbot-8xh100
 每次运行的目录里有这样几种文件，都由 `run_local.py`（或 Modal 上的同一套代码）生成：
 
 - **`report.json`**：教程与原书的提交号、主机（平台、GPU、PyTorch 与 CUDA 版本）、费用，以及每个脚本的开始时间、用时、退出码、最后的指标、吞吐、改动（patches）和起点检查点的来历。
-- **`<脚本名>.metrics.jsonl`**：从 tqdm 进度条解析出的指标，每行一个 `{"it": …, "loss": …}`。
+- **`<脚本名>.metrics.jsonl`**：从 tqdm 进度条解析出的指标，每行一个 `{"it": …, "loss": …}`；`it` 是 tqdm 的计数，下面细说。
 - **脚本自己画的图**：文件名沿用脚本里写的，例如 `loss_pretrain.png`、`webbot_val_loss.png`。
 - **`../index.json`**：登记过的运行，以及每次运行里哪些脚本有指标。
 
@@ -1051,7 +1068,9 @@ uv run python gpu/register_run.py webbot-8xh100
 
 指标从哪来？原书的脚本不写日志文件（第 9 章的 wandb 也被我们默认关掉了），只有 tqdm 进度条上的 `loss=…`。`run_local.py` 用两个正则表达式把它们从日志里读出来。
 
-下面拿真实日志里的一对行试一试。tqdm 每走一步，会把同一个计数打印两次：先刷新计数，这时 postfix 还是上一步的；再由 `set_postfix` 写入这一步的值。GRPO 在循环变量 `i = 10` 的这一步结束时做了评估（`i % 10 == 0`），所以第二行的 acc 从 53.1% 跳到了 61.7%。
+下面拿真实日志里相邻的三行试一试。先要知道，tqdm 的计数是已经做完的步数，同一个计数会打印两次。循环变量 `i = 9` 的这一步做完，计数变成 10，tqdm 刷新一次，这时的 postfix 还是 `i = 9` 写的；接着 `i = 10` 这一步做完，`set_postfix` 写入它的值，而计数要等下一步开始才加 1，所以仍是 10。
+
+GRPO 在 `i = 10` 这一步更新之后做了评估（`i % 10 == 0`），于是第二行的 acc 从 53.1% 跳到了 61.7%。第三行是计数变成 11 时的刷新，带的还是 `i = 10` 的值。
 
 ```verify id=G.7-a title="从 tqdm 的进度条里读出指标：正则与 run_local.py 相同，结果与运行记录一致" files=data/runs/codebot-3060ti/09_grpo.metrics.jsonl
 import re
@@ -1064,29 +1083,40 @@ def parse(line):
     values = POSTFIX_RE.findall(m.group(3))
     return {"it": int(m.group(1)), **{k: float(v) for k, v in values}}
 
-# 运行记录 codebot-3060ti 的原始日志里，计数 10 的两行
-pair = [
+# 运行记录 codebot-3060ti 的原始日志：计数 10 的两行，计数 11 的第一行
+lines = [
     "  2%|▏         | 10/500 [04:01<3:06:14, 22.81s/it, "
     "loss=0.1076, acc=53.1%]",
     "  2%|▏         | 10/500 [04:32<3:06:14, 22.81s/it, "
     "loss=0.0910, acc=61.7%]",
+    "  2%|▏         | 11/500 [04:32<3:27:55, 25.51s/it, "
+    "loss=0.0910, acc=61.7%]",
 ]
-first, second = (parse(line) for line in pair)
-print(first)
-print(second)
+first, second, third = (parse(line) for line in lines)
+for p in (first, second, third):
+    print(p)
 # 百分号不是数字，正则自然停在它前面
 assert first == {"it": 10, "loss": 0.1076, "acc": 53.1}
+# 第二行和第三行都是 i = 10 写下的值
 assert second == {"it": 10, "loss": 0.091, "acc": 61.7}
+assert third == {**second, "it": 11}
 
 path = "data/runs/codebot-3060ti/09_grpo.metrics.jsonl"
 with open(path, encoding="utf-8") as f:
-    rows = [json.loads(line) for line in f]
-row = next(r for r in rows if r["it"] == 10)
-print("运行记录里 it = 10 的那一行：", row)
-assert row in (first, second)
+    rows = {r["it"]: r for r in map(json.loads, f)}
+print("运行记录里的 it = 10 与 it = 11：")
+print(rows[10])
+print(rows[11])
+# run_local.py 每个计数只留第一行
+assert (rows[10], rows[11]) == (first, third)
+# 开头是例外：计数 0 没有刷新的那一行，记下的就是第 1 步的值
+assert rows[0] == {**rows[1], "it": 0}
 ```
 
-运行记录的 `metrics.jsonl` 里，每个计数只留一行；最后一个断言确认，记下的那一行就是日志里的原文。
+`run_local.py` 每个计数只留第一行，所以运行记录里 it = k 的那一行，是第 k 步（`i = k − 1`）写下的读数：`i = 10` 测得的 61.7%，记在 it = 11。唯一的例外在开头：计数 0 没有刷新的那一行，记下的就是第 1 步的值，所以 it = 0 和 it = 1 两行相同。原书的准确率图以 `i` 为横轴（0、10、20……），同一次评估在那张图上落在 10。拿运行记录和原书的图对照时，要记得这一步之差。
+
+```localcheck verify/test_gpu.py::test_parse_tqdm_keeps_the_first_line_of_each_counter title="run_local.py 每个计数只留第一行，与运行记录一致，每份记录的 it = 0 与 it = 1 相同；原书在 i 这一步更新之后评估，准确率图的横轴就是 i"
+```
 
 ```localcheck verify/test_gpu.py::test_run_local_records_a_run_end_to_end title="在临时目录里用一个假的原书脚本跑通 run_local.py：报告、指标、索引，以及补丁和起点检查点的记录"
 ```
@@ -1102,7 +1132,7 @@ assert row in (first, second)
 
 这一页我们把三台机器人的训练从“能跑”推进到了“知道要花多少、在哪跑最划算、跑完怎样留下证据”。估算的骨架是 $C = 6ND$ 加上 Attention 与评估两项，再除以峰值乘 MFU；但小模型在快 GPU 上会被固定开销卡住，事前的 MFU 也只是猜测，所以真正可靠的永远是 200 步的计时探针。多卡训练最容易出的错，是原样启动脚本：每张卡都跑满全部步数，账单乘以卡数。
 
-本机的 3060 Ti 跑完了 CodeBot，显存也够 StoryBot 用；WebBot 交给 Modal 或者整机租用。无论在哪，结果都以同一种格式回到 `web/data/runs/`，各章的曲线就从这里读取。
+本机的 3060 Ti 跑完了 CodeBot。StoryBot 估计也能在本机跑完，只是我们还没有完整跑过；它在 Modal 的 H100 上实测 16 分钟。WebBot 则交给 Modal 或者整机租用。无论在哪，结果都以同一种格式回到 `web/data/runs/`，各章的曲线就从这里读取。
 
 **本页所学的内容**
 

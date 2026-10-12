@@ -6,7 +6,7 @@
    虚线 V_k(b) 是上图那一维，最低点是这一维自己的最优基线 b*_k。上图的宽窄跟着虚线走，不是跟着实线走。
    抽样时对所有 b 使用同一批样本（公共随机数），拖动 b 时看到的变化只来自 b 本身。 */
 import { h } from './_lib.js';
-import { lineChart, fmtNum } from './_plot.js';
+import { lineChart } from './_plot.js';
 import { makeRng, softmax, dot, histogram, stairs, nextId, appendixRoot } from './appendix-common.js';
 
 export const PRESETS = {
@@ -123,7 +123,8 @@ export function mount(root, config = {}) {
     // 当前 b 的竖线不加文字：它可能贴着右端，文字会伸出图外；图的标题说明了它是什么
     varChart.update({
       vLines: [{ x: b }, { x: model.bStar, label: 'b*' }, { x: bk, label: `b*${SUB[comp]}`, labelY: 'bottom' }],
-      refLines: [{ y: model.totalVar(model.bStar), label: `V(b) 的最小值 ${fmtNum(model.totalVar(model.bStar))}` }],
+      // 标签要短、放在左端：右端是两条曲线的末端标签和 b*₂，窄屏上会叠在一起
+      refLines: [{ y: model.totalVar(model.bStar), label: `最小值 ${model.totalVar(model.bStar).toFixed(3)}`, labelAt: 'left' }],
     });
     stats.replaceChildren(
       h('div', {}, `精确的期望梯度 ∇J = (${model.grad.map((g) => g.toFixed(4)).join(', ')})，与 b 无关。`),

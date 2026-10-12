@@ -307,11 +307,9 @@ def test_first_wins_breaks_in_the_ch04_trainer(tie_runs):
     # with the (count, id0, id1) rule the same trainer reproduces merge_rules.pkl (see test_training_cost_naive_vs_fast)
 
 
-NAIVE_RUN_MINUTES, NAIVE_RUN_SECONDS_PER_MERGE = 0, "0"   # quoted in 1.7.3  @@FILL@@
-
-
 def test_naive_run_record():
-    """1.7.3: the recorded full run of ch01/07 (verify/_ch01_naive_run.py) matches the repository it ran on."""
+    """1.7.3: the recorded full run of ch01/07 (verify/_ch01_naive_run.py) matches the repository it ran on,
+    and the page quotes it (minutes, seconds per merge, CPU)."""
     import hashlib
     import pickle
     if not shutil.which("git"):
@@ -330,11 +328,19 @@ def test_naive_run_record():
     assert record["pickle_default_protocol"] == 4 and python < (3, 14)
     minutes, per_merge = record["seconds"] / 60, record["seconds"] / 743
     print(f"{record['seconds']:,.0f} s = {minutes:.1f} min, {per_merge:.2f} s per merge on {record['host']['cpu']}")
-    assert (round(minutes), f"{per_merge:.1f}") == (NAIVE_RUN_MINUTES, NAIVE_RUN_SECONDS_PER_MERGE), \
-        "1.7.3 quotes the recorded run: update the numbers in content/ch01.md if it was re-recorded"
 
-    # "byte identical" needs pickle protocol 4, the default up to Python 3.13; 3.14's default, protocol 5,
-    # writes the same rules with a different second byte (the protocol number)
+    # 1.7.3 quotes the record: "743 步一共用了 M 分钟，平均每步 S 秒（<CPU> 单核", and M again in this test's title
+    page = PAGE.read_text(encoding="utf-8")
+    quoted = re.search(r"743 步一共用了 (\d+) 分钟，平均每步 ([\d.]+) 秒（(\S+) 单核", page)
+    assert quoted, "1.7.3 no longer quotes the recorded run"
+    assert (int(quoted.group(1)), quoted.group(2)) == (round(minutes), f"{per_merge:.1f}"), \
+        "1.7.3 quotes another run: update the numbers in content/ch01.md to the record"
+    assert quoted.group(3) in record["host"]["cpu"]
+    assert f"naive_run.json）：{round(minutes)} 分钟" in page
+
+    # "byte identical" needs pickle protocol 4: the default from Python 3.8 to 3.13 (DLFS6 asks for >=3.10);
+    # 3.14's default, protocol 5, writes the same rules with a different second byte (the protocol number)
+    assert 'requires-python = ">=3.10"' in (DLFS6 / "pyproject.toml").read_text(encoding="utf-8")
     rules = pickle.loads(repo_pkl)
     assert pickle.dumps(rules, protocol=4) == repo_pkl
     p5 = pickle.dumps(rules, protocol=5)

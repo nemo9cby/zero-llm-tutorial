@@ -25,10 +25,16 @@ Experiments (every timed variant is checked against a reference, and the record 
   heaps            occurrences vs distinct pretokens on growing prefixes (needs --train-prefix)
   pep393           CPython string storage of the whole text vs the pieces between <|endoftext|> (needs --train-prefix)
   train_prefix_encode  encode_file on the train prefix vs the official train.bin prefix (needs both prefixes)
+  train_full       ch04/04's training on the whole 2.2 GB train file (8 processes, 64 chunks), compared with the
+                   official storybot/merge_rules.pkl (needs --train-full; about 10 minutes)
+  encode_full      ch04/07's encode_file on the whole train file (8 processes, 64 chunks), compared by sha256 with the
+                   official tiny_stories_train.bin (needs --train-full; under an hour)
+  heaps_full       occurrences and distinct pretokens of the whole train file (needs --train-full; a few minutes)
 
-Two inputs are not in the repository; both were fetched once with HTTP Range requests (see INPUTS for the
-URLs, sizes and sha256): --train-prefix (the first 100 MiB of tiny_stories_train.txt, cut before an
-<|endoftext|>) and --train-bin-prefix (the first 50,946,778 bytes of the official tiny_stories_train.bin).
+Three inputs are not in the repository (see INPUTS for the URLs, sizes and sha256): --train-prefix (the first
+100 MiB of tiny_stories_train.txt, cut before an <|endoftext|>) and --train-bin-prefix (the first 50,946,778
+bytes of the official tiny_stories_train.bin), both fetched once with HTTP Range requests, and --train-full
+(the whole tiny_stories_train.txt, the first file storybot/download.sh downloads).
 
 verify/test_ch04.py::test_bench_json_consistent checks bench.json == assemble() and recomputes the
 deterministic facts; test_bench_full_valid_facts (slow) re-runs the ones that need the whole validation set.
@@ -41,6 +47,7 @@ import json
 import os
 import pickle
 import platform
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -71,7 +78,19 @@ INPUTS = {
                          "url": "https://huggingface.co/datasets/koki0702/zero-llm-data/resolve/main/storybot/tiny_stories_train.bin",
                          "bytes": 50_946_778,
                          "sha256": "0893d9cc166e91c361f096f867159332f236b97f230c1fdd2902b3f970b016a1"},
+    "train_full": {"what": "the whole storybot/tiny_stories_train.txt (= TinyStoriesV2-GPT4-train.txt, see web/data/cs336/data_identity.json)",
+                   "url": "https://huggingface.co/datasets/koki0702/zero-llm-data/resolve/main/storybot/tiny_stories_train.txt",
+                   "bytes": 2_227_753_162,
+                   "sha256": "6418d412de72888f52b5142c761ac21a582f7d1166f0bfbdb5f03ccfdec90443"},
 }
+
+# The official encoding of the whole train file, as published (encode_full compares with it, without downloading it).
+OFFICIAL_TRAIN_BIN = {
+    "file": "storybot/tiny_stories_train.bin", "bytes": 1_082_458_446,
+    "sha256": "74c89ae1d5d46d474304841ea1b62bbe9139e11f7579ee5d5fff409b97c2777c",
+    "source": "lfs.oid and size in GET https://huggingface.co/api/datasets/koki0702/zero-llm-data/tree/main/storybot "
+              "(2026-10-12); the same listing gives merge_rules.pkl 8fb285d9... and tiny_stories_valid.bin 05a36c44..., "
+              "which are the sha256 of the files in third_party/dlfs6/storybot"}
 
 # The first batch of records (2026-10-11) was taken with a scratch copy of this script, before it was moved
 # into the repository; those records carry no commit of their own, so the facts are stated here once.
@@ -176,6 +195,15 @@ def rules_digest(rules: dict) -> str:
     return hashlib.sha256(repr(list(rules.items())).encode()).hexdigest()
 
 
+def sha256_file(path: Path) -> str:
+    """sha256 of a file, read in 16 MiB blocks (the inputs here are up to 2.2 GB)."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 24), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
 # ------------------------------------------------------------------ measurement helpers (psutil only needed here)
 class Load:
     """Samples whole-machine CPU utilisation (all logical CPUs) every 0.5 s in a background thread."""
@@ -202,6 +230,45 @@ class Load:
     def summary(self):
         s = self.samples or [self._psutil.cpu_percent(0.2)]
         return {"mean": round(sum(s) / len(s), 1), "min": round(min(s), 1), "max": round(max(s), 1)}
+
+
+class MemPeak:
+    """Largest resident memory of this process plus all its children (pool workers), sampled every 0.5 s."""
+
+    METHOD = "psutil rss of the process and its children, summed, sampled every 0.5 s"
+
+    def __init__(self):
+        self.peak, self._stop = 0, threading.Event()
+
+    def __enter__(self):
+        import psutil
+
+        self._me = psutil.Process()
+        self._t = threading.Thread(target=self._run, daemon=True)
+        self._t.start()
+        return self
+
+    def _sample(self):
+        total = 0
+        for p in [self._me, *self._me.children(recursive=True)]:
+            try:
+                total += p.memory_info().rss
+            except Exception:              # a worker that exits between listing and reading
+                pass
+        self.peak = max(self.peak, total)
+
+    def _run(self):
+        while not self._stop.wait(0.5):
+            self._sample()
+
+    def __exit__(self, *exc):
+        self._stop.set()
+        self._t.join()
+        self._sample()
+
+    @property
+    def peak_mib(self) -> float:
+        return round(self.peak / 2**20, 1)
 
 
 def timed(fn, *args, **kwargs):
@@ -267,10 +334,25 @@ def env_info() -> dict:
             "date": time.strftime("%Y-%m-%d %H:%M"), "utc_offset": time.strftime("%z")}
 
 
+def command_line(argv: list[str]) -> str:
+    """The command that made a record. Inputs from outside the repository are named, not given by their local path:
+    `need` has checked their sha256 against INPUTS."""
+    flags = {"--" + name.replace("_", "-"): name for name in INPUTS}
+    out = []
+    for prev, arg in zip([None, *argv], argv):
+        flag, eq, _ = arg.partition("=")
+        if prev in flags:                       # --train-full <path>
+            arg = f"<{flags[prev]}>"
+        elif eq and flag in flags:              # --train-full=<path>
+            arg = f"{flag}=<{flags[flag]}>"
+        out.append(arg)
+    return "python verify/_ch04_bench.py " + " ".join(out)
+
+
 def save(name: str, obj: dict) -> None:
     """Write a raw record, stamped with the environment, the commits and the command that produced it."""
     obj["env"] = env_info()
-    obj["provenance"] = {"script": "verify/_ch04_bench.py", "command": "python verify/_ch04_bench.py " + " ".join(sys.argv[1:]),
+    obj["provenance"] = {"script": "verify/_ch04_bench.py", "command": command_line(sys.argv[1:]),
                          "tutorial": git_state(ROOT), "dlfs6": git_state(DLFS6)}
     RAW.mkdir(parents=True, exist_ok=True)
     (RAW / f"{name}.json").write_text(json.dumps(obj, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
@@ -622,6 +704,31 @@ def exp_heaps(b: Book, args):
     save("heaps", {"rows": rows})
 
 
+def exp_heaps_full(b: Book, args):
+    """Occurrences and distinct pretokens of the whole training file, which 4.1.1 extrapolates from the first 100 MiB.
+    Counted the 04 way (steps 1-3: 64 chunks, 8 processes); chunked counts equal whole-file counts
+    (test_parallel_pretokenize_equals_serial)."""
+    from multiprocessing import Pool
+
+    path = need(args.train_full, "train_full")
+    bounds = b.sb.find_chunk_boundaries(str(path), 64)
+    tasks = [(str(path), s, e, EOT) for s, e in zip(bounds[:-1], bounds[1:])]
+    total = defaultdict(int)
+    with Load() as load:
+        w0 = time.perf_counter()
+        with Pool(processes=8) as pool:
+            for part in pool.imap(b.sb.pretoken_chunk, tasks):
+                for k, v in part.items():
+                    total[k] += v
+        wall = time.perf_counter() - w0
+    top = sorted(total.values(), reverse=True)
+    save("heaps_full", {"input": "storybot/tiny_stories_train.txt (2,227,753,162 bytes)", "bytes": path.stat().st_size,
+                        "occurrences": sum(top), "unique": len(top),
+                        "top10_share": round(sum(top[:10]) / sum(top), 4),
+                        "top1000_share": round(sum(top[:1000]) / sum(top), 4),
+                        "wall": round(wall, 3), "load": load.summary()})
+
+
 def exp_pep393(b: Book, args):
     save("pep393", {"valid": pep393_stats(read_text(VALID)),
                     "train_prefix": pep393_stats(read_text(need(args.train_prefix, "train_prefix")))})
@@ -640,12 +747,47 @@ def exp_train_prefix_encode(b: Book, args):
                                  "official_prefix_bytes": official.stat().st_size})
 
 
+def exp_train_full(b: Book, args):
+    """ch04/04 on the whole training file. storybot's train_bpe is 04's train_bpe statement for statement (only the
+    default num_chunks differs: test_bpe_book_is_verbatim), and its pretoken_chunk can be imported by spawned
+    workers, so it runs here with 04's arguments: 8 processes, 64 chunks."""
+    path = need(args.train_full, "train_full")
+    with MemPeak() as mem:
+        rules, t = run_phased(b.sb, "train_bpe", str(path), 10000, num_processes=8, num_chunks=64)
+    got, official = list(rules.items()), list(b.story_rules.items())
+    first_diff = next((i for i, (x, y) in enumerate(zip(got, official)) if x != y), None)
+    save("train_full", {"input": "storybot/tiny_stories_train.txt (2,227,753,162 bytes)", "bytes": path.stat().st_size,
+                        "vocab": 10000, "num_processes": 8, "num_chunks": 64, "run": t, "peak_rss_mib": mem.peak_mib,
+                        "peak_rss_method": MemPeak.METHOD, "merges": len(rules), "rules_sha256": rules_digest(rules),
+                        "equals_storybot_merge_rules_pkl": got == official, "first_difference": first_diff,
+                        "same_pairs_as_set": len(set(rules) & set(b.story_rules))})
+
+
+def exp_encode_full(b: Book, args):
+    """ch04/07's __main__ (its first call) on the whole training file: encode_file with 07's arguments, 8 processes and
+    64 chunks. storybot's BPETokenizer is 07's method for method (only encode_file's default num_processes differs),
+    and its bound _encode_chunk can be unpickled by spawned workers. The output is compared by size and sha256 with
+    the official tiny_stories_train.bin as published (OFFICIAL_TRAIN_BIN), then deleted."""
+    path = need(args.train_full, "train_full")
+    outp, cache = b.tmp / "train_full.bin", b.tmp / "bpe_cache_full"
+    tok = b.sb.BPETokenizer(b.story_rules)
+    with MemPeak() as mem:
+        total, t = timed(tok.encode_file, str(path), str(outp), num_processes=8, num_chunks=64, cache_dir=str(cache))
+    size, digest = outp.stat().st_size, sha256_file(outp)
+    outp.unlink()
+    save("encode_full", {"input": "storybot/tiny_stories_train.txt (2,227,753,162 bytes)", "num_processes": 8,
+                         "num_chunks": 64, "run": t, "peak_rss_mib": mem.peak_mib, "peak_rss_method": MemPeak.METHOD,
+                         "tokens": total, "out_bytes": size, "out_sha256": digest, "official": OFFICIAL_TRAIN_BIN,
+                         "identical_to_official_train_bin": (size, digest) == (OFFICIAL_TRAIN_BIN["bytes"], OFFICIAL_TRAIN_BIN["sha256"]),
+                         "cache_dir_removed": not cache.exists()})
+
+
 def need(path: Path | None, name: str) -> Path:
     """An input that is not in the repository: check it is exactly the file the records were made with."""
     if path is None:
         sys.exit(f"this experiment needs --{name.replace('_', '-')} ({INPUTS[name]['what']}; {INPUTS[name]['url']})")
     path = Path(path)
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    digest = sha256_file(path)
     if digest != INPUTS[name]["sha256"]:
         sys.exit(f"{path} is not the recorded {name} (sha256 {digest})")
     return path
@@ -696,6 +838,7 @@ def assemble() -> dict:
     v10k, pretok, efile = load_raw("train_valid10k"), load_raw("pretok_scaling"), load_raw("encode_file_scaling")
     memory, heaps, prefix = load_raw("memory"), load_raw("heaps"), load_raw("train_prefix_encode")
     repeat, pretok_rep, pool, shrink = load_raw("repeat_small"), load_raw("pretok_repeat"), load_raw("pool_startup"), load_raw("shrink")
+    full, enc_full, heaps_full = load_raw("train_full"), load_raw("encode_full"), load_raw("heaps_full")
 
     r, same_small = small["runs"], small["identical_to_naive"]
     c, same_codes = codes["runs"], codes["equals_codebot_pkl"]
@@ -807,6 +950,21 @@ def assemble() -> dict:
         "heaps": heaps["rows"],
         "train_prefix_encode": {k: prefix[k] for k in ("tokens", "wall", "processes", "identical_to_official_train_bin_prefix",
                                                        "official_prefix_bytes")} | {"load": prefix["load"]["mean"]},
+        "train_full": {"input": full["input"], "vocab": full["vocab"], "num_processes": full["num_processes"],
+                       "num_chunks": full["num_chunks"], "wall": full["run"]["wall"],
+                       "pretok_wall": full["run"]["phases"]["Pretokenizing"]["wall"],
+                       "merge_loop_wall": full["run"]["phases"]["Training BPE"]["wall"],
+                       "peak_rss_mib": full["peak_rss_mib"], "load": full["run"]["load"]["mean"], "merges": full["merges"],
+                       "rules_sha256": full["rules_sha256"],
+                       "identical_to_official_merge_rules": full["equals_storybot_merge_rules_pkl"],
+                       "date": full["env"]["date"]},
+        "encode_full": {"input": enc_full["input"], "num_processes": enc_full["num_processes"],
+                        "num_chunks": enc_full["num_chunks"], "wall": enc_full["run"]["wall"],
+                        "peak_rss_mib": enc_full["peak_rss_mib"], "load": enc_full["run"]["load"]["mean"],
+                        "tokens": enc_full["tokens"], "out_bytes": enc_full["out_bytes"],
+                        "identical_to_official_train_bin": enc_full["identical_to_official_train_bin"],
+                        "cache_dir_removed": enc_full["cache_dir_removed"], "date": enc_full["env"]["date"]},
+        "heaps_full": {k: heaps_full[k] for k in ("input", "bytes", "occurrences", "unique", "top10_share", "top1000_share")},
         "scanned": load_raw("scanned_valid10k"),
         "pep393": load_raw("pep393"),
         "accomplishment_ms": {"ch01": enc_small["accomplishment"]["ch01_ms"], "06": enc_small["accomplishment"]["06_ms"]},
@@ -827,15 +985,19 @@ def main() -> None:
     run.add_argument("--rounds", type=int, default=3, help="repeat_small / pretok_repeat / pool_startup")
     run.add_argument("--train-prefix", type=Path)
     run.add_argument("--train-bin-prefix", type=Path)
+    run.add_argument("--train-full", type=Path)
     sub.add_parser("assemble", help="rebuild web/data/ch04/bench.json from the raw records")
     args = ap.parse_args()
     if args.cmd == "assemble":
         write_bench()
         return
     book = Book()
-    for name in args.experiments:
-        print(f"=== {name}", flush=True)
-        EXPERIMENTS[name](book, args)
+    try:
+        for name in args.experiments:
+            print(f"=== {name}", flush=True)
+            EXPERIMENTS[name](book, args)
+    finally:
+        shutil.rmtree(book.tmp, ignore_errors=True)        # slices, probes and outputs written along the way
 
 
 if __name__ == "__main__":

@@ -107,6 +107,29 @@ def test_initial_loss_is_a_little_above_ln_vocab(models):
         assert 0 < excess < 0.2, (key, excess)
 
 
+def test_step0_validation_sees_untouched_weights(dlfs6_path):
+    """0.2 节的验证 0.2-d：两次 H100 运行在第 0 步记下的完整验证集 loss，用的是随机初始化的权重。
+    两个脚本都在第 0 次循环的 optimizer.step() 之后才评估，但 warmup 让第 0 步的学习率为 0，
+    而 lr = 0 时 torch 的 AdamW（权重衰减和更新都乘以 lr）一个参数也不改。"""
+    import torch
+    for rel in ("ch06/05_pretrain.py", "ch09/01_pretrain.py"):
+        src = (pp.DLFS6 / rel).read_text(encoding="utf-8")
+        assert "optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)" in src, rel
+        h = pp.script_hparams(rel)
+        get_lr = pp.book_function(rel, "get_lr")
+        assert get_lr(0, h["learning_rate"], h["warmup_iters"], h["max_iters"]) == 0.0, rel
+        assert get_lr(1, h["learning_rate"], h["warmup_iters"], h["max_iters"]) > 0.0, rel
+    torch.manual_seed(0)
+    w = torch.nn.Parameter(torch.randn(8))
+    before = w.detach().clone()
+    optimizer = torch.optim.AdamW([w], lr=6e-4)
+    for group in optimizer.param_groups:                  # 与脚本相同：每步先改写学习率
+        group["lr"] = 0.0
+    (w ** 2).sum().backward()
+    optimizer.step()
+    assert torch.equal(w.detach(), before)
+
+
 def test_embed_dim_is_the_residual_width(models):
     """embed_dim（HF: hidden_size，CS336: d_model，GPT-2: n_embd）是每个 token 向量在整个网络里的宽度。"""
     import torch

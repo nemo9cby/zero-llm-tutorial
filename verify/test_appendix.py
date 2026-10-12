@@ -5,6 +5,7 @@
 DLFS6 的训练脚本在模块顶层就开始训练，所以只用 ast 抽出需要的函数和类，不运行脚本本身。
 """
 import ast
+import codecs
 import random
 from collections import Counter
 
@@ -57,10 +58,19 @@ def test_a_decode_matches_dlfs6(dlfs6_path):
     # 合并出来的 token 里，单独解码不合法的有 157 个：150 个以不完整的序列结尾，7 个以后续字节开头
     reasons = Counter()
     for i in range(256, tok.vocab_size):
+        b = tok.id_to_bytes[i]
         try:
-            tok.id_to_bytes[i].decode("utf-8")
+            b.decode("utf-8")
         except UnicodeDecodeError as e:
             reasons[e.reason] += 1
+            if e.reason == "invalid start byte":
+                assert e.start == 0 and 0x80 <= b[0] <= 0xBF, (i, b)       # 以后续字节开头
+            else:
+                # 不完整的结尾：增量解码器不报错，只是把末尾的字节留着等后续
+                dec = codecs.getincrementaldecoder("utf-8")()
+                text = dec.decode(b, final=False)
+                pending = dec.getstate()[0]
+                assert pending and text.encode("utf-8") + pending == b, (i, b)
     assert reasons == {"unexpected end of data": 150, "invalid start byte": 7}
     assert tok.id_to_bytes[290] == "’".encode("utf-8")[:2] == b"\xe2\x80"
     assert all(c.encode("utf-8")[:2] == b"\xe2\x80" for c in "’“”—")   # 弯引号与破折号共用这两个字节
@@ -132,6 +142,18 @@ def test_a_chunk_boundaries(dlfs6_path, tmp_path):
         naive = [i * size for i in range(num_chunks)] + [len(blob)]
         naive_bad += sum(not _is_utf8(blob[a:b]) for a, b in zip(naive, naive[1:]))
     assert naive_bad > 0  # 对照：不挪切点的话，确实会把字符切开
+
+    # 附录 A.3：函数每次只在 4096 字节的一块里找，跨在两块之间的 <|endoftext|> 会被错过。
+    # 2 万字节、切成 2 块，等分的切点是 10,000；第一个 token 从 14,091 开始（跨过 14,096 这条块界），
+    # 第二个从 17,096 开始，完整地落在第二块里。最近的是第一个，函数挪到的却是第二个。
+    straddle = bytearray(b"x" * 20_000)
+    first, second = 10_000 + 4096 - 5, 10_000 + 4096 + 3000
+    straddle[first:first + len(end)] = end
+    straddle[second:second + len(end)] = end
+    path2 = tmp_path / "straddle.txt"
+    path2.write_bytes(bytes(straddle))
+    assert bytes(straddle).find(end, 10_000) == first                       # 最近的那个
+    assert find_chunk_boundaries(str(path2), 2) == [0, second, 20_000]      # 函数挪到的是下一个
 
 
 # ---------------------------------------------------------------- 附录 B：Attention 缩放
@@ -344,6 +366,8 @@ def test_e_dpo_loss(dlfs6_path):
     pairs = json.loads((dlfs6_path / "storybot" / "tiny_stories_dpo.json").read_text(encoding="utf-8"))
     assert len(pairs) == 144 and all(sorted(p) == ["chosen", "prompt", "rejected"] for p in pairs)
     assert "Tim was so happy" in pairs[0]["chosen"] and "Tim was very sad" in pairs[0]["rejected"]
+    # 附录 E.6：每个故事开头只出现一次，标注也只有一种（chosen 赢），所以从数据看 P_wl = 1
+    assert len({p["prompt"] for p in pairs}) == 144
 
     tok = BPETokenizer.load_from(str(dlfs6_path / "storybot" / "merge_rules.pkl"))
     data = ns["DPODataset"](str(dlfs6_path / "storybot" / "tiny_stories_dpo.json"), tok, 256)

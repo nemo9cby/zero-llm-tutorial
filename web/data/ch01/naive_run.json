@@ -1,0 +1,30 @@
+{
+ "run": "ch01-bpe-naive",
+ "what": "ch01/07_tiny_codes.py on the whole of codebot/tiny_codes.txt (vocab_size 1000, codebot.tokenizer.train_bpe), unchanged except the line that writes the pickle",
+ "command": "uv run python verify/_ch01_naive_run.py",
+ "dlfs6_commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
+ "script": "ch01/07_tiny_codes.py",
+ "script_sha256": "e1a28dd0ff82e84ff1100556c2961a1a345ea4f5ccb7311ccbfb8bf2d085e65c",
+ "patch": {
+  "line": 13,
+  "from": "with open(\"codebot/merge_rules.pkl\", \"wb\") as f:",
+  "to": "with open(OUT, \"wb\") as f:   # OUT = build/ch01-naive-run/merge_rules.pkl"
+ },
+ "host": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "logical_cpus": 16
+ },
+ "pickle_default_protocol": 4,
+ "started": "2026-10-12T18:21:20+00:00",
+ "seconds": 4067.2,
+ "cpu_seconds": 3012.0,
+ "tqdm_last_line": "Training BPE: 100%|██████████| 743/743 [1:07:40<00:00,  5.47s/it]",
+ "merges": 743,
+ "output_bytes": 7421,
+ "output_sha256": "7b1667406b2128a420b35a885f3efe03ce239d1d4669750e481d31a8f84f6943",
+ "repo_sha256": "7b1667406b2128a420b35a885f3efe03ce239d1d4669750e481d31a8f84f6943",
+ "same_rules_same_order": true,
+ "byte_identical": true
+}

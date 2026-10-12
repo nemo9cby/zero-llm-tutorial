@@ -134,18 +134,22 @@ means = [sum(bpt[c][n] for c in bpt) / len(bpt) for n in names]
 print(f"同一份网页文本，CodeBot 的分词器切出的 token 是 WebBot 的 {web['tokens']['codebot'] / web['tokens']['webbot']:.2f} 倍")
 print("三种数据上的平均：" + "  ".join(f"{n} {m:.2f}" for n, m in zip(names, means)))
 corpus = {b["id"]: b["corpus"] for b in json.load(open("data/ch00/bots.json", encoding="utf-8"))["bots"]}["codebot"]
-print(f"对照：CodeBot 在完整的 TinyCodes 上是 {corpus['text_bytes']:,} ÷ {corpus['tokens']:,} = {corpus['text_bytes'] / corpus['tokens']:.2f}")
+full_code, web_2m = corpus["text_bytes"] / corpus["tokens"], owt["bytes_per_token_first_2M"]
+gap_code, gap_web = full_code / bpt["TinyCodes"]["codebot"] - 1, web_2m / bpt["OpenWebText"]["webbot"] - 1
+print(f"对照：CodeBot 在完整的 TinyCodes 上是 {corpus['text_bytes']:,} ÷ {corpus['tokens']:,} = {full_code:.2f}（比表里 {gap_code:+.0%}）；"
+      f"WebBot 在 OWT 前 200 万个 token 上是 {web_2m:.2f}（比表里 {gap_web:+.0%}）")
 assert {n: len(c) for n, c in tk["chips"].items()} == {"codebot": 64, "storybot": 34, "webbot": 26}
 assert all(max(bpt, key=lambda c: bpt[c][n]) == own[n] for n in names)   # 每个分词器都在自己的训练数据上最省
 assert min(web["tokens"], key=web["tokens"].get) == "webbot"           # 网页上 WebBot 最省
 assert min(story["tokens"], key=story["tokens"].get) == "storybot"     # 故事上 StoryBot 最省
 assert code["tokens"]["webbot"] < code["tokens"]["codebot"]            # 连代码上，5 万词表也比 1,000 词表省
 assert means[0] < means[1] < means[2]                                  # 词表 1,000 < 10,000 < 50,000
+assert (round(gap_code, 2), round(gap_web, 2)) == (0.09, -0.03)         # 换一份样本，数值能差到一成
 ```
 
 结果有两层意思。第一，**领域**很重要：每个分词器都在自己的训练数据上最省。在故事上，只有 1 万词表的 StoryBot 分词器甚至比 5 万词表的 WebBot 略胜一筹；反过来，用 TinyStories 训练出的词表放到网页上，每个 token 只装 3.22 个字节。第二，**词表大小**也很重要：CodeBot 只有 1,000 个 token，哪怕在自己的代码数据上，也比不过 5 万词表的 WebBot 分词器。同一份网页文本，CodeBot 的分词器切出的 token 是 WebBot 的 2.30 倍，模型要读的序列也就长了一倍多。WebBot 需要在网页文本上重新训练一个更大的词表，这是第 7 章的起点。
 
-这张表每格只用了约 100 万字节的样本（网页约 200 篇），具体数值会随样本变动几个百分点：CodeBot 在完整的 TinyCodes 上是 2.42，WebBot 在 OWT 验证集前 200 万个 token（约 890 万字节）上是 4.46（[验证 III.1-b](#v-III.1-b)）。比较谁大谁小没有问题；引用具体数值时，要说明是在哪份样本上测的。
+这张表每格只用了约 100 万字节的样本（网页约 200 篇），具体数值会随样本而变，差别可达一成：CodeBot 在完整的 TinyCodes 上是 2.42，比表里的 2.21 高 9%；WebBot 在 OWT 验证集前 200 万个 token（约 890 万字节）上是 4.46，比表里的 4.61 低 3%（[验证 III.1-b](#v-III.1-b)、[验证 III.1-c](#v-III.1-c)）。比较谁大谁小没有问题；引用具体数值时，要说明是在哪份样本上测的。
 
 ```localcheck verify/test_part3.py::test_tokenizer_matrix_matches_record title="用三个分词器重新编码，并核对第 1 章与第 4 章两种编码实现的结果相同"
 ```

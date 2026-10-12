@@ -8,7 +8,7 @@ lede: 第 1 章把 str.encode("utf-8") 当作黑盒来用。本附录打开这�
 pyodide_packages: [numpy]
 ---
 
-[1.2 节](ch01.html#s1-2)里，我们把 `str.encode("utf-8")` 当作一个黑盒来用：`A` 变成 1 个字节，`あ` 变成 3 个字节，`😁` 变成 4 个字节。字节级分词器之所以成立，靠的是两条性质：任何文字都能写成一串 0–255 的整数；这串整数还能原样变回文字。这两条性质都来自 UTF-8 的设计。
+[1.2 节](ch01.html#s1-2)里，我们把 `str.encode("utf-8")` 当作一个黑盒来用：`A` 变成 1 个字节，`あ` 变成 3 个字节，`😁` 变成 4 个字节。字节级分词器之所以成立，靠的是两条性质：任何文字都能写成一串 0–255 的整数；这串整数还能原样变回文字。这两条性质来自 Unicode 编码的设计，DLFS6 选的是其中的 UTF-8。
 
 黑盒也留下了几个疑问。为什么 ASCII 字符只占 1 个字节，汉字却要 3 个？[验证 1.2-b](ch01.html#v-1.2-b) 里，半个汉字为什么解不出来？用 `errors="replace"` 时，两个坏字节为什么只变成了一个 `�`？
 
@@ -38,8 +38,10 @@ UTF-16 以 2 个字节为一个单位。U+FFFF 以内的码位直接写成一个
 
 $$
 \begin{aligned}
-&v = \text{0x1F601} - \text{0x10000} = \underbrace{0000111101}_{\text{0x03D}}\;\underbrace{1000000001}_{\text{0x201}}\\[-3pt]
-&\quad{\footnotesize\text{（20 位，一分为二）}}\\[2pt]
+&v = \text{0x1F601} - \text{0x10000} = \text{0xF601}\\[-3pt]
+&\quad{\footnotesize\text{（先减去 0x10000，剩下的不超过 20 位）}}\\[2pt]
+&v = \underbrace{0000111101}_{\text{0x03D}}\;\underbrace{1000000001}_{\text{0x201}}\\[-3pt]
+&\quad{\footnotesize\text{（写成 20 位，一分为二）}}\\[2pt]
 &\text{0xD800} + \text{0x03D} = \text{0xD83D}\\[-3pt]
 &\quad{\footnotesize\text{（高 10 位）}}\\[2pt]
 &\text{0xDC00} + \text{0x201} = \text{0xDE01}\\[-3pt]
@@ -65,12 +67,12 @@ assert units == 2 and len("😁") == 1                     # 见下面的提示�
 ```
 
 ::: note 网页里的字符串是 UTF-16
-JavaScript 的字符串按 UTF-16 的单位计数，所以 `"😁".length` 是 2，而 Python 的 `len("😁")` 是 1（[MDN：String.length](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/length)；单位的个数见[验证 A-b](#v-A-b) 的最后一行）。所以本附录的交互图在逐字符处理文字时，用 `[...text]` 按码位切分，避免把一个 emoji 劈成两半。
+JavaScript 的字符串按 UTF-16 的单位计数，所以 `"😁".length` 是 2，而 Python 的 `len("😁")` 是 1（[MDN：String.length](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/length)，2026-10 查证；单位的个数见[验证 A-b](#v-A-b) 的最后一行）。所以本附录的交互图在逐字符处理文字时，用 `[...text]` 按码位切分，避免把一个 emoji 劈成两半。
 :::
 
 UTF-8 是变长的：ASCII 字符只占 1 个字节，而且这个字节就等于码位本身。所以一个纯 ASCII 的文件，原封不动就是合法的 UTF-8 文件。另外，除了 U+0000 本身，UTF-8 的输出里不会出现值为 0 的字节（[验证 A-f](#v-A-f) 会在全部码位上确认）；而用 UTF-16、UTF-32 写英文时，每个字符都带着值为 0 的字节（上面 `A` 的两行就是例子）。
 
-那么，为什么“任何字符都能写成 0–255 的数列”呢？答案其实很朴素：三种编码的输出都是字节，一个字节有 8 位，取值只能是 0–255。字节级分词器用哪一种编码都行，真正的区别在于长度：
+那么，为什么“任何字符都能写成 0–255 的数列”呢？分两步看。第一，Unicode 给每个字符都分配了一个码位，最大是 0x10FFFF，最多 21 位。第二，三种编码都按固定的规则把这个整数切成若干个 8 位的块，而且能原样拼回去（[验证 A-f](#v-A-f) 会在全部码位上确认这一点）。8 位的块只能取 0–255。所以字节级分词器用哪一种编码都行，真正的区别在于长度：
 
 ```verify id=A-c title="英文和代码用 UTF-8 最短，中文用 UTF-16 更短"
 def size_in(text, enc):
@@ -90,7 +92,7 @@ assert size_in(zh, "utf-16-be") == 2 * len(zh)      # 而 UTF-16 每字 2 字节
 assert all(0x4E00 <= ord(c) <= 0x9FFF for c in zh)  # 这几个字的码位范围
 ```
 
-对英文和代码来说，UTF-8 的长度是 UTF-16 的一半、UTF-32 的四分之一；对中文来说，UTF-8 反而比 UTF-16 多出一半。DLFS6 的三份语料（Python 代码、英文童话、英文网页）几乎全是 ASCII：`tiny_codes.txt` 里一个非 ASCII 字节都没有；TinyStories 的验证集里，非 ASCII 字节只占 0.06%；OpenWebText 的验证集里也只占 1.4%。
+对英文和代码来说，UTF-8 的长度是 UTF-16 的一半、UTF-32 的四分之一；对中文来说，UTF-8 反而比 UTF-16 多出一半。DLFS6 的三份语料（Python 代码、英文儿童短故事、英文网页）几乎全是 ASCII：`tiny_codes.txt` 里一个非 ASCII 字节都没有；TinyStories 的验证集里，非 ASCII 字节只占 0.06%；OpenWebText 的验证集里也只占 1.4%。
 
 ```localcheck verify/test_appendix.py::test_a_corpora_are_ascii title="三份语料里非 ASCII 字节的比例：0、0.06%、1.4%"
 ```
@@ -101,21 +103,21 @@ assert all(0x4E00 <= ord(c) <= 0x9FFF for c in zh)  # 这几个字的码位范�
 ```
 
 ::: cs336 A1 §2.2 unicode2
-CS336 作业 1 的 `unicode2` 小题问了三件事：为什么在 UTF-8 的字节上训练分词器，而不是 UTF-16 或 UTF-32；一个逐字节解码的函数错在哪里；什么样的两个字节无法解码。这三件事分别对应本附录的 A.1、A.5 和 A.4 节。读完之后，建议你合上本页，自己作答一遍（[A1 仓库](https://github.com/stanford-cs336/assignment1-basics)）。
+CS336 作业 1 的 `unicode2` 小题问了三件事：为什么在 UTF-8 的字节上训练分词器，而不是 UTF-16 或 UTF-32；一个逐字节解码的函数错在哪里；什么样的两个字节无法解码。这三件事分别对应本附录的 A.1、A.5 和 A.4 节。读完之后，建议你合上本页，自己作答一遍（[A1 仓库](https://github.com/stanford-cs336/assignment1-basics)，2026-10 查证）。
 :::
 
 ## A.2 UTF-8 的位模式
 
-UTF-8 的规则可以写成一张表。码位越大，需要的有效位数越多，就用越多的字节来装：
+UTF-8 的规则可以写成一张表。码位越大，需要的位数越多，就用越多的字节来装：
 
-| 码位范围 | 有效位数 | 字节序列（x 是码位的二进制位） | 字节数 |
+| 码位范围 | 可装的位数（x 的个数） | 字节序列（x 是码位的二进制位） | 字节数 |
 |---|---|---|---|
 | U+0000–U+007F | 7 | `0xxxxxxx` | 1 |
 | U+0080–U+07FF | 11 | `110xxxxx 10xxxxxx` | 2 |
 | U+0800–U+FFFF | 16 | `1110xxxx 10xxxxxx 10xxxxxx` | 3 |
 | U+10000–U+10FFFF | 21 | `11110xxx 10xxxxxx 10xxxxxx 10xxxxxx` | 4 |
 
-每个字节开头的几位是固定的标记，剩下的 x 位用来装码位。规律只有两条：第一个字节开头有几个 1，这个字符就占几个字节（单字节的 ASCII 例外，开头是 0）；其余的字节一律以 `10` 开头。我们把第一个字节叫作**首字节**（lead byte），把以 `10` 开头的字节叫作**后续字节**（continuation byte）。数一数 x 的个数：2 字节能装 5+6=11 位，3 字节能装 4+6+6=16 位，4 字节能装 3+6+6+6=21 位，正好与表中的有效位数对上。
+每个字节开头的几位是固定的标记，剩下的 x 位用来装码位。规律只有两条：第一个字节开头有几个 1，这个字符就占几个字节（单字节的 ASCII 例外，开头是 0）；其余的字节一律以 `10` 开头。我们把第一个字节叫作**首字节**（lead byte），把以 `10` 开头的字节叫作**后续字节**（continuation byte）。数一数 x 的个数：2 字节能装 5+6=11 位，3 字节能装 4+6+6=16 位，4 字节能装 3+6+6+6=21 位，正好是表中第二列的数。码位本身的位数可以更少，比如 `é` 是 U+00E9，只有 8 位，装进 2 字节的模板时，前面补 0 凑满 11 位。
 
 开头的第一个问题也有了答案：ASCII 字符的码位小于 0x80，落在第 1 行；`あ` 是 U+3042，`深度学习入门` 这几个字的码位都在 U+4E00–U+9FFF 之间（[验证 A-c](#v-A-c) 的最后一行），都落在第 3 行，所以要 3 个字节。
 
@@ -169,6 +171,7 @@ steps = [(f"U+{cp:04X}", "码位"),
 for value, why in steps:
     print(f"{value:<28}（{why}）")
 assert b == [227, 129, 130] == list("あ".encode("utf-8"))
+assert ord("é").bit_length() == 8 and len(utf8_encode(ord("é"))) == 2   # 8 位，装进 11 位的模板
 ```
 
 ::: think 手算 😁（U+1F601）的 UTF-8 编码，结果应该与 1.2 节的哪几个 id 一致？
@@ -185,14 +188,18 @@ import numpy as np
 rng = np.random.default_rng(0)
 classes = [(0x0000, 0x007F), (0x0080, 0x07FF),
            (0x0800, 0xFFFF), (0x10000, 0x10FFFF)]
+dropped = {}
 for n, (lo, hi) in enumerate(classes, start=1):
-    cps = [lo, hi] + [int(c) for c in rng.integers(lo, hi + 1, size=2000)]
-    cps = [c for c in cps if not 0xD800 <= c <= 0xDFFF]  # 代理区另行检查
+    drawn = [lo, hi] + [int(c) for c in rng.integers(lo, hi + 1, size=2000)]
+    cps = [c for c in drawn if not 0xD800 <= c <= 0xDFFF]  # 代理区另行检查
+    dropped[n] = len(drawn) - len(cps)
     for c in cps:
         b = utf8_encode(c)
         assert len(b) == n and bytes(b) == chr(c).encode("utf-8")
     print(f"U+{lo:04X}–U+{hi:04X}：{len(cps)} 个码位，都是 {n} 字节，"
           "与 str.encode 一致")
+print(f"第 3 类抽到的 {2000 + 2:,} 个码位里有 {dropped[3]} 个落进代理区，已先剔除")
+assert dropped == {1: 0, 2: 0, 3: 68, 4: 0}
 
 def try_encode(encode, c):
     try:
@@ -207,7 +214,9 @@ for c in (0xD7FF, 0xD800, 0xDFFF, 0xE000):
     assert mine == ref
 ```
 
-抽样能发现大多数错误，但我们可以做得更彻底：把全部 1,112,064 个可编码的码位一次性对拍。码位从小到大排列时，字节数也是从小到大的，所以把四类码位分别用数组运算编好，再依次拼起来，就应该等于“所有字符连成的字符串”的 UTF-8 编码。构造这个字符串时，我们借用了 A.1 节的结论：UTF-32 的字节就是码位本身，所以把码位数组按 UTF-32 解码，就得到了包含全部字符的字符串。
+第 3 类的范围包含了代理区，抽到的码位里有 68 个落在代理区里。它们先被剔除，留给最后四行单独检查，所以这一类只剩 1,934 个。
+
+抽样能发现大多数错误，但我们可以做得更彻底：把全部 1,112,064 个可编码的码位一次性对拍。这个数是 0 到 0x10FFFF 的 1,114,112 个码位，减去代理区的 2,048 个。码位从小到大排列时，字节数也是从小到大的，所以把四类码位分别用数组运算编好，再依次拼起来，就应该等于“所有字符连成的字符串”的 UTF-8 编码。构造这个字符串时，我们借用了 A.1 节的结论：UTF-32 的字节就是码位本身，所以把码位数组按 UTF-32 解码，就得到了包含全部字符的字符串。
 
 ```verify id=A-f title="全部 1,112,064 个码位逐字节对拍（NumPy 向量化）"
 cps = np.arange(0x110000, dtype=np.uint32)
@@ -226,8 +235,13 @@ ours = np.concatenate(blocks).astype(np.uint8).tobytes()
 # UTF-32 的字节就是码位本身：按 UTF-32 解码，得到全部字符连成的字符串
 everything = cps.astype("<u4").tobytes().decode("utf-32-le")
 print(f"{len(cps):,} 个码位 → {len(ours):,} 个字节，其中值为 0 的字节 {ours.count(0)} 个")
-assert len(cps) == 1_112_064 and len(everything) == len(cps)
+assert 0x110000 == 1_114_112 and 0xDFFF - 0xD800 + 1 == 2_048
+assert len(cps) == 1_114_112 - 2_048 == 1_112_064 and len(everything) == len(cps)
+assert (0x10FFFF).bit_length() == 21                       # 码位最多 21 位
 assert ours == everything.encode("utf-8")
+assert ours.decode("utf-8") == everything                  # 还能原样拼回去
+for enc in ("utf-16-be", "utf-32-be"):                     # 另外两种编码也一样
+    assert everything.encode(enc).decode(enc) == everything
 assert ours.count(0) == 1                                  # 只有 U+0000 本身
 ```
 
@@ -243,7 +257,8 @@ assert ours.count(0) == 1                                  # 只有 U+0000 本�
 
 $$
 \begin{aligned}
-&\text{E3 81 82} = 1110\,0011\;\;10\,000001\;\;10\,000010_{(2)}\\[-3pt]
+&\text{E3 81 82}\\
+&= 1110\,0011\;\;10\,000001\;\;10\,000010_{(2)}\\[-3pt]
 &\quad{\footnotesize\text{（写成二进制）}}\\[2pt]
 &\to 0011\;000001\;000010_{(2)}\\[-3pt]
 &\quad{\footnotesize\text{（去掉标记位）}}\\[2pt]
@@ -287,10 +302,12 @@ print(f"{len(data)} 个起点都能对齐，最多跳过 {max_skip} 个字节")
 assert max_skip == 3
 ```
 
-第二个好处在 DLFS6 里派上了用场。[4.3 节](ch04.html#s4-3)训练分词器时，要把好几 GB 的文件切成若干块，一块一块地读（[4.4 节](ch04.html#s4-4)再把这些块分给多个进程并行处理）。负责切分的 `find_chunk_boundaries` 先按字节数把文件等分，再从每个切点往后找最近的 `<|endoftext|>`，把切点挪到那里：
+第二个好处在 DLFS6 里派上了用场。[4.3 节](ch04.html#s4-3)训练分词器时，要把好几 GB 的文件切成若干块，一块一块地读（[4.4 节](ch04.html#s4-4)再把这些块分给多个进程并行处理）。负责切分的 `find_chunk_boundaries` 先按字节数把文件等分，再从每个切点往后，按 4096 个字节一块地读，把切点挪到读到的第一个 `<|endoftext|>` 上：
 
-```listing storybot/tokenizer.py#L53-L71
+```listing storybot/tokenizer.py#L45-L77
 ```
+
+这一块里找不到时，`chunk_position += buffer_size` 把起点往后挪一块再读；最后 `sorted(set(...))` 去掉重合的切点，下面验证 A-i 里的 `sorted({0, len(blob), *moved})` 就是照着它写的。
 
 等分的切点可能正好落在一个汉字的中间，挪过之后就不会了：`<|endoftext|>` 全是 ASCII 字节，它的起点不可能在任何多字节字符的内部。于是每一块都能单独解码。我们在内存里模拟一遍：
 
@@ -327,9 +344,9 @@ chunks = [blob[a:b] for a, b in zip(aligned, aligned[1:])]
 assert b"".join(chunks) == blob
 ```
 
-这里的模拟把 `find_chunk_boundaries` 的循环读取简化成了一次 `bytes.find`。真正的函数在磁盘文件上是不是也这样，可以用下面的本地测试确认：
+这里的模拟把 `find_chunk_boundaries` 的循环读取简化成了一次 `bytes.find`。两者有一处不同：真正的函数每次读 4096 个字节，只在这一块里找，恰好跨在两块之间的 `<|endoftext|>` 会被错过，切点于是挪到下一个，而不是最近的那个。这不影响结论：不管挪到哪一个 `<|endoftext|>` 上，切点都落在字符的边界上。下面的本地测试在磁盘文件上运行真正的函数，确认每一块都能单独解码，也确认了“跨在两块之间的会被错过”：
 
-```localcheck verify/test_appendix.py::test_a_chunk_boundaries title="真实的 find_chunk_boundaries 切出的每一块都能单独解码"
+```localcheck verify/test_appendix.py::test_a_chunk_boundaries title="真实的 find_chunk_boundaries 切出的每一块都能单独解码；跨在两块之间的 <|endoftext|> 会被错过"
 ```
 
 ## A.4 不合法的字节序列
@@ -344,13 +361,15 @@ UTF-8 的规则也决定了哪些字节序列不合法。归纳起来有下面�
 | 代理区 | `ED A0 80`（U+D800） | 这段码位留给 UTF-16 的代理对，不是字符 |
 | 超出 U+10FFFF | `F4 90 80 80` | Unicode 的码位到 0x10FFFF 为止 |
 
+开头的第二个问题也有了答案：半个“世” `E4 B8` 正是第 2 种情况。首字节 `E4` 说一共 3 个字节，却只来了 2 个，序列在中途就断了。
+
 前两种情况直接违反了 A.2 节的模板，后三种则需要解释一下。
 
-先看超长编码。如果不管规矩，硬把 `C0 80` 按模板拆开，数据位是 `00000` 和 `000000`，拼起来就是 U+0000。可 U+0000 明明只需要一个字节 `00`。如果两种写法都算合法，同一段文字就会有多种字节表示，分词器给出的 token 序列也就不再唯一。更危险的是安全检查：一个程序禁止输入里出现 NUL 字节 `00`，却放过了 `C0 80`，后面的解码器又把它还原成了 NUL。这正是 UTF-8 的规范 RFC 3629 在第 10 节举的例子，所以规范要求只接受最短的写法（[RFC 3629](https://www.rfc-editor.org/rfc/rfc3629)）。这也解释了首字节为什么从 `C2` 开始：`C0` 和 `C1` 开头的 2 字节序列只能装下小于 0x80 的码位，必然是超长编码。
+先看超长编码。如果不管规矩，硬把 `C0 80` 按模板拆开，数据位是 `00000` 和 `000000`，拼起来就是 U+0000。可 U+0000 明明只需要一个字节 `00`。如果两种写法都算合法，同一段文字就会有多种字节表示，分词器给出的 token 序列也就不再唯一。更危险的是安全检查：一个程序禁止输入里出现 NUL 字节 `00`，却放过了 `C0 80`，后面的解码器又把它还原成了 NUL。这正是 UTF-8 的规范 RFC 3629 在第 10 节举的例子，所以规范要求只接受最短的写法（[RFC 3629](https://www.rfc-editor.org/rfc/rfc3629)，2026-10 查证）。这也解释了首字节为什么从 `C2` 开始：`C0` 和 `C1` 开头的 2 字节序列只能装下小于 0x80 的码位，必然是超长编码。
 
-再看后两种。代理区 U+D800–U+DFFF 是 A.1 节里留给 UTF-16 的“零件”，单独出现没有意义。至于上限，早期的规范 RFC 2279 允许最多 6 个字节；RFC 3629 把范围收窄到 0x10FFFF，也就是 UTF-16 能表示的范围，于是最多 4 个字节。这样一来，首字节 `F5–FF` 就永远不会出现了：`F5–F7` 开头的 4 字节序列表示的码位都超过了 0x10FFFF；`F8–FD` 属于已经废除的 5、6 字节格式；`FE` 和 `FF` 则连旧规范里都没有用到（[RFC 2279](https://www.rfc-editor.org/rfc/rfc2279)）。
+再看后两种。代理区 U+D800–U+DFFF 是 A.1 节里留给 UTF-16 的“零件”，单独出现没有意义。至于上限，早期的规范 RFC 2279 允许最多 6 个字节；RFC 3629 把范围收窄到 0x10FFFF，也就是 UTF-16 能表示的范围，于是最多 4 个字节。这样一来，首字节 `F5–FF` 就永远不会出现了：`F5–F7` 开头的 4 字节序列表示的码位都超过了 0x10FFFF；`F8–FD` 属于已经废除的 5、6 字节格式；`FE` 和 `FF` 则连旧规范里都没有用到（[RFC 2279](https://www.rfc-editor.org/rfc/rfc2279)，2026-10 查证）。
 
-把这些规则合起来，就是 Unicode 标准中的“合法 UTF-8 字节序列”表（[Unicode 16.0 第 3.9.3 节，表 3-7](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G27506)）。它的关键在于：第 2 个字节允许的范围取决于首字节：
+把这些规则合起来，就是 Unicode 标准中的“合法 UTF-8 字节序列”表（[Unicode 16.0 第 3.9.3 节，表 3-7](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G27506)，2026-10 查证）。它的关键在于：第 2 个字节允许的范围取决于首字节：
 
 | 码位范围 | 首字节 | 第 2 个 | 第 3 个 | 第 4 个 |
 |---|---|---|---|---|
@@ -467,7 +486,7 @@ print(f"{len(cases)} 段字节串，其中 {n_bad} 段不合法；"
 
 现在可以回答开头的问题了。严格模式遇到坏字节就报错；`errors="replace"` 则把坏字节换成替换字符 U+FFFD（显示为 `�`）然后继续。问题在于“换几个”：两个坏字节，是换成一个 `�` 还是两个？
 
-Unicode 标准推荐的做法叫“按最大子部分替换”（[第 3.9.6 节](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G66453)）。从出错的位置开始，找出最长的一段字节，这段字节要么是某个合法序列的开头，要么只有 1 个字节；这一段叫作**最大子部分**（maximal subpart），整段只换成一个 U+FFFD，然后从它后面接着解码。标准本身并不强制这种做法，但 Python 的解码器遵守它（下面的验证会逐字对拍），浏览器里的 `TextDecoder` 也遵守它（[WHATWG Encoding 标准的 UTF-8 解码器](https://encoding.spec.whatwg.org/#utf-8-decoder)）。
+Unicode 标准推荐的做法叫“按最大子部分替换”（[第 3.9.6 节](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G66453)，2026-10 查证）。从出错的位置开始，找出最长的一段字节，这段字节要么是某个合法序列的开头，要么只有 1 个字节；这一段叫作**最大子部分**（maximal subpart），整段只换成一个 U+FFFD，然后从它后面接着解码。标准本身并不强制这种做法，但 Python 的解码器遵守它（下面的验证会逐字对拍），浏览器里的 `TextDecoder` 也遵守它（[WHATWG Encoding 标准的 UTF-8 解码器](https://encoding.spec.whatwg.org/#utf-8-decoder)，2026-10 查证）。
 
 A.4 节解码器里的变量 `j` 正是为此设计的：它从首字节往前走，停在第一个“不对”的字节上，`data[i:j]` 就是最大子部分。于是：
 
@@ -515,7 +534,7 @@ print("增量解码：", pieces)
 assert "".join(pieces) == "世界😁" and chr(0xFFFD) not in "".join(pieces)
 ```
 
-“半个字符”的 token 并不是理论上的担心。WebBot 的分词器在 OpenWebText 上训练出了 5 万个 token（[7.1 节](ch07.html#s7-1)），其中有 157 个合并出来的 token，单独拿出来不是合法的 UTF-8。150 个以不完整的序列结尾，例如 id 290 是 `E2 80`，它是弯引号 `’` `“` `”` 和破折号 `—` 共同的前两个字节。另外 7 个以后续字节开头，例如 id 6091 是 `82 AC`，它是欧元符号 `€`（`E2 82 AC`）的后两个字节。下面的本地测试读取真实的 WebBot 词表，确认这些数字；再用本页的解码器与 DLFS6 的 `decode` 对拍，先逐个解码 5 万个 token，再解码随机拼成的 token 序列：
+“半个字符”的 token 并不是理论上的担心。WebBot 的分词器是在 OpenWebText 上训练的，词表有 5 万个 token（[7.1 节](ch07.html#s7-1)），其中有 157 个合并出来的 token，单独拿出来不是合法的 UTF-8。150 个以不完整的序列结尾，例如 id 290 是 `E2 80`，它是弯引号 `’` `“` `”` 和破折号 `—` 共同的前两个字节。另外 7 个以后续字节开头，例如 id 6091 是 `82 AC`，它是欧元符号 `€`（`E2 82 AC`）的后两个字节。下面的本地测试读取真实的 WebBot 词表，确认这些数字，也逐个检查了这两种结构：150 个交给增量解码器时不报错，只是留下了等待后续的字节；7 个的第一个字节都在 `80–BF` 之间。然后用本页的解码器与 DLFS6 的 `decode` 对拍，先逐个解码 5 万个 token，再解码随机拼成的 token 序列：
 
 ```localcheck verify/test_appendix.py::test_a_decode_matches_dlfs6 title="WebBot 词表：157 个“半个字符”的 token；本页解码器与 DLFS6 的 decode 逐字相同"
 ```
@@ -534,11 +553,11 @@ assert "".join(pieces) == "世界😁" and chr(0xFFFD) not in "".join(pieces)
 
 ### 本附录所学的内容
 
-- 三种编码的输出都是字节，所以任何字符都能写成 0–255 的数列；对英文和代码，UTF-8 最短（[验证 A-a](#v-A-a)、[验证 A-c](#v-A-c)）。
+- 每个字符的码位不超过 0x10FFFF（21 位），三种编码都把它切成 8 位的块，还能原样拼回去，所以任何字符都能写成 0–255 的数列；对英文和代码，UTF-8 最短（[验证 A-a](#v-A-a)、[验证 A-c](#v-A-c)、[验证 A-f](#v-A-f)）。
 - UTF-8 按“首字节标记 + 每个后续字节 6 位”的模板编码，`あ` 是 `E3 81 82`；这条规则在全部 1,112,064 个码位上与 Python 一致（[验证 A-d](#v-A-d)、[验证 A-f](#v-A-f)）。
 - 首字节、后续字节、ASCII 的取值范围互不重叠，有 13 个字节值永远不出现；因此 UTF-8 可以自同步（[验证 A-g](#v-A-g)、[验证 A-h](#v-A-h)）。
 - 把切点挪到 `<|endoftext|>` 上，每一块都能单独解码，这就是 `find_chunk_boundaries` 的做法（[验证 A-i](#v-A-i)）。
-- 超长编码、代理区、超出 0x10FFFF 都不合法，表 3-7 用“第 2 个字节的范围”把它们一并排除（[验证 A-j](#v-A-j)、[验证 A-k](#v-A-k)）。
+- 超长编码、代理区、超出 0x10FFFF 都不合法，表 3-7 用首字节的范围（排除 `C0`、`C1`、`F5–FF`）和四格加粗的第 2 字节范围把它们一并排除（[验证 A-j](#v-A-j)、[验证 A-k](#v-A-k)）。
 - `errors="replace"` 把每个最大子部分换成一个 U+FFFD：半个“世”是一个 `�`，逐 token 解码是三个；替换有损，流式输出要用增量解码（[验证 A-l](#v-A-l)、[验证 A-m](#v-A-m)）。
 
 字节的问题到此为止。[附录 B](appendix-b.html) 回到第 2 章的 Attention，证明那个让 softmax 不再饱和的 $\sqrt{d}$ 从何而来。

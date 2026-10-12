@@ -21,7 +21,10 @@ pyodide_packages: [numpy]
 于是 Attention 的公式里多了一个 $\sqrt d$：
 
 $$
-\operatorname{Attention}(Q, K, V) = \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt d}\right)V
+\begin{aligned}
+&\operatorname{Attention}(Q, K, V)\\
+&\qquad= \operatorname{softmax}\!\left(\frac{QK^\top}{\sqrt d}\right)V
+\end{aligned}
 $$
 
 CodeBot 的模型里也有对应的两行，其中 `D` 是每个头的维度：
@@ -116,7 +119,7 @@ $$
 &= d\\[-3pt]
 &\quad{\footnotesize\text{（第 2 步：每项都是 1）}}\\[2pt]
 \operatorname{Var}\Big[\frac{\mathbf q\cdot\mathbf k}{\sqrt d}\Big] &= \frac1d\operatorname{Var}[\mathbf q\cdot\mathbf k] = 1\\[-3pt]
-&\quad{\footnotesize\text{（性质 4：}\operatorname{Var}[cX] = c^2\operatorname{Var}[X]\text{）}}
+&\quad{\footnotesize\text{（性质 4，取 }c = 1/\sqrt d\text{）}}
 \end{aligned}
 $$
 
@@ -167,8 +170,10 @@ for d in (10, 64, 256):
 先看方差。如果各分量的方差是 $\sigma_q^2$ 和 $\sigma_k^2$，第 2 步的结果就变成 $\sigma_q^2\sigma_k^2$，第 3 步变成：
 
 $$
-\operatorname{Var}[\mathbf q\cdot\mathbf k] = d\,\sigma_q^2\sigma_k^2,\qquad
-\operatorname{Var}\Big[\frac{\mathbf q\cdot\mathbf k}{\sqrt d}\Big] = \sigma_q^2\sigma_k^2
+\begin{aligned}
+\operatorname{Var}[\mathbf q\cdot\mathbf k] &= d\,\sigma_q^2\sigma_k^2\\
+\operatorname{Var}\Big[\frac{\mathbf q\cdot\mathbf k}{\sqrt d}\Big] &= \sigma_q^2\sigma_k^2
+\end{aligned}
 $$
 
 也就是说，除以 $\sqrt d$ 消掉的只是对维度的依赖，分数的尺度仍由 $\sigma_q$、$\sigma_k$ 决定。在真实模型里，它们由初始化决定，而且可以预先算出来。CodeBot 的权重和 embedding 都用标准差 0.02 初始化（[2.10 节](ch02.html#s2-10)），embedding 是 384 维，每个头 64 维（[2.8 节](ch02.html#s2-8)）。[2.3 节](ch02.html#s2-3)粗略估计过，初始化时分数的标准差约为 0.154，那里把 LayerNorm 的输出方差当作 1。下面把 LayerNorm 的 eps 也算进去，以刚初始化的第 0 层为例，一步一步来：

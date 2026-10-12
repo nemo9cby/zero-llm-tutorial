@@ -125,8 +125,8 @@ def test_low_training_loss_is_not_verbatim_recall(dlfs6_path, models):
     prefix = match.cumprod(1).sum(1)                         # 从头开始连续对上的 token 数
     print(f"teacher forcing：loss {loss:.3f}，top-1 准确率 {top1:.1%}；自由续写 32 个 token：逐 token 一致 "
           f"{match.float().mean().item():.1%}，整段一致的窗口 {verbatim}/64，连续一致的长度中位数 {int(prefix.median())}")
-    assert loss < 0.6 and top1 > 0.8                         # 在语料上拟合得很紧……
-    assert verbatim <= 8 and int(prefix.median()) < 16       # ……但整段复述的窗口不到八分之一
+    assert loss < 0.6 and 0.835 <= top1 < 0.845              # 在语料上拟合得很紧（正文：84%）……
+    assert verbatim == 5 and int(prefix.median()) < 16       # ……但整段复述的窗口只有 5 个（正文的数字）
 
 
 def test_overfit_one_batch_first(dlfs6_path):
@@ -371,6 +371,21 @@ def test_free_running_length_export(dlfs6_path, tok, models):
     pick = exp["indices"][::16]                              # 每个 prompt 有自己的种子，可以单独抽查
     r = ex.sft_free_running_lengths(tok, models["sft"], pick)
     assert r["generated"] == exp["generated"][::16] and r["target"] == exp["target"][::16]
+    # 改写过的 48 条指令（句末的标点去掉或加上）：都不在 SFT 数据里，模型却大多一字不差地背出原题的回答
+    data = json.loads((CODEBOT / "tiny_codes_sft.json").read_text(encoding="utf-8"))
+    rw = exp["reworded"]
+    assert rw["instructions"] == [ex.reworded(data[i]["instruction"]) for i in exp["indices"]]
+    assert not {d["instruction"] for d in data} & set(rw["instructions"])
+    assert rw["ids"] == [tok.encode(t) for t in rw["texts"]]
+    sft = read_json("sft_tokens.json")
+    verbatim = [t == data[i]["response"] for t, i in zip(rw["texts"], exp["indices"])]
+    # 页面上的验证单元比较的是 token id：编码是确定的、可逆的，所以 id 相同等价于文字相同
+    assert verbatim == [g == sft["response_ids"][i][:-1] for g, i in zip(rw["ids"], exp["indices"])]
+    print(f"改写过的 48 条指令：与训练回答一字不差的 {sum(verbatim)} 条，平均长度 {np.mean([len(g) for g in rw['ids']]):.1f}")
+    assert sum(verbatim) == 42
+    sub = sorted({0, 16, 32, rw["instructions"].index("output welcome.")})     # 抽查几条，含页面引用的那条跑偏的例子
+    texts = ex.free_running_texts(tok, models["sft"], [rw["instructions"][j] for j in sub], [exp["indices"][j] for j in sub])
+    assert texts == [rw["texts"][j] for j in sub]
 
 
 def test_answer_distribution_export(dlfs6_path, tok, models):
@@ -667,23 +682,40 @@ def test_optimizers_descend_by_default_but_can_ascend(dlfs6_path):
 
 
 def test_zero_gradient_still_moves_weights_through_weight_decay(dlfs6_path):
-    p = torch.nn.Parameter(torch.ones(3))
+    """3.9.2：奖励函数写坏了（优势全为 0、梯度全为 0）时，AdamW 只剩权重衰减：每步把参数乘以 1 − 7e-8。"""
+    p = torch.nn.Parameter(torch.ones(3, dtype=torch.float64))
     opt = torch.optim.AdamW([p], lr=7e-6)          # 09_grpo.py 的学习率，weight_decay 默认 0.01
+    assert opt.defaults["weight_decay"] == 0.01
     (p * 0).sum().backward()                        # 全零梯度（例如整批都是零方差组）
     opt.step()
-    assert torch.allclose(p.detach(), torch.full((3,), 1 - 7e-6 * 0.01))
+    assert torch.allclose(p.detach(), torch.full((3,), 1 - 7e-6 * 0.01, dtype=torch.float64), rtol=0, atol=1e-15)
+    for _ in range(999):                            # 500 轮 × 每轮 2 次更新 = 1000 步
+        opt.zero_grad()
+        (p * 0).sum().backward()
+        opt.step()
+    shrink = 1 - p[0].item()
+    print(f"全零梯度下 1000 步：参数缩小了 {shrink:.2e}")
+    assert abs(shrink - (1 - (1 - 7e-8) ** 1000)) < 1e-12 and shrink < 1e-4      # 不到万分之一
 
 
 def test_recorded_grpo_runs(dlfs6_path):
     """页面引用的 CPU 对照实验记录（verify/_ch03_grpo_replicate.py 的输出，seed 0、1、2 各两条）：
-    核对正文写到的数字；并确认批量采样从没碰到 40 个 token 的上限，所以它与原书逐条调用 generate() 等价。"""
+    核对正文写到的数字。批量采样每条回答最多 40 个 token：77,760 条回答里只有 8 条写满上限被截断，
+    greedy 评测里一条也没有。除了这 8 条，它与原书逐条调用 generate() 在统计上等价。"""
     runs = read_json("grpo_dropout_runs.json")
     assert sorted((r["seed"], r["dropout"]) for r in runs["runs"]) == [(s, d) for s in (0, 1, 2) for d in (False, True)]
+    n_resp = n_trunc = 0
     for run in runs["runs"]:
         rows = [json.loads(line) for line in (DATA / run["file"]).read_text(encoding="utf-8").splitlines()]
-        assert len(rows) == run["iters"] == 60
-        assert "_ch03_grpo_replicate.py" in run["env"] and f"--seed {run['seed']}" in run["env"]
+        assert len(rows) == run["iters"] == 60 and [r["it"] for r in rows] == list(range(60))
+        assert run["env"].endswith(f"_ch03_grpo_replicate.py --iters 60 --seed {run['seed']} --tag "
+                                   + ("base" if run["dropout"] else "nodrop --dropout-off"))
         accs = [r["greedy_acc"] for r in rows if "greedy_acc" in r]
-        assert abs(accs[-1] - run["final_greedy_acc"]) < 0.05, run["file"]
-        assert all(r["truncated"] == 0 for r in rows), run["file"]
+        assert len(accs) == 7 and abs(accs[-1] - run["final_greedy_acc"]) < 0.05, run["file"]   # 第 0、10、…、50、59 轮
+        assert [r["n_prompts"] for r in rows[:3]] == [32, 32, 17]                               # cycle 重放的三批
+        n_resp += sum(r["n_prompts"] * 8 for r in rows)
+        n_trunc += sum(r["truncated"] for r in rows)
         assert all(r["greedy_truncated"] == 0 for r in rows if "greedy_acc" in r), run["file"]
+        assert 30 * 60 < run["seconds"] < 45 * 60                                                # 墙钟时间：33–41 分钟
+    print(f"6 条运行一共采样 {n_resp:,} 条回答，写满 40 个 token 被截断的 {n_trunc} 条")
+    assert (n_resp, n_trunc) == (77_760, 8)

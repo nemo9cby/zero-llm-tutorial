@@ -85,14 +85,16 @@ export async function mount(root, config) {
     const show = [];
     for (const i of argsortDesc(q)) { if (show.length >= nShow || q[i] === 0) break; show.push(i); }
     for (const i of argsortDesc(base).slice(0, nShow)) if (show.length < nShow + 4 && !show.includes(i) && q[i] === 0) show.push(i);
-    const maxv = Math.max(...show.map((i) => Math.max(q[i], base[i])), 1e-9);
+    // 条长按显示项里最大的那个值归一；抽样频率也算在内，否则频率高于最大概率时圆点会越过轨道
+    const freq = (i) => (counts ? (counts.get(i) || 0) / nDraw : 0);
+    const maxv = Math.max(...show.map((i) => Math.max(q[i], base[i], freq(i))), 1e-9);
     rows.replaceChildren(...show.flatMap((i) => {
       const cut = q[i] === 0;
       const track = h('div', { class: 'track' },
         h('div', { class: 'bar', style: `width:${(q[i] / maxv) * 100}%` }),
         h('div', { class: 'ghost', style: `left:calc(${(base[i] / maxv) * 100}% - 1px)` }));
       if (counts && counts.get(i)) {
-        track.append(h('div', { class: 'dot', style: `left:${((counts.get(i) / nDraw) / maxv) * 100}%`, title: `${counts.get(i)} 次` }));
+        track.append(h('div', { class: 'dot', style: `left:${(freq(i) / maxv) * 100}%`, title: `${counts.get(i)} 次` }));
       }
       const label = `${showTok(tokens[i])}`;
       return [

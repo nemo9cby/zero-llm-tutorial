@@ -3,7 +3,8 @@
 The JavaScript trainer (web/widgets/_tinygpt.js) is checked three ways:
   * gradient checks against finite differences, layer by layer (node --test tests/js/trainer-ops.test.mjs);
   * parity with DLFS6's own codebot.model.GPT in PyTorch (fixtures from verify/_trainer_export.py);
-  * the recorded runs shown on the page replay exactly (tests/js/trainer-runs.test.mjs).
+  * the recorded runs shown on the page replay exactly, in Node (tests/js/trainer-runs.test.mjs) and in
+    headless Chromium through the page's Web Worker (tests/js/trainer-browser.test.mjs).
 The rest checks facts the page states about the data and about the PyTorch side.
 
     uv run pytest verify/test_trainer.py
@@ -21,7 +22,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from _trainer_data import CORPUS, EOT, OUT, build_slice
+from _trainer_data import CORPUS, EOT, OUT, build_slice, printable
 from _trainer_export import FIXTURES, build_default, build_erf, build_tiny
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -74,6 +75,9 @@ def test_data_slice_is_reproducible(dlfs6_path):
     corpus_docs = set(corpus.split(EOT))
     docs = train.split(EOT) + val.split(EOT)
     assert len(docs) == 778 + 86 and all(d in corpus_docs for d in docs)  # whole documents of the book's corpus
+    picked = corpus.split(EOT)[::25]  # every 25th document ...
+    assert len(picked) == 874 and len(picked) - len(docs) == 10  # ... minus 10 with a tab or a control character
+    assert all(not printable(d) for d in picked if d not in set(docs))
     size = sum(f.stat().st_size for f in OUT.iterdir() if f.is_file())
     assert size <= 300_000, f"web/data/train-in-browser holds {size:,} bytes"
 
@@ -98,19 +102,37 @@ def test_js_gradient_checks():
 
 
 def test_parity_fixtures_come_from_dlfs6_gpt(dlfs6_path):
-    """Rebuilding the fixtures with DLFS6's GPT reproduces the committed JSON (to 1e-12)."""
-    for name, build in (("parity-tiny.json", build_tiny), ("parity-default.json", build_default)):
-        saved = json.loads((FIXTURES / name).read_text(encoding="utf-8"))
-        fresh = build()
-        assert saved["names"] == fresh["names"] and saved["ids"] == fresh["ids"]
-        assert abs(saved["loss"] - fresh["loss"]) < 1e-12
-        if "grads" in saved:
-            for n in saved["names"]:
-                assert saved["weights"][n] == fresh["weights"][n]
-                a, b = (np.frombuffer(base64.b64decode(f["grads"][n]), "<f8") for f in (saved, fresh))
-                assert np.allclose(a, b, rtol=1e-12, atol=1e-15), n
-        else:
-            assert saved["param_count"] == fresh["param_count"] == 93_408
+    """Rebuilding the fixtures with DLFS6's GPT reproduces every number the JavaScript parity test reads:
+    tiny model: the batch, the loss, every gradient, and the three torch.optim.AdamW steps (their losses
+    and every parameter afterwards); real size: the loss and every gradient checksum. All to 1e-12."""
+    unb64 = lambda s: np.frombuffer(base64.b64decode(s), "<f8")
+    close = lambda a, b: np.allclose(a, b, rtol=1e-12, atol=1e-15)
+
+    saved, fresh = json.loads((FIXTURES / "parity-tiny.json").read_text(encoding="utf-8")), build_tiny()
+    assert saved["names"] == fresh["names"] and saved["ids"] == fresh["ids"] and len(saved["names"]) == 29
+    assert abs(saved["loss"] - fresh["loss"]) < 1e-12
+    for n in saved["names"]:
+        assert saved["weights"][n] == fresh["weights"][n]
+        assert close(unb64(saved["grads"][n]), unb64(fresh["grads"][n])), n
+    opt_saved, opt_fresh = saved["adamw"], fresh["adamw"]
+    for key in ("lr", "betas", "eps", "weight_decay"):
+        assert opt_saved[key] == opt_fresh[key], key
+    assert np.allclose(opt_saved["losses"], opt_fresh["losses"], rtol=0, atol=1e-12)
+    for n in saved["names"]:
+        moved = unb64(opt_saved["params_after"][n]) - unb64(saved["weights"][n])
+        assert np.abs(moved).max() > 1e-3, n  # three steps of lr 0.05 really moved every tensor
+        assert close(unb64(opt_saved["params_after"][n]), unb64(opt_fresh["params_after"][n])), n
+
+    saved, fresh = json.loads((FIXTURES / "parity-default.json").read_text(encoding="utf-8")), build_default()
+    assert saved["names"] == fresh["names"] and saved["ids"] == fresh["ids"]
+    assert abs(saved["loss"] - fresh["loss"]) < 1e-12
+    assert saved["param_count"] == fresh["param_count"] == 93_408
+    for n in saved["names"]:
+        s, f = saved["grad_checks"][n], fresh["grad_checks"][n]
+        norm = math.sqrt(f["sumsq"])
+        assert abs(s["sumsq"] - f["sumsq"]) <= 1e-12 * f["sumsq"], n
+        assert abs(s["sum"] - f["sum"]) <= 1e-12 * norm * 400, n  # |sum| <= sqrt(numel) * norm, numel <= 12,288
+        assert np.allclose(s["head"], f["head"], rtol=0, atol=1e-12 * norm), n
     assert json.loads((FIXTURES / "erf.json").read_text(encoding="utf-8")) == build_erf()
 
 
@@ -184,9 +206,34 @@ def test_dlfs6_gpt_overfits_one_batch(dlfs6_path):
 
 
 def test_recorded_runs_replay():
-    """The runs shown on the page (web/data/train-in-browser/runs.json) replay step for step, and the
-    milestones the page quotes hold in them."""
+    """The runs shown on the page (web/data/train-in-browser/runs.json) replay with the current code: the first
+    20 losses of every run bit for bit, and the first 500 steps of the default run completely (every loss to
+    4 decimals, every held-out loss, every sample). The milestones the page quotes hold in the record."""
     out = run_node_tests("tests/js/trainer-runs.test.mjs")
+    assert "fail 0" in out
+
+
+def test_live_trainer_in_chromium_matches_recording():
+    """The live trainer (trainer-worker.js, the page's own settings) in headless Chromium: its first 500 steps
+    equal the recorded default run -- the first 20 losses bit for bit, then every loss to 4 decimals, every
+    held-out loss and every sample."""
+    out = run_node_tests("tests/js/trainer-browser.test.mjs")
+    if "skipped 1" in out:
+        pytest.skip("Playwright's Chromium is not available")
+    assert "pass 1" in out and "fail 0" in out
+
+
+def test_js_erf_within_one_ulp():
+    """The JavaScript erf is at most one float64 step (ulp) from the correctly rounded erf(x), on a 1/64 grid
+    over [-7, 7] plus 10,000 random points (references: mpmath at 120 bits, verify/_trainer_export.py)."""
+    out = run_node_tests("--test-name-pattern=erf is at most one ulp", "tests/js/trainer-ops.test.mjs")
+    assert "pass 1" in out and "fail 0" in out
+
+
+def test_simd_kernel():
+    """The WebAssembly SIMD matmul: the embedded 670 bytes are the WAT in the source comment compiled with wabt,
+    it equals the JavaScript loop to about 1e-7, and a whole training step agrees with and without it."""
+    out = run_node_tests("tests/js/trainer-simd.test.mjs")
     assert "fail 0" in out
 
 

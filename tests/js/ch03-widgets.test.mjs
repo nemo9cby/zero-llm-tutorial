@@ -11,6 +11,8 @@ import { LINEAGE, PRESETS } from '../../web/widgets/ch03-lineage.js';
 import { ratioHistogram } from '../../web/widgets/ch03-dropout.js';
 import { passAtK, correctProbs, MODELS } from '../../web/widgets/ch03-answers.js';
 import { parseMetrics, accSummary, lossSummary, patchText } from '../../web/widgets/ch03-grporuns.js';
+import { stdNote } from '../../web/widgets/ch03-group.js';
+import { columnsFor } from '../../web/widgets/ch03-novar.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const close = (a, b, tol = 1e-3) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
@@ -133,4 +135,23 @@ test('两次 3060 Ti 运行的记录：第 51 轮 60.5% 对 98.8%；最终 86.4%
   const report = JSON.parse(fs.readFileSync(path.join(ROOT, 'web/data/runs/codebot-grpo-evalfix-3060ti/report.json'), 'utf8'));
   assert.equal(patchText(report.steps[0].patches[0]), 'model.eval()（加在 for _ in range(n_update_per_generation): 之前）');
   assert.deepEqual(parseMetrics('{"it": 0, "acc": 1}\r\n\r\n{"it": 1, "acc": 2}\r\n'), [{ it: 0, acc: 1 }, { it: 1, acc: 2 }]);
+});
+
+test('组内优势计算器“除以标准差”：答对者的优势与专栏公式 √((1−p)/p) 只差常数倍 √((G−1)/G)', () => {
+  const r = [1, 0, 0, 1, 1, 0, 0, 0];
+  const note = stdNote(r, advantages(r, { stdNorm: true }), true);
+  assert.match(note, /A₊ = 1\.207/);                      // 无偏 std（除以 G−1）再加 1e-4
+  assert.match(note, /√\(\(1−p\)\/p\) = 1\.291/);         // 3.7-h：除以 G 的 std
+  assert.match(note, /√\(\(G−1\)\/G\) = 0\.935/);
+  assert.equal(stdNote(r, advantages(r), false), '');      // 没打开开关时不说
+  assert.equal(stdNote([1, 1, 1], advantages([1, 1, 1], { stdNorm: true }), true), '');   // 全对的组：没有 A₊ 可比
+});
+
+test('P(无信号) 热力图：放不下 11 列（每格 ≥ 30px）时只画 p = 0, 0.2, …, 1', () => {
+  assert.equal(columnsFor(700).length, 11);
+  assert.equal(columnsFor(343).length, 6);                // 375px 的手机，正文约 343px 宽
+  assert.equal(columnsFor(0).length, 11);                 // 还不知道宽度时先画完整的网格
+  assert.deepEqual(columnsFor(343), [0, 0.2, 0.4, 0.6, 0.8, 1]);
+  const cell = (w, C) => Math.min(44, Math.floor((w - 44 - 4) / C));   // 与 _plot.js heatmap 的格子大小相同
+  assert.ok(cell(343, columnsFor(343).length) >= 30 && cell(378, columnsFor(378).length) >= 30);
 });

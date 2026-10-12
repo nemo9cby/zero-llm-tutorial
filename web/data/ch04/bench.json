@@ -49,6 +49,12 @@
     "url": "https://huggingface.co/datasets/koki0702/zero-llm-data/resolve/main/storybot/tiny_stories_train.bin",
     "bytes": 50946778,
     "sha256": "0893d9cc166e91c361f096f867159332f236b97f230c1fdd2902b3f970b016a1"
+   },
+   "train_full": {
+    "what": "the whole storybot/tiny_stories_train.txt (= TinyStoriesV2-GPT4-train.txt, see web/data/cs336/data_identity.json)",
+    "url": "https://huggingface.co/datasets/koki0702/zero-llm-data/resolve/main/storybot/tiny_stories_train.txt",
+    "bytes": 2227753162,
+    "sha256": "6418d412de72888f52b5142c761ac21a582f7d1166f0bfbdb5f03ccfdec90443"
    }
   },
   "cpu_timer": "time.process_time() of the measuring process (on Windows it ticks in steps of 1/64 s)",
@@ -565,6 +571,42 @@
   "identical_to_official_train_bin_prefix": true,
   "official_prefix_bytes": 50946778,
   "load": 100.0
+ },
+ "train_full": {
+  "input": "storybot/tiny_stories_train.txt (2,227,753,162 bytes)",
+  "vocab": 10000,
+  "num_processes": 8,
+  "num_chunks": 64,
+  "wall": 563.967,
+  "pretok_wall": 193.057,
+  "merge_loop_wall": 368.627,
+  "peak_rss_mib": 1574.1,
+  "load": 97.4,
+  "merges": 9743,
+  "rules_sha256": "39466b3206e01c94d2dd4f1b3b751d34b29fae311652904b6c8d69d7a577222c",
+  "identical_to_official_merge_rules": true,
+  "date": "2026-10-12 14:47"
+ },
+ "encode_full": {
+  "input": "storybot/tiny_stories_train.txt (2,227,753,162 bytes)",
+  "num_processes": 8,
+  "num_chunks": 64,
+  "wall": 2269.683,
+  "peak_rss_mib": 2093.5,
+  "load": 99.5,
+  "tokens": 541229223,
+  "out_bytes": 1082458446,
+  "identical_to_official_train_bin": true,
+  "cache_dir_removed": true,
+  "date": "2026-10-12 15:28"
+ },
+ "heaps_full": {
+  "input": "storybot/tiny_stories_train.txt (2,227,753,162 bytes)",
+  "bytes": 2227753162,
+  "occurrences": 536592168,
+  "unique": 59933,
+  "top10_share": 0.3192,
+  "top1000_share": 0.925
  },
  "scanned": {
   "first": 932,

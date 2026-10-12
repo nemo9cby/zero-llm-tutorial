@@ -334,13 +334,24 @@ def _calls(run):
 
 
 def test_recorded_cpu_run_is_consistent(dlfs6_path):
-    """web/data/ch09/webbot-cpu-shrunk：记录下来的学习率逐步等于原书 get_lr，loss 从 ln 50000 附近开始下降。"""
+    """web/data/ch09/webbot-cpu-shrunk：记录下来的学习率逐步等于原书 get_lr，loss 从 ln 50000 附近开始下降。
+    页面上关于这次运行的几句话也在这里核对：原书的 autocast 在 CPU 上只留下一条警告就关掉了（所以是 fp32）；
+    训练用 owt_valid.bin 的前 90%，紧接着的 65,536 个 token 做验证。"""
+    import re
     report = json.loads((RUNS / "webbot-cpu-shrunk" / "report.json").read_text(encoding="utf-8"))
     calls = _calls("webbot-cpu-shrunk")
     cfg = next(c["data"] for c in calls if c["call"] == "config.update")
     assert [c["call"] for c in calls][:2] == ["init", "config.update"] and calls[-1]["call"] == "finish"
     assert report["dlfs6_commit"].startswith("c9b6e2e") and report["exit_codes"] == [0]
     assert cfg["effective_batch_size"] == cfg["micro_batch_size"] * cfg["accumulation_steps"]
+    assert report["warnings"] == ["UserWarning: CUDA is not available or torch_xla is imported. Disabling autocast."]
+
+    probe_log = (ROOT / "web" / "data" / "runs" / "webbot-probe" / "01_pretrain.log.txt").read_text(encoding="utf-8")
+    n_valid = int(re.search(r"検証データ: ([\d,]+) tokens", probe_log).group(1).replace(",", ""))  # 整个 owt_valid.bin
+    (t0, t1), (v0, v1) = [tuple(int(x or 0) for x in re.search(r"\[(\d*):(\d+)\]", report["data"][k]).groups())
+                          for k in ("train", "val")]
+    assert report["data"]["train"].startswith("webbot/owt_valid.bin[") and t0 == 0 and t1 == int(0.9 * n_valid)
+    assert v0 == t1 and v1 - v0 == 65_536
 
     get_lr = load_defs(["get_lr"])["get_lr"]
     train = [c for c in calls if c["call"] == "log" and "train/loss" in c["data"]]
@@ -391,9 +402,16 @@ def test_unigram_baseline_on_the_shrunk_split(dlfs6_path):
 
 def test_recorded_ddp_run_logs_only_on_rank0(dlfs6_path):
     """web/data/ch09/webbot-cpu-ddp2：原书脚本走 DDP 分支、2 个进程；只有 rank 0 调用 wandb，
-    而它记下的 effective_batch_size 只是单卡的 micro×accum。"""
+    而它记下的 effective_batch_size 只是单卡的 micro×accum。改动的行与单进程的缩小版相比，只多出 4 行
+    （nccl → gloo、cuda:{local_rank} → cpu、去掉 torch.cuda.set_device、DDP 不传 device_ids）。"""
     report = json.loads((RUNS / "webbot-cpu-ddp2" / "report.json").read_text(encoding="utf-8"))
     assert report["world_size"] == 2 and report["exit_codes"] == [0, 0]
+    shrunk = json.loads((RUNS / "webbot-cpu-shrunk" / "report.json").read_text(encoding="utf-8"))
+    old = lambda r: [p["old"] for p in r["patches"] if p.get("file", "ch09/01_pretrain.py") == "ch09/01_pretrain.py"]  # noqa: E731
+    extra = [line for line in old(report) if line not in old(shrunk)]
+    assert set(old(shrunk)) <= set(old(report)) and len(old(report)) == len(old(shrunk)) + 4
+    assert extra == ["dist.init_process_group(backend='nccl')", "device = torch.device(f'cuda:{local_rank}')",
+                     "torch.cuda.set_device(device)", "model = DDP(model, device_ids=[local_rank])"]
     calls = _calls("webbot-cpu-ddp2")
     assert report["wandb_calls_per_rank"]["1"] == 0
     assert report["wandb_calls_per_rank"]["0"] == len(calls)     # 记录下来的每一次调用都来自 rank 0

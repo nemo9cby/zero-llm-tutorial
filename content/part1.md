@@ -272,6 +272,7 @@ first_full = min(it for it, acc in fixed.items() if acc == 100.0)
 print(f"加 model.eval() 后，第一次 81 道全对是第 {first_full} 步")
 assert len(fix["steps"][0]["patches"]) == 1 and fix["steps"][0]["patches"][0]["new"].lstrip().startswith("model.eval()")
 assert (as_is[51], as_is[500]) == (60.5, 86.4) and (fixed[51], fixed[500]) == (98.8, 100.0) and first_full == 131
+assert all(acc == 100.0 for it, acc in fixed.items() if it >= first_full)   # 从第 131 步起每次都是 81 道全对
 ```
 
 为什么一行代码差这么多？组内 8 个回答全对或全错的题为什么学不到东西，训练时显示的 loss 为什么不能当进度条看？[3.9 节](ch03.html#s3-9)会细说。

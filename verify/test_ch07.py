@@ -452,6 +452,7 @@ def test_word_vocab_oov_shrinks_but_stays_positive(tok):
         size[n] = len(vocab)
         rate[n] = round(sum(w not in vocab for w in test) / len(test), 3)
     assert rate == {50_000: 0.308, 1_000_000: 0.103, 8_000_000: 0.045}
+    assert 60_000 < size[8_000_000] < 70_000                      # page: "6 万多个词" (61,641)
     assert size[8_000_000] > tok.vocab_size == 50_000            # a bigger vocabulary than all of WebBot's
 
 

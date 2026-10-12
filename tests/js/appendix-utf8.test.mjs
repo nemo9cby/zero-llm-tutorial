@@ -1,7 +1,8 @@
 // 附录 A 交互图的编解码逻辑：与浏览器 / Node 内置的 TextEncoder、TextDecoder 对拍。
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { encodeCodePoint, decodeSegments, decodeReplace, parseHex } from '../../web/widgets/appendix-utf8.js';
+import { encodeCodePoint, decodeSegments, decodeReplace, parseHex, bitsLabel, rejectReason, shown, quoteVisible }
+  from '../../web/widgets/appendix-utf8.js';
 
 test('encodeCodePoint 在全部 1,112,064 个码位上与 TextEncoder 逐字节相同', () => {
   const enc = new TextEncoder();
@@ -56,6 +57,38 @@ test('decodeSegments 给出与 Python 相同的出错位置和原因', () => {
     assert.deepEqual([bad.start, bad.end, bad.reason], expected);
   }
   assert.deepEqual(decodeSegments([0xe4, 0xb8, 0x96]), [{ start: 0, end: 3, cp: 0x4e16 }]);
+});
+
+test('卡片标题：码位本身的位数与模板能装的位数分开写（é 是 8 位，装进 11 位的模板）', () => {
+  assert.equal(bitsLabel(0x41), '7 位有效，装进 7 位的模板 → 1 个字节');
+  assert.equal(bitsLabel(0xe9), '8 位有效，装进 11 位的模板 → 2 个字节');
+  assert.equal(bitsLabel(0x4e16), '15 位有效，装进 16 位的模板 → 3 个字节');   // 世
+  assert.equal(bitsLabel(0x1f601), '17 位有效，装进 21 位的模板 → 4 个字节');  // 😁
+});
+
+test('落单的代理区码位：编码模式给出原因，不抛异常', () => {
+  const cps = [...'A\ud800B'].map((c) => c.codePointAt(0));   // 粘贴进来的文字里可能有
+  assert.deepEqual(cps, [0x41, 0xd800, 0x42]);
+  assert.throws(() => encodeCodePoint(0xd800), RangeError);
+  assert.match(rejectReason(0xd800), /U\+D800 是代理区的码位.*A\.4 节/);
+  assert.equal(shown(0xd800), String.fromCodePoint(0xfffd));
+});
+
+test('看不见的字符：字形显示成 ·，输出行写成 \\uXXXX', () => {
+  for (const cp of [0x00, 0x1f, 0x7f, 0x85, 0xad, 0x200b, 0x200d, 0x2028, 0x2029, 0xfeff, 0xe0001]) {
+    assert.equal(shown(cp), '·', `U+${cp.toString(16)}`);
+  }
+  assert.equal(shown(0x20), '␣');
+  assert.equal(shown(0x3000), '␣');
+  assert.equal(shown(0x4e16), '世');
+  // EF BB BF 41：解出来是 U+FEFF 加 A，不能只显示成 "A"
+  const bomA = String.fromCodePoint(0xfeff, 0x41);
+  assert.equal(decodeReplace([0xef, 0xbb, 0xbf, 0x41]), bomA);
+  assert.equal(quoteVisible(bomA), '"\\uFEFFA"');
+  assert.equal(quoteVisible(String.fromCodePoint(0x61, 0x200b, 0x62, 0x2028)), '"a\\u200Bb\\u2028"');
+  assert.equal(quoteVisible(String.fromCodePoint(0xe0001)), '"\\u{E0001}"');
+  const plain = String.fromCodePoint(0x4e16, 0x754c, 0xfffd);   // 世界�：普通字符和 � 原样显示
+  assert.equal(quoteVisible(plain), JSON.stringify(plain));
 });
 
 test('parseHex 接受常见写法，拒绝非法输入', () => {

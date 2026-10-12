@@ -92,7 +92,7 @@ test('KV cache animation counts (验证 5.5-a)', () => {
   assert.equal(cache, 200);
 });
 
-test('KV cache bytes per token and presets (验证 5.5-j)', () => {
+test('KV cache bytes per token and presets (验证 5.5-m)', () => {
   assert.equal(kvBytesPerToken(6, 6, 64, 4), 18432);
   assert.equal(kvBytesPerToken(4, 16, 32, 4), 16384);
   assert.equal(kvBytesPerToken(12, 4, 64, 2), 12288);
@@ -108,7 +108,7 @@ test('KV cache bytes per token and presets (验证 5.5-j)', () => {
   assert.equal(PRESETS.webbotMHA.params, webbot(50000, 768, 12, 2048, 12, 64));
 });
 
-test('agent token meter (验证 5.5-n)', () => {
+test('agent token meter (验证 5.5-k)', () => {
   assert.equal(requestSize(3000, 800, 300), 243000);
   assert.equal(cumulative(3000, 800, 300), 37020000);
   assert.equal(cumulative(3000, 800, 300, 256000), 37020000);                 // 300 轮还装得下：窗口不起作用
@@ -134,7 +134,7 @@ test('recorded CPU timing: measured per-step speedup stays far below t (验证 5
   for (const r of ratios(rec.per_step)) if (r.t >= 25) assert.ok(r.measured < r.flops / 2, `t=${r.t}`);
 });
 
-test('recorded GPU timing: at batch 1 the cache is about as fast as recomputing (验证 5.5-i)', () => {
+test('recorded GPU timing: at batch 1 the cache is about as fast as recomputing (验证 5.5-l)', () => {
   const rec = JSON.parse(fs.readFileSync(new URL('../../web/data/ch05/kv_timing_cuda.json', import.meta.url), 'utf8'));
   for (const r of ratios(rec.per_step)) assert.ok(r.measured > 0.6 && r.measured < 1.5, `t=${r.t}`);
   const last = ratios(rec.per_step).at(-1);

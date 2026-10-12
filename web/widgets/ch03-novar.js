@@ -7,6 +7,13 @@ import { injectStyle, loadJSON, pNoSignal, segmented } from './ch03-common.js';
 
 const GS = [1, 2, 4, 8, 16, 32];
 const PS = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1];
+const PS_NARROW = [0, 0.2, 0.4, 0.6, 0.8, 1];
+
+/** 热力图的列：放得下 11 列、每格 ≥ 30px（格子里才显示数字）时用 PS，否则每隔 0.2 取一列。 */
+export function columnsFor(width) {
+  const labelW = 44 + 4;                                   // _plot.js heatmap 的行标签宽度与边距
+  return width && width < labelW + 30 * PS.length ? PS_NARROW : PS;
+}
 
 export async function mount(root, config) {
   injectStyle();
@@ -23,12 +30,24 @@ export async function mount(root, config) {
   ];
 
   const heatBox = h('div', { class: 'hm-seq' });
-  root.append(h('div', { class: 'w-label' }, '每格：一组 G 个回答全对或全错（没有学习信号）的概率。横轴是这道题的正确率 p，纵轴是组大小 G。'), heatBox);
-  heatmap(heatBox, {
-    values: GS.map((G) => PS.map((p) => pNoSignal(p, G))),
-    rowLabels: GS.map((G) => `G=${G}`), colLabels: PS.map((p) => p.toFixed(1)),
+  const narrowNote = h('div', { class: 'w-label' });
+  root.append(h('div', { class: 'w-label' }, '每格：一组 G 个回答全对或全错（没有学习信号）的概率，格子里的数字就是这个概率。横轴是这道题的正确率 p，纵轴是组大小 G。'),
+    heatBox, narrowNote);
+  // 窄屏上 11 列放不下数字：只画 p = 0, 0.2, …, 1，让每格仍然写得下概率
+  let cols = columnsFor(root.clientWidth);
+  const grid = (ps) => ({
+    values: GS.map((G) => ps.map((p) => pNoSignal(p, G))), colLabels: ps.map((p) => p.toFixed(1)),
+  });
+  const setNote = () => { narrowNote.textContent = cols === PS ? '' : '屏幕较窄，这里只画了 p = 0, 0.2, …, 1 这几列；加宽窗口可以看到每隔 0.1 的完整网格。'; };
+  const hm = heatmap(heatBox, {
+    ...grid(cols), rowLabels: GS.map((G) => `G=${G}`),
     domain: [0, 1], cellFormat: (v) => v.toFixed(2), size: 44, ariaLabel: 'P(无信号) 热力图',
   });
+  setNote();
+  new ResizeObserver(() => {
+    const next = columnsFor(root.clientWidth);
+    if (next !== cols) { cols = next; hm.update(grid(cols)); setNote(); }
+  }).observe(root);
 
   let di = 2, G = 8;
   const info = h('div', { class: 'stat', 'aria-live': 'polite' });

@@ -29,10 +29,15 @@ const STYLE = `
 .w-ch04-incr .word .cnt { font: 12px var(--mono); color: var(--ink-2); white-space: nowrap; }
 .w-ch04-incr .word .tag { font-size: .72rem; color: var(--ai); white-space: nowrap; }
 .w-ch04-incr table { display: table; width: 100%; margin: 0; font-size: .82rem; }
-.w-ch04-incr td, .w-ch04-incr th { padding: .15rem .35rem .15rem 0; border-bottom: 1px solid var(--rule); white-space: nowrap; }
-.w-ch04-incr td.num { font: 12px var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
-.w-ch04-incr td.idx { white-space: normal; font-size: .76rem; color: var(--ink-2); min-width: 5.5rem; }
+.w-ch04-incr td, .w-ch04-incr th { padding: .15rem .45rem .15rem 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.w-ch04-incr th { font-weight: 600; text-align: left; }
+.w-ch04-incr td.pair code { white-space: pre; }
+.w-ch04-incr td.num, .w-ch04-incr th.num { white-space: nowrap; text-align: right; }
+.w-ch04-incr td.num { font: 12px var(--mono); font-variant-numeric: tabular-nums; }
+.w-ch04-incr td.idx { font-size: .76rem; color: var(--ink-2); overflow-wrap: anywhere; }
+.w-ch04-incr td.idx, .w-ch04-incr th.idx { padding-left: .6rem; }
 .w-ch04-incr td.idx em { font-style: normal; color: var(--ink-3); }
+.w-ch04-incr .legend { margin-top: .35rem; font-size: .76rem; color: var(--ink-3); }
 .w-ch04-incr tr.next td { background: color-mix(in srgb, var(--ai-2) 55%, transparent); }
 .w-ch04-incr tr.gone td { color: var(--ink-3); text-decoration: line-through; }
 .w-ch04-incr .minus { color: var(--shu); } .w-ch04-incr .plus { color: var(--moss); }
@@ -60,12 +65,13 @@ export function mount(root, config) {
   const lamp = h('span', { class: 'lamp', role: 'status' });
   const wordsBox = h('div');
   const table = h('table', {});
+  const legend = h('div', { class: 'legend' });
   const foot = h('div', { class: 'foot' });
   root.append(
     h('div', { class: 'bar' }, select, nextBtn, resetBtn, stepLabel, lamp),
     h('div', { class: 'cols' },
       h('div', {}, h('h4', {}, '不同的词（当前的 token 序列 × 出现次数）'), wordsBox),
-      h('div', {}, h('h4', {}, 'pair 计数表与倒排索引'), table)),
+      h('div', {}, h('h4', {}, 'pair 计数表与倒排索引'), table, legend)),
     foot,
   );
 
@@ -115,14 +121,16 @@ export function mount(root, config) {
       return words.length > 3 ? `${shown} 等 ${fmt(words.length)} 个` : shown;
     };
     table.replaceChildren(
-      h('thead', {}, h('tr', {}, h('th', {}, 'pair'), h('th', {}, '次数'), h('th', {}, '−旧'), h('th', {}, '+新'),
-        h('th', {}, '倒排索引：含有它的词'))),
-      h('tbody', {}, [...rows].map(([k, c]) => h('tr', { class: k === nextKey ? 'next' : (c === 0 ? 'gone' : '') },
-        h('td', {}, h('code', {}, pairLabel(k)), k === nextKey ? ' ← 下一步' : ''),
-        h('td', { class: 'num' }, fmt(c)),
-        h('td', { class: 'num' }, amount(minus, k, '−', 'minus')),
-        h('td', { class: 'num' }, amount(plus, k, '+', 'plus')),
-        h('td', { class: 'idx' }, index(k))))));
+      h('thead', {}, h('tr', {}, h('th', {}, 'pair'), h('th', { class: 'num' }, '次数'), h('th', { class: 'num' }, '−旧'),
+        h('th', { class: 'num' }, '+新'), h('th', { class: 'idx' }, '倒排索引'))),
+      h('tbody', {}, [...rows].map(([k, c]) => h('tr', {
+        class: k === nextKey ? 'next' : (c === 0 ? 'gone' : ''), 'aria-label': k === nextKey ? `下一步要合并的 pair：${pairLabel(k)}` : null },
+      h('td', { class: 'pair' }, h('code', {}, pairLabel(k))),
+      h('td', { class: 'num' }, fmt(c)),
+      h('td', { class: 'num' }, amount(minus, k, '−', 'minus')),
+      h('td', { class: 'num' }, amount(plus, k, '+', 'plus')),
+      h('td', { class: 'idx' }, index(k))))));
+    legend.textContent = `高亮的一行是下一步要合并的 pair（次数最多，平票时比 id）；倒排索引一栏是现在含有这个 pair 的词。`;
 
     const totalBytes = bpe.seqs.reduce((s, q) => s + new TextEncoder().encode(q.word).length * q.count, 0);
     const touched = new Set([...minus.keys(), ...plus.keys()]);

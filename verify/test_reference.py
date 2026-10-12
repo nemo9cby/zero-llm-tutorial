@@ -1003,16 +1003,38 @@ def test_cs336_a1_record_is_consistent():
                                                  "test_overlapping_special_tokens",
                                                  "test_encode_iterable_tinystories_sample_roundtrip",
                                                  "test_encode_iterable_tinystories_matches_tiktoken"}
+    # every outcome except the wall-clock speed gate is fixed: 35/10/2 as shipped, 40/5/2 after the fixes
+    for v, want in (("as_shipped", (35, 10, 2)), ("one_line_fixes", (40, 5, 2))):
+        outcomes = [t[v]["outcome"] for n, t in tests.items() if n != "test_train_bpe_speed"]
+        assert tuple(outcomes.count(k) for k in ("passed", "failed", "skipped")) == want, v
+    # per-test kinds: the "设计不同" and "无对应" filters show exactly what the page names
+    kinds = {k: sorted(n for n, t in tests.items() if t["kind"] == k) for k in ("design", "none")}
+    assert kinds == {"design": ["test_get_lr_cosine_schedule"],
+                     "none": ["test_checkpointing", "test_encode_iterable_memory_usage",
+                              "test_encode_iterable_tinystories_matches_tiktoken",
+                              "test_encode_iterable_tinystories_sample_roundtrip", "test_overlapping_special_tokens"]}
     bpe = rec["diagnostics"]["as_shipped"]["train_bpe"][0]
-    assert (bpe["first_divergence"], bpe["identical_positions"]) == (92, 170)
+    assert (bpe["first_divergence"], bpe["identical_positions"]) == (92, 170)  # merges 1-92 agree, the 93rd differs
     assert rec["diagnostics"]["one_line_fixes"]["train_bpe"][0]["exact"]
     ts = rec["diagnostics"]["as_shipped"]["train_bpe"][1]                       # 5 MB TinyStories sample
     assert (ts["first_divergence"], ts["n_merges"], ts["vocab_values_equal"]) == (34, 743, True)
     assert rec["diagnostics"]["one_line_fixes"]["train_bpe"][1]["exact"]
-    # the speed gate (1.5 s) on corpus.en: as shipped the five timings straddle it, after the fix all miss it
-    shipped, fixed = (rec["diagnostics"][v]["train_bpe"][0]["train_seconds_runs"] for v in ("as_shipped", "one_line_fixes"))
+    # the BPE fix recorded is the one shown on the page (one changed line, two added lines)
+    page = (ROOT / "content" / "cs336.md").read_text(encoding="utf-8")
+    after = rec["fixes"]["bpe_tiebreak"]["after"]
+    assert len(after) == 3
+    for line in (l.strip() for new in after for l in new.splitlines()):
+        assert line in page, line
+    # the speed gate (1.5 s) on corpus.en depends on the machine: every recording is kept with its note
+    hist = rec["speed_history"]
+    first = hist[0]                                    # the first recording, with another training job running
+    assert "another training job" in first["note"] and "id_bytes" in first["bpe_tiebreak_after"]
+    shipped, fixed = (first["train_seconds_runs"][v] for v in ("as_shipped", "one_line_fixes"))
     assert (round(min(shipped), 2), round(max(shipped), 2)) == (1.27, 1.52) and min(shipped) < 1.5 < max(shipped)
     assert (round(min(fixed), 2), round(max(fixed), 2)) == (1.80, 2.48)
+    last = hist[-1]
+    assert last["generated"] == rec["generated"] and last["bpe_tiebreak_after"] == after and last["note"]
+    assert last["bpe_speed"]["rounds"] == 5 and set(last["bpe_speed"]["runs"]) == {"as_shipped", "one_line_fixes"}
     rms = rec["diagnostics"]["as_shipped"]["rmsnorm_vs_snapshot"]
     assert round(rms["nn.RMSNorm(d) default eps"], 6) == 1.7e-05                  # "only 1.7e-5" for test_rmsnorm
     worst = lambda name, v: tests[name][v]["worst"]
@@ -1047,15 +1069,18 @@ def test_cs336_a1_live_spot_checks():
 
 
 def test_cs336_storybot_pretraining_equals_a1_tinystories_config():
-    tree = ast.parse(src("ch06/05_pretrain.py"))
-    consts = {t.id: ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
-              for t in n.targets if isinstance(t, ast.Name) and isinstance(n.value, ast.Constant)}
-    a1 = {"context_len": 256, "vocab_size": 10000, "embed_dim": 512, "n_head": 16, "n_layer": 4,
-          "ff_dim": 1344, "theta": 10000, "batch_size": 32}                # A1 handout, TinyStories LM
-    assert {k: consts[k] for k in a1} == a1
-    assert consts["max_iters"] * consts["batch_size"] * consts["context_len"] == 327_680_000
+    c = consts("ch06/05_pretrain.py")
+    # the 7 values A1's handout (section 7.2.1, TinyStories LM) fixes: model shape and tokenizer
+    a1 = {"vocab_size": 10000, "context_len": 256, "embed_dim": 512, "n_head": 16, "n_layer": 4,
+          "ff_dim": 1344, "theta": 10000}
+    assert {k: c[k] for k in a1} == a1
+    # A1 fixes only the token budget; batch size, learning rate and warmup are left to the student. DLFS6's choices:
+    assert (c["batch_size"], c["learning_rate"], c["warmup_iters"], c["max_iters"]) == (32, 1e-3, 200, 40_000)
+    assert c["max_iters"] * c["batch_size"] * c["context_len"] == 327_680_000   # A1: 327,680,000 tokens
     assert "save_iters = [500, 5000]" in src("ch06/05_pretrain.py")
-    assert 5000 * 32 * 256 == 40_960_000                               # model_iter_5000 = A1 low-resource budget
+    assert 5000 * c["batch_size"] * c["context_len"] == 40_960_000                # model_iter_5000 = low-resource budget
+    lr = load_defs("ch06/05_pretrain.py", names={"get_lr"})["get_lr"]
+    assert abs(lr(5000, c["learning_rate"], c["warmup_iters"], c["max_iters"]) / c["learning_rate"] - 0.88) < 0.01
 
 
 def test_cs336_local_tinystories_valid_matches_the_recorded_hash():
@@ -1079,18 +1104,22 @@ def test_cs336_storybot_parameter_count(dlfs6_path):
 
 
 def test_cs336_storybot_initial_logit_scale(dlfs6_path):
-    """sigma(logits) ~ sqrt(d) * 0.02 because the final RMSNorm gives every vector RMS 1."""
+    """sigma(logits) ~ sqrt(d) * 0.02 because the final RMSNorm gives every vector RMS 1, and the initial loss is
+    ~ ln V + sigma^2 / 2. The loss is the expectation over a uniformly random target, taken exactly for every row
+    (logsumexp minus the row mean), not a sampled cross-entropy: no sampling noise, so a tight tolerance holds."""
     from storybot.model import GPT
 
-    torch.manual_seed(0)
-    m = GPT(10000, 256, 512, 16, 4, 1344).eval()
-    ids = torch.randint(0, 10000, (4, 64))
-    with torch.no_grad():
-        logits = m(ids)
-        ce = torch.nn.functional.cross_entropy(logits[:, :-1].reshape(-1, 10000), ids[:, 1:].reshape(-1)).item()
-    sigma = logits.std().item()
-    assert abs(sigma - math.sqrt(512) * 0.02) < 0.02                   # 0.453
-    assert abs(ce - (math.log(10000) + sigma ** 2 / 2)) < 0.03          # ~9.31, above ln V = 9.21
+    for seed in (0, 1, 2):
+        torch.manual_seed(seed)
+        m = GPT(10000, 256, 512, 16, 4, 1344).eval()
+        ids = torch.randint(0, 10000, (4, 64))
+        with torch.no_grad():
+            logits = m(ids)
+        sigma = logits.std().item()
+        ce = (torch.logsumexp(logits, -1) - logits.mean(-1)).mean().item()
+        assert abs(sigma - math.sqrt(512) * 0.02) < 0.02, seed           # 0.453
+        assert abs(ce - (math.log(10000) + sigma ** 2 / 2)) < 5e-3, seed  # ~9.31, above ln V = 9.21
+        assert ce - math.log(10000) > 0.09, seed
 
 
 def test_cs336_dpo_loss_is_ln2_at_initialisation(dlfs6_path):
@@ -1106,13 +1135,45 @@ def test_cs336_dpo_loss_is_ln2_at_initialisation(dlfs6_path):
     assert abs(loss.item() - math.log(2)) < 1e-6
 
 
+def test_cs336_clipping_and_lr_schedules():
+    """X.3 梯度裁剪 / 学习率调度 rows (and the glossary's 学习率调度 row): which training scripts clip the gradient
+    and which change the learning rate step by step; the others keep the constant set when the optimizer is made."""
+    scripts = ("ch03/01_pretrain.py", "ch03/03_sft.py", "ch03/09_grpo.py", "ch06/05_pretrain.py", "ch06/08_dpo.py",
+               "ch09/01_pretrain.py")
+    clips = {s for s in scripts if "clip_grad_norm_" in src(s)}
+    scheduled = {s for s in scripts if "param_group['lr'] = lr" in src(s) and "def get_lr(" in src(s)}
+    assert clips == {"ch03/09_grpo.py", "ch06/05_pretrain.py", "ch09/01_pretrain.py"}
+    assert scheduled == {"ch06/05_pretrain.py", "ch09/01_pretrain.py"}
+    for s in set(scripts) - scheduled:                                  # one constant learning rate, no scheduler
+        assert "lr_scheduler" not in src(s) and "param_group" not in src(s), s
+    assert {s: consts(s)["learning_rate"] for s in sorted(set(scripts) - scheduled)} == {
+        "ch03/01_pretrain.py": 3e-4, "ch03/03_sft.py": 3e-4, "ch03/09_grpo.py": 7e-6, "ch06/08_dpo.py": 5e-6}
+    assert "torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)" in src("ch03/09_grpo.py")
+    assert consts("ch06/05_pretrain.py")["grad_clip"] == consts("ch09/01_pretrain.py")["grad_clip"] == 1.0
+
+
 def test_cs336_grpo_shape_matches_a5_rollout_batch():
-    tree = ast.parse(src("ch03/09_grpo.py"))
-    c = {t.id: ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
-         for t in n.targets if isinstance(t, ast.Name) and isinstance(n.value, ast.Constant)}
+    """The DLFS6 columns of the two settings tables on the cs336 page (X.3), read from the scripts."""
+    from torch.utils.data import DataLoader
+
+    c = consts("ch03/09_grpo.py")
     assert (c["group_size"], c["batch_size"], c["epsilon"], c["n_update_per_generation"]) == (8, 32, 0.2, 2)
+    assert (c["learning_rate"], c["max_iters"], c["eval_interval"]) == (7e-6, 500, 10)
     assert c["group_size"] * c["batch_size"] == 256                    # A5: rollout_batch_size 256, G = 8
-    assert "advantages = rewards - rewards.mean()" in src("ch03/09_grpo.py")   # no std division
+    n = len(load_defs("ch03/09_grpo.py", names={"GRPODataset"})["GRPODataset"](tokenizer=None))
+    sizes = [len(b) for b in DataLoader(range(n), batch_size=c["batch_size"])]
+    assert n == 81 and sizes == [32, 32, 17]                          # one step in three has 17 x 8 = 136 rollouts
+    text = src("ch03/09_grpo.py")
+    assert "advantages = rewards - rewards.mean()" in text              # no std division
+    assert "ratio = probs / (old_probs + 1e-8)" in text and "-token_objective.sum() / n_samples" in text
+    assert "for prompt, gt in dataset.data:" in text and "temperature=0" in text   # greedy on the 81 training prompts
+    d = consts("ch06/08_dpo.py")
+    assert (d["beta"], d["learning_rate"], d["batch_size"], d["max_iters"]) == (0.1, 5e-6, 8, 1000)
+    dpo = src("ch06/08_dpo.py")
+    assert "ref_model = GPT.load_from(pretrain_model_path, device=device)" in dpo      # reference = pretrained model
+    assert "model = GPT.load_from(pretrain_model_path, device=device)" in dpo
+    assert "optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)" in dpo
+    assert len(json.loads(src("storybot/tiny_stories_dpo.json"))) == 144
 
 
 # ====================================================================== glossary
@@ -1128,6 +1189,91 @@ def test_glossary_sources_match_the_pinned_code():
         from _glossary_sources import signature
         for name, args in data["cs336_a1"]["signatures"].items():
             assert signature(Path(a1) / "tests" / "adapters.py", None, name) == args
+
+
+def test_glossary_norm_eps_defaults(dlfs6_path):
+    """Y.2 归一化的 eps: CodeBot's nn.LayerNorm keeps the default 1e-5; StoryBot's and WebBot's nn.RMSNorm get no
+    eps, which PyTorch takes as the machine epsilon of the input dtype (float32: 1.19e-7)."""
+    from codebot.model import GPT as CodeGPT
+    from storybot.model import GPT as StoryGPT
+    from webbot.model import GPT as WebGPT
+
+    layer_norms = [m for m in CodeGPT(50, 8, 16, 2, 1, 64, 0.1).modules() if isinstance(m, nn.LayerNorm)]
+    assert len(layer_norms) == 3 and all(m.eps == 1e-5 for m in layer_norms)
+    for model in (StoryGPT(50, 8, 16, 2, 1, 32), WebGPT(50, 8, 16, 2, 1, 1, 32)):
+        norms = [m for m in model.modules() if isinstance(m, nn.RMSNorm)]
+        assert len(norms) == 3 and all(m.eps is None for m in norms)
+    eps32 = torch.finfo(torch.float32).eps
+    assert round(eps32, 9) == 1.19e-7
+    x = torch.full((1, 8), 1e-3)
+    assert torch.allclose(nn.RMSNorm(8)(x), nn.RMSNorm(8, eps=eps32)(x), rtol=1e-6, atol=0)
+
+
+def test_glossary_grpo_logging_lines(dlfs6_path):
+    """Y.3: the grad-norm and entropy lines shown on the glossary page, run inside two iterations (two updates each)
+    of 09_grpo.py's update step on the author's SFT weights."""
+    import copy
+
+    import torch.nn.functional as F
+
+    from codebot.model import GPT
+    from codebot.tokenizer import BPETokenizer
+
+    page = (ROOT / "content" / "glossary.md").read_text(encoding="utf-8")
+    shown = ["grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)",
+             "logp = F.log_softmax(old_model(ids)[:, :-1], dim=-1)",
+             "entropy = -(logp.exp() * logp).sum(-1)[mask[:, 1:].bool()].mean()"]
+    for line in shown:
+        assert line in page, line
+    text = src("ch03/09_grpo.py")
+    assert "torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)" in text      # the line it replaces
+    # the progress bar shows the loss of the last (second) update: set_postfix comes after the update loop
+    loop = next(n for n in ast.walk(ast.parse(text)) if isinstance(n, ast.For) and ast.unparse(n.target) == "i")
+    body = [ast.unparse(s) for s in loop.body]
+    upd = next(k for k, s in enumerate(body) if s.startswith("for _ in range(n_update_per_generation)"))
+    post = next(k for k, s in enumerate(body) if "pbar.set_postfix" in s and "loss.item()" in s)
+    assert upd < post
+
+    g = load_defs("ch03/09_grpo.py", names={"GRPODataset", "compute_probs", "grpo_loss", "calculate_reward"})
+    tok = BPETokenizer.load_from(str(DLFS6 / "codebot" / "merge_rules.pkl"))
+    ds = g["GRPODataset"](tok)
+    data = ds.data[:4]                                                  # 4 prompts, one right and one wrong answer
+    answers = [(p, gt, r) for p, gt in data for r in (str(gt), str(gt + 1))]
+    rewards = torch.tensor([g["calculate_reward"](gt, r) for _, gt, r in answers]).view(4, 2)
+    advantages = (rewards - rewards.mean(1, keepdim=True)).flatten()  # +0.5 / -0.5 in every group
+    ids, mask = ds.get_batch([p for p, _, _ in answers], [r for _, _, r in answers], CPU)
+    model = GPT.load_from(str(DLFS6 / "codebot" / "model_sft.pt"))
+    optimizer = torch.optim.AdamW(model.parameters(), lr=7e-6)
+    total_norm = lambda: torch.sqrt(sum((p.grad ** 2).sum() for p in model.parameters() if p.grad is not None))  # noqa: E731
+    torch.manual_seed(0)
+    norms, entropies = [], []
+    for _ in range(2):                                                  # two iterations of the script's loop
+        old_model = copy.deepcopy(model).eval()
+        with torch.no_grad():
+            logp = F.log_softmax(old_model(ids)[:, :-1], dim=-1)
+            entropy = -(logp.exp() * logp).sum(-1)[mask[:, 1:].bool()].mean()
+        entropies.append(entropy.item())
+        for _ in range(2):                                              # n_update_per_generation
+            optimizer.zero_grad()
+            loss = g["grpo_loss"](model, old_model, ids, mask, advantages, 0.2)
+            loss.backward()
+            before = total_norm()
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            # the return value is the norm before clipping (float32 sums taken in another order: rtol 1e-4)
+            assert torch.allclose(grad_norm, before, rtol=1e-4)
+            assert total_norm() <= min(1.0, before.item()) * (1 + 1e-4)   # clipped to 1.0 (same float32 slack)
+            norms.append(grad_norm.item())
+            optimizer.step()
+    assert len(norms) == 4 and all(math.isfinite(n) and n > 0 for n in norms)
+    assert all(0 < e < math.log(1000) for e in entropies)
+    # every logit equal (zero output weights, tied to the embedding, and zero bias): the entropy is exactly ln V
+    flat = GPT(1000, 256, 32, 2, 1, 64, 0.1).eval()
+    with torch.no_grad():
+        flat.unembed.weight.zero_()
+        flat.unembed.bias.zero_()
+        logp = F.log_softmax(flat(ids)[:, :-1], dim=-1)
+        entropy = -(logp.exp() * logp).sum(-1)[mask[:, 1:].bool()].mean()
+    assert abs(entropy.item() - math.log(1000)) < 1e-5
 
 
 def test_glossary_epoch_two_ways():

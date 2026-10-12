@@ -210,7 +210,8 @@ export async function mount(root, config = {}) {
     rows.push(['峰值算力', `${gpu.name} ${b.precision.toUpperCase()} ${cm.peakTflops(b, gpu)} TFLOP/s（稠密）`]);
     rows.push(['每步计算', `${est.step_ms.toFixed(1)} 毫秒${est.floor_bound ? `，低于下限，按 ${st.floorMs} 毫秒计` : ''}`]);
     rows.push(['GPU·小时', est.gpu_hours.toFixed(2)]);
-    rows.push(['单价', price ? `${price.toFixed(2)} 美元 / GPU·小时` : '0（本机，电费不计）']);
+    rows.push(['单价', price ? `${price.toFixed(2)} 美元 / GPU·小时${offer.provider === 'modal' ? '（只算 GPU；CPU 与内存另计，见 G.5）' : ''}`
+      : '0（本机，电费不计）']);
 
     const big = h('div', { class: 'big' }, `${hours(est.wall_hours)} · ${usd(est.usd)} `,
       h('small', {}, st.world > 1 ? `（${st.world} 张卡同时计费）` : ''));

@@ -3,9 +3,10 @@
              sampleChars, prompt, temperature, seed } */
 import { h, fmt } from './_lib.js';
 import { lineChart } from './_plot.js';
+import { liftLabels } from './trainer-replay.js';
 
 const LRS = [3e-4, 1e-3, 3e-3, 1e-2];
-const STEPS = [300, 1000, 3000];
+const STEPS = [300, 1000, 2000, 3000];
 const TEMPS = [0.5, 0.8, 1.0];
 const BUCKET = 10; // the training curve shows the mean loss of every 10 steps
 
@@ -34,6 +35,7 @@ function injectStyle() {
 .w-trainer button:disabled { opacity: .45; cursor: default; }
 .w-trainer .w-trainer-status { font: 13px/1.6 var(--mono); font-variant-ligatures: none; color: var(--ink-2); font-variant-numeric: tabular-nums; margin: .4rem 0 .6rem; }
 .w-trainer .w-trainer-status b { color: var(--ink); font-weight: 600; }
+.w-trainer .w-trainer-status span { white-space: nowrap; }
 .w-trainer .w-trainer-samples { margin-top: .8rem; }
 .w-trainer .w-trainer-sample { margin: 0 0 .7rem; }
 .w-trainer .w-trainer-sample header { font-size: .82rem; color: var(--ink-3); margin-bottom: .15rem; }
@@ -43,6 +45,7 @@ function injectStyle() {
 .w-trainer .eot, .w-replay .eot { color: var(--ink-3); font-size: .85em; border: 1px solid var(--rule); border-radius: 3px; padding: 0 .2em; margin: 0 .1em; }
 .w-trainer .w-trainer-error { color: var(--shu); font-size: .9rem; }
 .w-trainer .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.w-trainer svg text.end-label { paint-order: stroke; stroke: var(--scroll-bg, var(--paper)); stroke-width: 4px; stroke-linejoin: round; pointer-events: none; }
 `));
 }
 
@@ -86,13 +89,15 @@ export function mount(root, cfg = {}) {
     status, live, errorBox, chartBox, samples));
 
   // ------------------------------------------------------------ chart state
-  let facts = null, trainPts = [], evalPts = [], bucket = [], chart = null, lastDraw = 0, drawTimer = 0;
-  let step = 0, seconds = 0, running = false, lastLoss = null;
+  let facts = null, trainPts = [], evalPts = [], bucket = [], recent = [], chart = null, lastDraw = 0, drawTimer = 0;
+  let step = 0, seconds = 0, running = false;
 
+  // The newest points are drawn at the right edge, where the curve hovers near the bigram line for a while,
+  // so that line's label goes to the left (the curves there are still far above it).
   const refLines = () => [
     { y: facts.lnV, label: `ln ${facts.vocabSize} = ${facts.lnV.toFixed(2)}（瞎猜）` },
     { y: facts.baselines.unigram, label: `unigram ${facts.baselines.unigram.toFixed(2)}` },
-    { y: facts.baselines.bigram, label: `bigram ${facts.baselines.bigram.toFixed(2)}` },
+    { y: facts.baselines.bigram, label: `bigram ${facts.baselines.bigram.toFixed(2)}`, labelAt: 'left' },
   ];
   const chartOpts = () => ({
     series: [
@@ -100,13 +105,14 @@ export function mount(root, cfg = {}) {
       { name: '留出 loss', points: evalPts },
     ],
     xLabel: '步数（参数更新次数）', yLabel: 'loss（nats）', yMin: 0, refLines: refLines(), table: false, height: 280,
+    // Until the first point after step 0 arrives, every point is at x = 0: show one tick, not 0, 0.2, 0.4 ... steps.
+    xTicks: [...trainPts, ...evalPts].some(([x]) => x > 0) ? undefined : [0],
     ariaLabel: '训练 loss 与留出 loss 随步数变化的曲线',
   });
   const draw = () => {
     drawTimer = 0;
     lastDraw = performance.now();
-    if (!chart) chart = lineChart(chartBox, chartOpts());
-    else chart.update(chartOpts());
+    if (!chart) { chart = lineChart(chartBox, chartOpts()); liftLabels(chartBox); } else chart.update(chartOpts());
   };
   const scheduleDraw = () => {
     if (drawTimer) return;
@@ -114,11 +120,13 @@ export function mount(root, cfg = {}) {
   };
   const showStatus = () => {
     const rate = seconds > 0 ? step / seconds : 0;
-    const lossTxt = lastLoss == null ? '' : ` · 训练 loss <b>${lastLoss.toFixed(3)}</b>`;
-    const valTxt = evalPts.length ? ` · 留出 loss <b>${evalPts.at(-1)[1].toFixed(3)}</b>` : '';
-    const speed = seconds > 0 ? ` · ${rate.toFixed(1)} 步/秒 · ${fmt(Math.round(rate * settings.batch * model.ctx))} token/秒`
-      + ` · 训练用时 ${seconds.toFixed(1)} 秒` : '';
-    status.innerHTML = `第 <b>${fmt(step)}</b> / ${fmt(settings.maxSteps)} 步${speed}${lossTxt}${valTxt}`;
+    const item = (html) => ` · <span>${html}</span>`;
+    // The training loss of a single batch jumps around by about 0.15; the mean of the last 10 steps is what the curve shows.
+    const lossTxt = recent.length ? item(`训练 loss（近 ${recent.length} 步平均）<b>${(recent.reduce((a, b) => a + b, 0) / recent.length).toFixed(3)}</b>`) : '';
+    const valTxt = evalPts.length ? item(`留出 loss <b>${evalPts.at(-1)[1].toFixed(3)}</b>`) : '';
+    const speed = seconds > 0 ? item(`${rate.toFixed(1)} 步/秒`) + item(`${fmt(Math.round(rate * settings.batch * model.ctx))} token/秒`)
+      + item(`用时 ${seconds.toFixed(1)} 秒`) : '';
+    status.innerHTML = `<span>第 <b>${fmt(step)}</b> / ${fmt(settings.maxSteps)} 步</span>${speed}${lossTxt}${valTxt}`;
   };
   const setRunning = (on) => {
     running = on;
@@ -128,15 +136,16 @@ export function mount(root, cfg = {}) {
     resetBtn.disabled = false;
     sampleBtn.disabled = on;
   };
-  const addSample = ({ step: s, prompt, text, val }) => {
+  const addSample = ({ step: s, prompt, text, val, overfit }) => {
+    const from = overfit ? `从被背下来的第 1 段的开头 “${prompt}” 开始：` : `从 “${prompt}” 开始：`;
     const item = h('figure', { class: 'w-trainer-sample' },
-      h('header', {}, `第 ${fmt(s)} 步${val != null ? `（留出 loss ${val.toFixed(2)}）` : ''}，温度 ${settings.temperature}，从 “${prompt}” 开始：`),
+      h('header', {}, `第 ${fmt(s)} 步${val != null ? `（留出 loss ${val.toFixed(2)}）` : ''}，温度 ${settings.temperature}，${from}`),
       h('pre', {}, sampleNodes(prompt, text)));
     samples.prepend(item);
     while (samples.children.length > 4) samples.lastChild.remove();
   };
   const clearRun = (initialLoss, initialVal) => {
-    trainPts = []; bucket = []; evalPts = [[0, initialVal]]; step = 0; seconds = 0; lastLoss = initialLoss;
+    trainPts = []; bucket = []; recent = []; evalPts = [[0, initialVal]]; step = 0; seconds = 0;
     samples.replaceChildren();
     facts.initialLoss = initialLoss;
     draw();
@@ -167,9 +176,10 @@ export function mount(root, cfg = {}) {
       step = msg.step; seconds = msg.seconds;
       for (const [s, loss] of msg.losses) {
         bucket.push(loss);
-        lastLoss = loss;
-        if (bucket.length === BUCKET) {
-          trainPts.push([s - (BUCKET - 1) / 2, bucket.reduce((a, b) => a + b, 0) / BUCKET]);
+        recent.push(loss);
+        if (recent.length > BUCKET) recent.shift();
+        if (bucket.length === BUCKET) { // drawn at the last of its 10 steps (10, 20, ...), as in the recorded replay
+          trainPts.push([s + 1, bucket.reduce((a, b) => a + b, 0) / BUCKET]);
           bucket = [];
         }
       }

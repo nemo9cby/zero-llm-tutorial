@@ -672,6 +672,36 @@ def test_parse_timing_reads_the_main_bar_only():
     assert len(pts) == 40 and pts[-1] == {"it": 40, "loss": 1.0}
 
 
+def test_parse_tqdm_keeps_the_first_line_of_each_counter(dlfs6_path):
+    """tqdm prints each counter twice: the refresh when the counter moves still carries the previous step's
+    postfix, then set_postfix writes this step's. parse_tqdm keeps the first, so `it = k` holds what step k
+    (i = k - 1) wrote: GRPO's evaluation at i = 10 is recorded at it = 11, while the book's own plot puts it
+    at 10 (content/gpu.md G.7). The lines are verbatim from runs/codebot-3060ti/09_grpo.log."""
+    lines = ["  2%|▏         | 10/500 [04:01<3:06:14, 22.81s/it, loss=0.1076, acc=53.1%]",
+             "  2%|▏         | 10/500 [04:32<3:06:14, 22.81s/it, loss=0.0910, acc=61.7%]",
+             "  2%|▏         | 11/500 [04:32<3:27:55, 25.51s/it, loss=0.0910, acc=61.7%]",
+             "  2%|▏         | 11/500 [04:44<3:27:55, 25.51s/it, loss=0.2259, acc=61.7%]"]
+    assert run_local.parse_tqdm("\r".join(lines)) == [{"it": 10, "loss": 0.1076, "acc": 53.1},
+                                                      {"it": 11, "loss": 0.091, "acc": 61.7}]
+    recorded = [json.loads(ln) for ln in (RUNS / "codebot-3060ti" / "09_grpo.metrics.jsonl")
+                .read_text(encoding="utf-8").splitlines()]
+    assert [r for r in recorded if r["it"] in (10, 11)] == run_local.parse_tqdm("\r".join(lines))
+    # counter 0 has no refresh line, so in every recorded run it = 0 repeats it = 1 (the first step's postfix)
+    for path in sorted(RUNS.glob("*/*.metrics.jsonl")):
+        head = [json.loads(ln) for ln in path.read_text(encoding="utf-8").splitlines()[:2]]
+        assert head[0] == {**head[1], "it": 0}, path.relative_to(RUNS)
+    log = RAW_RUNS / "codebot-3060ti" / "09_grpo.log"
+    if log.is_file():                                       # consecutive in the raw log, in this order
+        raw = [ln for ln in re.split(r"[\r\n]", log.read_text(encoding="utf-8", errors="replace")) if ln]
+        k = raw.index(lines[0])
+        assert raw[k:k + len(lines)] == lines
+    # the book evaluates after the update of step i when i % 10 == 0, and plots accuracy against i itself
+    text = (DLFS6 / "ch03/09_grpo.py").read_text(encoding="utf-8")
+    loop = text[text.index("for i in pbar:"):text.index("model.save(grpo_model_save_path)")]
+    assert loop.index("optimizer.step()") < loop.index("if i % eval_interval == 0:") < loop.index("pbar.set_postfix(")
+    assert "steps = list(range(0, len(accuracies) * eval_interval, eval_interval))" in text
+
+
 # Files under web/data/runs/ that no script writes: excerpts we took by hand from runs/<run>/<stem>.log.
 HAND_EXTRACTS = [("webbot-probe", "01_pretrain.log.txt", "01_pretrain.log"),
                  ("codebot-3060ti", "02_generate.output.txt", "02_generate.log"),

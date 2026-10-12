@@ -1,7 +1,8 @@
 /* 附录 E 的交互图：β 与最优策略 π* ∝ π_ref · exp(r/β)。
    config: { pi_ref: [...], r: [...], beta: 0.5 }
-   每个回答一行：奖励滑块、π_ref 与 π* 的条形、隐式奖励（β 乘以 π* 与 π_ref 之比的对数）；下方是 Z、KL 与一对回答的偏好概率。
-   计算与验证 E-c 到 E-f 相同。 */
+   每个回答一行：奖励滑块、π_ref 与 π* 的条形、隐式奖励（β 乘以 π* 与 π_ref 之比的对数）；下方是 Z、KL，
+   以及一对回答的偏好概率和期望 DPO 损失（两种标注按 BT 概率出现，与验证 E-h 的期望损失相同）。
+   计算与验证 E-c 到 E-f、E-h 相同。 */
 import { h } from './_lib.js';
 import { nextId, appendixRoot } from './appendix-common.js';
 
@@ -16,6 +17,11 @@ export function optimalPolicy(piRef, r, beta) {
 
 export const kl = (p, q) => p.reduce((acc, x, i) => acc + (x > 0 ? x * Math.log(x / q[i]) : 0), 0);
 export const sigmoid = (z) => 1 / (1 + Math.exp(-z));
+const logSigmoid = (z) => -(Math.max(0, -z) + Math.log1p(Math.exp(-Math.abs(z))));   // log σ(z)，不溢出
+
+/** 一对回答的期望 DPO 损失：y_w 以概率 p 赢，以概率 1 − p 输（验证 E-h 的期望损失里的一项）。
+    z 是隐式奖励之差；z = 0（π_θ = π_ref）时是 ln 2，σ(z) = p（π_θ = π*）时取最小值，即二元熵。 */
+export const expectedPairLoss = (p, z) => -(p * logSigmoid(z) + (1 - p) * logSigmoid(-z));
 
 let styled = false;
 function injectStyle() {
@@ -116,10 +122,13 @@ export function mount(root, config = {}) {
       return;
     }
     const pref = sigmoid(r[w] - r[l]);
+    // π_θ = π* 时，隐式奖励之差 z 正好等于 r_w − r_l（β·log Z 抵消），所以 σ(z) = P
     pairSummary.replaceChildren(
       h('div', {}, `Bradley–Terry：P(y${w} ≻ y${l}) = σ(r${w} − r${l}) = `, h('b', {}, pref.toFixed(4))),
-      h('div', {}, '这一对的 DPO 损失：π_θ = π_ref 时是 ', h('b', {}, Math.log(2).toFixed(4)), '（ln 2）；π_θ = π* 时是 ',
-        h('b', {}, (-Math.log(pref)).toFixed(4)), '（−log σ(r_w − r_l)）'));
+      h('div', {}, '这一对的期望 DPO 损失（两种标注按这个概率出现）：π_θ = π_ref 时是 ',
+        h('b', {}, expectedPairLoss(pref, 0).toFixed(4)), '（ln 2）；π_θ = π* 时降到最小值 ',
+        h('b', {}, expectedPairLoss(pref, r[w] - r[l]).toFixed(4)), '，正是二元熵 −P ln P − (1−P) ln(1−P)。'),
+      h('div', {}, `如果每次都标成 y${w} ≻ y${l}（P 当作 1），损失没有最小点，只会一路降向 0（E.6 节）。`));
   };
   betaIn.addEventListener('input', () => { logBeta = Number(betaIn.value); render(); });
   render();

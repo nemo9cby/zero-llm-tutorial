@@ -201,12 +201,13 @@ export function matmulBT(A, Bm, C, M, K, N) {
 }
 
 // ------------------------------------------------------------------ WebAssembly SIMD (optional speed-up)
-/* The matmulBT loop again, in WebAssembly with 128-bit SIMD: four float32 multiply-adds per
-   instruction, a 4 x 2 block of C in eight vector registers. In V8 it runs 6-10x faster than the
-   JavaScript loop, copies in and out included. Accumulation is in float32 (the JavaScript loop
-   accumulates in float64), so results differ by about 1e-7 relative; tests/js/trainer-simd.test.mjs
-   checks it against the JavaScript version. The bytes below were compiled with wabt 1.0.39
-   (parseWat with SIMD enabled, then toBinary) from exactly this source:
+/* The matmulBT loop again, in WebAssembly with 128-bit SIMD: each f32x4.mul does four float32
+   multiplies and the following f32x4.add four additions (WebAssembly SIMD has no fused multiply-add),
+   with a 4 x 2 block of C in eight vector registers. In V8 a whole training step runs more than 3x
+   faster with it (record_runs.mjs measures this; see "timing" in runs.json). Accumulation is in float32
+   (the JavaScript loop accumulates in float64), so results differ by about 1e-7 relative;
+   tests/js/trainer-simd.test.mjs checks it against the JavaScript version, and checks that the bytes
+   below are what wabt 1.0.39 (parseWat with SIMD enabled, then toBinary) makes of exactly this source:
 
   (module
     (memory (export "mem") 1)
@@ -560,7 +561,8 @@ export function createModel(cfg, { dtype = Float32Array } = {}) {
   return m;
 }
 
-/** DLFS6 GPT._init_weights: Linear/Embedding weights ~ N(0, 0.02^2), biases 0, LayerNorm weight 1 / bias 0. */
+/** DLFS6 GPT._init_weights: Linear/Embedding weights ~ N(0, 0.02^2), biases 0. LayerNorm is not touched
+    by _init_weights and keeps nn.LayerNorm's defaults: weight 1, bias 0. */
 export function initWeights(m, rng, std = 0.02) {
   for (const p of m.params) {
     if (p.init === 'normal') for (let i = 0; i < p.data.length; i++) p.data[i] = std * rng.normal();

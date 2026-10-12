@@ -231,11 +231,53 @@ def sft_free_running_lengths(tok, model, indices: list[int], max_new_tokens: int
     return {"indices": list(indices), "generated": gen, "target": tgt}
 
 
+def reworded(instruction: str) -> str:
+    """改写一条指令的最小方式：句末有 . ? ! 就去掉，没有就加一个句号。这样改过的指令都不在 SFT 数据里。"""
+    return instruction[:-1] if instruction.endswith((".", "?", "!")) else instruction + "."
+
+
+@torch.no_grad()
+def free_running_texts(tok, model, instructions: list[str], seeds: list[int], max_new_tokens: int = 200) -> list[str]:
+    """Free-running responses (T=1, the book's generate()), torch.manual_seed(seed) before each prompt."""
+    from codebot.utils import generate
+    out = []
+    for instruction, seed in zip(instructions, seeds):
+        prompt = ALPACA.format(instruction)
+        torch.manual_seed(seed)
+        out.append(generate(model, tok, prompt, max_new_tokens=max_new_tokens, temperature=1.0)[len(prompt):])
+    return out
+
+
+def reworded_free_running(tok, model, indices: list[int]) -> dict:
+    """The same prompts with their final punctuation toggled (none of them is in the SFT data), sampled with
+    the same per-prompt seeds as sft_free_running_lengths: does the SFT model still reproduce the training answer?"""
+    data = json.loads((CODEBOT / "tiny_codes_sft.json").read_text(encoding="utf-8"))
+    instructions = [reworded(data[i]["instruction"]) for i in indices]
+    texts = free_running_texts(tok, model, instructions, indices)
+    # ids: the token ids of each text, so a NumPy cell can compare them with sft_tokens.json exactly
+    # (vocab.json decodes token by token, which garbles a multi-byte character such as '²' split over two tokens)
+    return {"instructions": instructions, "texts": texts, "ids": [tok.encode(t) for t in texts]}
+
+
+FREE_RUNNING_SOURCE = (
+    "model_sft.pt + codebot.utils.generate (T=1, max_new_tokens=200), torch.manual_seed(index) per prompt; "
+    "48 prompts chosen by np.random.default_rng(0); lengths in tokens, EOS excluded. reworded: the same 48 prompts "
+    "with the final punctuation toggled (removed if it is . ? !, otherwise a '.' appended), same seeds")
+
+
 def export_free_running(tok, ms) -> None:
-    r = sft_free_running_lengths(tok, ms["sft"], free_running_indices())
-    dump("sft_free_running.json", {"source": "model_sft.pt + codebot.utils.generate (T=1, max_new_tokens=200), "
-                                             "torch.manual_seed(index) per prompt; 48 prompts chosen by "
-                                             "np.random.default_rng(0); lengths in tokens, EOS excluded", **r})
+    indices = free_running_indices()
+    r = sft_free_running_lengths(tok, ms["sft"], indices)
+    dump("sft_free_running.json", {"source": FREE_RUNNING_SOURCE, **r,
+                                   "reworded": reworded_free_running(tok, ms["sft"], indices)})
+
+
+def add_reworded_free_running(tok, ms) -> None:
+    """Add only the reworded measurement to the existing sft_free_running.json (the original rows stay as they are)."""
+    old = json.loads((OUT / "sft_free_running.json").read_text(encoding="utf-8"))
+    old["source"] = FREE_RUNNING_SOURCE
+    old["reworded"] = reworded_free_running(tok, ms["sft"], old["indices"])
+    dump("sft_free_running.json", old)
 
 
 CHAT_PROMPTS = ["Hello", "Who are you?", "print hello", "write loop", "3+4=", "7+8=", "5+7="]
@@ -275,6 +317,7 @@ EXPORTS = {
     "ratio_lengths": lambda tok, ms: add_ratio_lengths(tok),
     "corpus_head": lambda tok, ms: export_corpus_head(),
     "free_running": export_free_running,
+    "free_running_reworded": add_reworded_free_running,
     "samples": export_samples,
 }
 

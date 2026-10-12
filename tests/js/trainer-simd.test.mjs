@@ -2,6 +2,8 @@
 //   node --test tests/js/trainer-simd.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import {
   matmulBT, setSimd, simdSupported, makeRng, createModel, initWeights, makeWorkspace, forward, backward, zeroGrad,
 } from '../../web/widgets/_tinygpt.js';
@@ -11,6 +13,27 @@ const rel = (a, b) => {
   for (let i = 0; i < a.length; i++) { d += (a[i] - b[i]) ** 2; n += b[i] ** 2; }
   return Math.sqrt(d / n);
 };
+
+test('the embedded WebAssembly is the module in the source comment, compiled with wabt (skipped without wabt)', async (t) => {
+  const src = readFileSync(new URL('../../web/widgets/_tinygpt.js', import.meta.url), 'utf8');
+  const literal = src.match(/const MM_WASM = ([\s\S]*?);\n/);
+  assert.ok(literal, 'MM_WASM not found in _tinygpt.js');
+  const embedded = [...literal[1].matchAll(/'([^']*)'/g)].map((m) => m[1]).join('');
+  assert.equal(Buffer.from(embedded, 'base64').length, 670); // the size the page quotes
+  const wat = src.match(/\n {2}\(module\n[\s\S]*?\n {2}\)\n/);
+  assert.ok(wat, 'the (module ...) source comment was not found');
+  let init;
+  try {
+    init = createRequire(import.meta.url)(process.env.WABT || 'wabt');
+  } catch {
+    t.skip('wabt not installed (npm install --no-save wabt@1.0.39, or WABT=<path>)');
+    return;
+  }
+  const wabt = await init();
+  const mod = wabt.parseWat('mm.wat', wat[0], { simd: true });
+  mod.validate();
+  assert.equal(Buffer.from(mod.toBinary({}).buffer).toString('base64'), embedded);
+});
 
 test('this engine supports WebAssembly SIMD, and the switch works', () => {
   assert.equal(simdSupported, true); // Node 24 / V8 13 always has it; browsers without it fall back to JS

@@ -9,9 +9,11 @@ import { makeRng, appendixRoot } from './appendix-common.js';
 const REPLACEMENT = String.fromCodePoint(0xfffd);  // U+FFFD
 const hex = (v, width = 2) => v.toString(16).toUpperCase().padStart(width, '0');
 
+const isSurrogate = (cp) => cp >= 0xd800 && cp <= 0xdfff;
+
 /** 把一个码位编码成 UTF-8 字节值的数组（与验证 A-d 的 utf8_encode 相同）。 */
 export function encodeCodePoint(cp) {
-  if (!Number.isInteger(cp) || cp < 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) {
+  if (!Number.isInteger(cp) || cp < 0 || cp > 0x10ffff || isSurrogate(cp)) {
     throw new RangeError(`U+${hex(Math.max(0, cp | 0), 4)} 不是可以编码的字符`);
   }
   if (cp < 0x80) return [cp];
@@ -83,10 +85,23 @@ function role(b) {
   return ['禁用', 'var(--kincha)'];
 }
 
-function shown(cp) {
-  if (cp < 0x20 || (cp >= 0x7f && cp < 0xa0)) return '·';  // 控制字符没有字形
-  if (cp === 0x20) return '␣';
-  return String.fromCodePoint(cp);
+const INVISIBLE = /^[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]$/u;   // 控制字符、格式字符（U+FEFF、U+200B…）、行与段的分隔符
+
+/** 码位的字形：没有字形的字符显示成 ·，空格类显示成 ␣，落单的代理区码位显示成 �。 */
+export function shown(cp) {
+  if (isSurrogate(cp)) return REPLACEMENT;
+  const ch = String.fromCodePoint(cp);
+  if (INVISIBLE.test(ch)) return '·';
+  if (/^\p{Zs}$/u.test(ch)) return '␣';
+  return ch;
+}
+
+/** 输出行里的字符串：像 JSON 一样加引号；看不见的格式字符写成转义，免得开头带 U+FEFF 的字符串看起来只是 "A"。 */
+export function quoteVisible(s) {
+  return JSON.stringify(s).replace(/[\p{Cf}\p{Zl}\p{Zp}]/gu, (c) => {
+    const cp = c.codePointAt(0);
+    return cp > 0xffff ? `\\u{${hex(cp, 4)}}` : `\\u${hex(cp, 4)}`;
+  });
 }
 
 let styled = false;
@@ -125,11 +140,36 @@ function injectStyle() {
 .w-appendix-a-res b { font-size: 1.05rem; font-weight: 400; color: var(--ink); }
 .w-appendix-a-out { font: 13px/1.7 var(--mono); white-space: pre-wrap; word-break: break-all; margin: .3rem 0 0; }
 .w-appendix-a-err { color: var(--kincha); font-size: .85rem; }
+.w-appendix-a-card.w-appendix-a-bad { border-style: dashed; border-color: var(--kincha); }
+.w-appendix-a-card .w-appendix-a-err { margin: .35rem 0 0; }
 `));
 }
 
+/** 卡片标题里的一句话：码位本身有几位、装进几位的模板（x 的个数）、几个字节。 */
+export function bitsLabel(cp) {
+  const n = encodeCodePoint(cp).length;
+  const slots = GROUP_SIZES[n - 1].reduce((a, b) => a + b, 0);
+  return `${cp.toString(2).length} 位有效，装进 ${slots} 位的模板 → ${n} 个字节`;
+}
+
+/** 编码不了的码位（落单的代理区码位，粘贴进来的文字里可能有）：说明原因，而不是让交互图出错。 */
+export function rejectReason(cp) {
+  return isSurrogate(cp)
+    ? `U+${hex(cp, 4)} 是代理区的码位，单独出现时不是字符，UTF-8 不能编码它（A.4 节）`
+    : `U+${hex(cp, 4)} 不是可以编码的字符`;
+}
+
+function rejectCard(cp) {
+  return h('div', { class: 'w-appendix-a-card w-appendix-a-bad' },
+    h('div', { class: 'w-appendix-a-head' },
+      h('span', { class: 'w-appendix-a-glyph', 'aria-hidden': 'true' }, shown(cp)),
+      h('span', {}, `U+${hex(cp, 4)}`)),
+    h('p', { class: 'w-appendix-a-err' }, rejectReason(cp)));
+}
+
 function encodeCard(cp) {
-  const bytes = encodeCodePoint(cp);
+  let bytes;
+  try { bytes = encodeCodePoint(cp); } catch { return rejectCard(cp); }
   const n = bytes.length;
   const bits = cp.toString(2).padStart(GROUP_SIZES[n - 1].reduce((a, b) => a + b, 0), '0');
   let pos = 0;
@@ -138,7 +178,7 @@ function encodeCard(cp) {
     h('div', { class: 'w-appendix-a-head' },
       h('span', { class: 'w-appendix-a-glyph', 'aria-hidden': 'true' }, shown(cp)),
       h('span', {}, `U+${hex(cp, 4)}`),
-      h('span', { class: 'w-label' }, `${bits.length} 位有效 → ${n} 个字节`)),
+      h('span', { class: 'w-label' }, bitsLabel(cp))),
     h('div', { class: 'w-appendix-a-row' },
       h('span', { class: 'w-label' }, '码位的二进制'),
       h('span', { class: 'w-appendix-a-bits' }, groups.map((g, k) => h('span', { class: `w-appendix-a-g${k}` }, g)))),
@@ -154,8 +194,10 @@ function mountEncode(root, config) {
   const input = h('input', { class: 'w-input', value: config.text ?? 'Aé世😁', 'aria-label': '输入任意文字，逐个码位查看 UTF-8 编码' });
   const cards = h('div', { class: 'w-appendix-a-cards', 'aria-live': 'polite' });
   const ch = (v) => String.fromCodePoint(v);
+  // U+D800 落单时不是字符：JavaScript 的字符串允许它出现（粘贴时可能混进来），交互图要能说明为什么编码不了
   const picks = [['A', 'A'], ['é', 'é'], ['あ', 'あ'], ['世', '世'], ['😁', '😁'], ['U+07FF', ch(0x7ff)],
-    ['U+0800', ch(0x800)], ['U+FFFD', ch(0xfffd)], ['U+10000', ch(0x10000)], ['U+10FFFF', ch(0x10ffff)]];
+    ['U+0800', ch(0x800)], ['U+FFFD', ch(0xfffd)], ['U+10000', ch(0x10000)], ['U+10FFFF', ch(0x10ffff)],
+    ['U+D800（落单）', String.fromCharCode(0xd800)]];
   const render = () => {
     const cps = [...input.value].map((c) => c.codePointAt(0));
     cards.replaceChildren(...cps.slice(0, 12).map(encodeCard));
@@ -177,7 +219,7 @@ function mountDecode(root, config) {
   const strip = h('div', { class: 'w-appendix-a-strip' });
   const out = h('div', { 'aria-live': 'polite' });
   const picks = [['半个“世”', 'E4 B8'], ['完整的“世”', 'E4 B8 96'], ['超长编码', 'C0 80'], ['代理区', 'ED A0 80'],
-    ['超出上限', 'F4 90 80 80'], ['😁', 'F0 9F 98 81'], ['😁 少一个字节', 'F0 9F 98 41']];
+    ['超出上限', 'F4 90 80 80'], ['😁', 'F0 9F 98 81'], ['😁 少一个字节', 'F0 9F 98 41'], ['开头的 BOM', 'EF BB BF 41']];
   // 随机字节专挑各个区间的边界值，更容易撞上不合法的情况（与验证 A-k 的思路相同）
   const rng = makeRng(7);
   const edges = [0x41, 0x80, 0x9f, 0xa0, 0xbf, 0xc0, 0xc2, 0xdf, 0xe0, 0xe4, 0xed, 0xef, 0xf0, 0xf4, 0xf5];
@@ -206,13 +248,13 @@ function mountDecode(root, config) {
     try { browser = new TextDecoder('utf-8', { ignoreBOM: true }).decode(new Uint8Array(bytes)); } catch { /* 没有 TextDecoder */ }
     const row = (label, ...value) => h('div', { class: 'w-row' }, h('span', { class: 'w-label' }, label), ...value);
     out.replaceChildren(
-      row('errors="replace"', h('code', { class: 'w-appendix-a-out' }, JSON.stringify(replaced))),
+      row('errors="replace"', h('code', { class: 'w-appendix-a-out' }, quoteVisible(replaced))),
       row('严格模式', firstBad
         ? `位置 ${firstBad.start}–${firstBad.end} 报错（${firstBad.reason}）`
         : '解码成功'),
       browser === null
         ? row('TextDecoder', '这个浏览器不支持 TextDecoder，无法对照')
-        : row('浏览器的 TextDecoder', h('code', { class: 'w-appendix-a-out' }, JSON.stringify(browser)),
+        : row('浏览器的 TextDecoder', h('code', { class: 'w-appendix-a-out' }, quoteVisible(browser)),
           browser === replaced ? '与上面一致' : '与上面不一致！'));
   };
   root.append(input,

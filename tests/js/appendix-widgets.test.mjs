@@ -4,8 +4,8 @@ import assert from 'node:assert/strict';
 import { makeRng, softmax, histogram } from '../../web/widgets/appendix-common.js';
 import { attentionRow, meanMaxWeight } from '../../web/widgets/appendix-scaling.js';
 import { bandit, histRange, PRESETS } from '../../web/widgets/appendix-baseline.js';
-import { emaPath, uncorrectedRatio, ratioSummary, ratioText } from '../../web/widgets/appendix-adam.js';
-import { optimalPolicy, kl, sigmoid } from '../../web/widgets/appendix-dpo.js';
+import { emaPath, uncorrectedRatio, ratioSummary, ratioText, nEff, mHatSd } from '../../web/widgets/appendix-adam.js';
+import { optimalPolicy, kl, sigmoid, expectedPairLoss } from '../../web/widgets/appendix-dpo.js';
 
 const close = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ''} ${a} vs ${b}`);
 
@@ -126,6 +126,23 @@ test('appendix-adam：m_t = 1 − 0.9ᵗ；f(t) 在第 12 步达到 6.5685（验
   assert.match(ratioText(s), /最大 6\.57，在第 12 步；第 3,925 步之后/);
 });
 
+test('appendix-adam：上图的两条细虚线是单次 m̂_t 的 ±σ/√n_eff(t)，β₁ = 0.9 时后期约 ±0.23σ（验证 D-g）', () => {
+  close(nEff(1, 0.999), 1, 1e-12);
+  close(nEff(1000, 0.999), 924.2, 0.1);
+  close(nEff(1e6, 0.9), 19, 1e-9);
+  close(mHatSd(1, 0.9, 1), 1, 1e-12);                       // 第 1 步 m̂_1 = g_1
+  close(mHatSd(60, 0.9, 1), 1 / Math.sqrt(nEff(60, 0.9)), 1e-15);
+  close(mHatSd(1e6, 0.9, 1), Math.sqrt(0.1 / 1.9), 1e-9);    // 0.2294
+  close(mHatSd(60, 0.9, 2), 2 * mHatSd(60, 0.9, 1), 1e-15);
+  // 用交互图自己的 emaPath 和随机数，2 万次的单次 m̂_60 的标准差与公式相符
+  const rng = makeRng(11);
+  const finals = Array.from({ length: 20000 }, () => emaPath(Array.from({ length: 60 }, () => 0.5 + rng.normal()), 0.9)[59][1]);
+  const mean = finals.reduce((a, b) => a + b, 0) / finals.length;
+  const sd = Math.sqrt(finals.reduce((a, b) => a + (b - mean) ** 2, 0) / finals.length);
+  close(sd / mHatSd(60, 0.9, 1), 1, 0.03, 'sd of m̂_60');    // 相对标准误约 0.5%
+  close(mean, 0.5, 0.02, 'mean of m̂_60');                    // 无偏；标准误约 0.0016
+});
+
 test('appendix-adam：β₁ ≥ β₂ 时 f(t) 从下方逼近 1，总结里不再报“最大值”', () => {
   // β₁ = β₂ = 0.9：f(t) = √(1 − 0.9ᵗ)，0.9ᵗ ≤ 0.0199 即 t ≥ 38 时进入 1 ± 0.01
   const same = ratioSummary(0.9, 0.9);
@@ -155,4 +172,20 @@ test('appendix-dpo：π*、Z、隐式奖励与验证 E-c、E-e 相同', () => {
   // β 很小时不溢出，集中在奖励最高的回答上
   const sharp = optimalPolicy(piRef, r, 0.01).pi;
   assert.ok(sharp[2] > 0.999 && sharp.every(Number.isFinite));
+});
+
+test('appendix-dpo：一对回答的期望损失在 π_ref 处是 ln 2，在 π* 处取最小值，等于二元熵（验证 E-h）', () => {
+  const entropy = (p) => -(p * Math.log(p) + (1 - p) * Math.log(1 - p));
+  for (const gap of [2, -2, 0.5, 1.5]) {                  // 交互图默认的一对 y2 ≻ y0 是 2，反过来是 −2
+    const p = sigmoid(gap);
+    close(expectedPairLoss(p, 0), Math.log(2), 1e-12, `gap ${gap} at π_ref`);
+    close(expectedPairLoss(p, gap), entropy(p), 1e-12, `gap ${gap} at π*`);   // π* 处 z = r_w − r_l
+    for (const dz of [-1, -0.1, 0.1, 1]) assert.ok(expectedPairLoss(p, gap + dz) > expectedPairLoss(p, gap), `gap ${gap} dz ${dz}`);
+  }
+  close(expectedPairLoss(sigmoid(2), 2), 0.3653, 1e-4, '交互图默认的那一对（y2 ≻ y0）：0.3653');
+  close(expectedPairLoss(sigmoid(2), 2), expectedPairLoss(sigmoid(-2), -2), 1e-12, '两种顺序的期望损失相同');
+  // 确定性的标注（P = 1）：损失随 z 单调下降，没有有限的最小点（验证 E-i）
+  const zs = [0, 1, 5, 10, 20, 40];
+  zs.slice(1).forEach((z, i) => assert.ok(expectedPairLoss(1, z) < expectedPairLoss(1, zs[i]) && expectedPairLoss(1, z) > 0));
+  assert.ok(Number.isFinite(expectedPairLoss(0.5, 800)) && Number.isFinite(expectedPairLoss(0.5, -800)), '不溢出');
 });

@@ -250,9 +250,12 @@ def test_autocast_dtypes_in_storybot(dlfs6_path):
                          ("attention", block.attn), ("SwiGLU", block.ffn), ("block 输出（残差流）", block),
                          ("logits", model.unembed)]:
         module.register_forward_hook(record(name))
-    # 反向传播里，W_q 输出收到的梯度是什么类型（张量钩子在 backward 时触发）
-    block.attn.W_q.register_forward_hook(
-        lambda module, inputs, output: output.register_hook(lambda g: seen.__setitem__("W_q 输出的梯度", g.dtype)))
+    # 反向传播里，W_q 输出收到的梯度是什么类型（张量钩子在 backward 时触发）。
+    # forward hook 必须返回 None：返回别的值会替换掉这一层的输出。
+    def watch_grad(module, inputs, output):
+        output.register_hook(lambda g: seen.__setitem__("W_q 输出的梯度", g.dtype))
+
+    block.attn.W_q.register_forward_hook(watch_grad)
     x = torch.randint(0, 1000, (2, 32))
     with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
         logits = model(x)

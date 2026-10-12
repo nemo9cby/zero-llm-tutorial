@@ -63,7 +63,9 @@ test('the status line names the token, its id and its bytes', () => {
   const web = toks[2];
   const label = (id) => tokenLabel(web, id);
   assert.equal(tokenInfo('WebBot', 0, 256, web.tokenBytes(256), label(256)),
-    'WebBot 的第 1 个 token：id 256，字节 20 74（“ t”）');
+    'WebBot 的第 1 个 token：id 256，字节 20 74（“␣t”）');               // whitespace as on the chips
+  assert.equal(tokenInfo('WebBot', 5, 10, web.tokenBytes(10), label(10)),
+    'WebBot 的第 6 个 token：id 10，字节 0a（“↵”）');
   const half = [...Array(web.vocabSize - 257).keys()].map((k) => k + 256).find((id) => label(id).partial);
   assert.equal(tokenInfo('WebBot', 1_233, half, web.tokenBytes(half), label(half)),
     `WebBot 的第 1,234 个 token：id ${half.toLocaleString('en-US')}，字节 e2 80（单独不是完整的 UTF-8 字符）`);

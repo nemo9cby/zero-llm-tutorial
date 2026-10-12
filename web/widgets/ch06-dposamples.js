@@ -67,7 +67,7 @@ export async function mount(root, config = {}) {
 
   const groups = openings(rec);
   let gi = 0;
-  let si = 0;
+  let si = Math.max(0, groups[0].rows.findIndex((row) => row.seed === config.seed));   // config.seed：一开始显示哪个种子
   const select = h('select', { 'aria-label': '故事的开头' }, groups.map((g, i) =>
     h('option', { value: String(i) }, g.kind === 'heldout' ? `留出开头：${shortLabel(g.prompt)}` : g.prompt)));
   const seeds = h('div', { class: 'seeds', role: 'group', 'aria-label': '选择随机种子' });

@@ -206,7 +206,11 @@ def test_layer0_lens_self_prediction(name, dlfs6_path):
           f"({int((~seen[128:256]).sum())} of them non-ASCII bytes); own top-1 at all {T} positions: seen ids "
           f"{int(always[seen].sum())}/{int(seen.sum())} (lowest p(self) {p_min[seen].min():.2f}), never-seen ids "
           f"{int(always[~seen].sum())}/{int((~seen).sum())}")
-    assert seen.sum() == 839 and not seen[128:256].any()       # TinyCodes is pure ASCII: no byte >= 0x80 occurs
+    # TinyCodes is pure ASCII: no byte >= 0x80 occurs, neither as a byte token nor inside a merged token
+    from codebot.tokenizer import BPETokenizer
+    tok = BPETokenizer.load_from(dlfs6_path / "codebot" / "merge_rules.pkl")
+    assert seen.sum() == 839 and not seen[128:256].any()
+    assert all(max(tok.id_to_bytes[int(i)]) < 0x80 for i in np.flatnonzero(seen))
     assert always[seen].all() and p_min[seen].min() > 0.5
     assert not always[~seen].any()                             # every never-seen id loses the top spot somewhere
     # the page's example: 不 is the UTF-8 bytes e4 b8 8d = ids 228, 184, 141; at position 2 the lens is not 141

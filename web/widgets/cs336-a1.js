@@ -209,5 +209,6 @@ export async function mount(root, config) {
   render();
   box.append(h('p', { class: 'w-label' },
     `CS336 A1 @ ${rec.cs336_a1.commit.slice(0, 7)} · DLFS6 @ ${rec.dlfs6_commit.slice(0, 7)} · `
-    + `PyTorch ${rec.env.torch} · CPU · 记录于 ${rec.generated.slice(0, 10)}`));
+    + `PyTorch ${rec.env.torch} · CPU · 记录于 ${rec.generated.slice(0, 10)}`
+    + (rec.env.note ? `（${rec.env.note}）` : '')));
 }

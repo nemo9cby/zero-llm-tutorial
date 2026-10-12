@@ -121,6 +121,19 @@
    "• Val rewards (total, format).",
    "• Val average response length.",
    "• Anything else you think could be useful for debugging."
+  ],
+  "batch_excerpt": [
+   "rollout_batch_size = n_prompts_per_rollout_batch * group_size.",
+   "rollout_batch_size = train_batch_size = 256",
+   "group_size = 8",
+   "gradient_accumulation_steps = 32",
+   "Note that rollout_batch_size and train_batch_size count responses, not prompts. So",
+   "rollout_batch_size = train_batch_size = 256 means 32 prompts with 8 rollouts each.",
+   "32x off policy (so we take 32 training steps for each inference batch):",
+   "train_batch_size = 8"
+  ],
+  "clip_fraction_excerpt": [
+   "In addition to the metrics you're already logging, make sure to also log the clip fraction."
   ]
  },
  "hf": {
@@ -218,6 +231,40 @@
     "vocab_size": 151936
    }
   },
+  "qwen3_0p6b": {
+   "url": "https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/config.json",
+   "fetched": "2026-10-12",
+   "config": {
+    "architectures": [
+     "Qwen3ForCausalLM"
+    ],
+    "attention_bias": false,
+    "attention_dropout": 0.0,
+    "bos_token_id": 151643,
+    "eos_token_id": 151645,
+    "head_dim": 128,
+    "hidden_act": "silu",
+    "hidden_size": 1024,
+    "initializer_range": 0.02,
+    "intermediate_size": 3072,
+    "max_position_embeddings": 40960,
+    "max_window_layers": 28,
+    "model_type": "qwen3",
+    "num_attention_heads": 16,
+    "num_hidden_layers": 28,
+    "num_key_value_heads": 8,
+    "rms_norm_eps": 1e-06,
+    "rope_scaling": null,
+    "rope_theta": 1000000,
+    "sliding_window": null,
+    "tie_word_embeddings": true,
+    "torch_dtype": "bfloat16",
+    "transformers_version": "4.51.0",
+    "use_cache": true,
+    "use_sliding_window": false,
+    "vocab_size": 151936
+   }
+  },
   "gpt2_attribute_map": {
    "url": "https://github.com/huggingface/transformers/blob/55c3cc9f03cd4fbf2d27d382dcc8fcc544631f8e/src/transformers/models/gpt2/configuration_gpt2.py",
    "lines": [
@@ -262,6 +309,10 @@
   "commit": "1d367a4f459a43768f76312c0d3430a99ec46b8c",
   "lines": {
    "verl/trainer/ppo/metric_utils.py": [
+    "454: sequence_reward = batch.batch[\"token_level_rewards\"].sum(-1)",
+    "483: reward_mean = torch.mean(non_aborted_sequence_reward).detach().item()",
+    "490: valid_adv = torch.masked_select(advantages, response_mask)",
+    "494: adv_mean = torch.mean(valid_adv).detach().item()",
     "498: logger.warning(\"Response mask is all False, returning default advantage metrics\")",
     "506: logger.warning(\"Response mask is all False, returning default return metrics\")",
     "528: if use_critic:",
@@ -297,13 +348,35 @@
    ],
    "verl/trainer/ppo/core_algos.py": [
     "1372: \"actor/pg_clipfrac\": pg_clipfrac.detach().item(),",
-    "1373: \"actor/ppo_kl\": ppo_kl.detach().item(),"
+    "1373: \"actor/ppo_kl\": ppo_kl.detach().item(),",
+    "328: scores[i] = scores[i] - id2mean[index[i]]",
+    "329: scores = scores.unsqueeze(-1) * response_mask"
    ],
    "verl/trainer/ppo/ray_trainer.py": [
+    "407: batch_size=self.config.data.get(\"gen_batch_size\", None) or self.config.data.train_batch_size,",
+    "725: core_var = \"acc\" if \"acc\" in var2metric2val else \"reward\"",
+    "734: metric_sec = \"val-core\"",
+    "736: metric_sec = \"val-aux\"",
+    "737: pfx = f\"{metric_sec}/{data_source}/{var_name}/{metric_name}\"",
+    "1353: ppo_mini_batch_size = ppo_mini_batch_size * self.config.actor_rollout_ref.rollout.n",
     "1371: actor_output = rename_dict(actor_output, \"actor/\")",
+    "1383: ppo_mini_batch_size = ppo_mini_batch_size * self.config.actor_rollout_ref.rollout.n",
+    "1540: batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)",
     "1597: \"actor/entropy\": entropy_agg.detach().item(),",
     "1788: gradient_norm = metrics.get(\"actor/grad_norm\", None)"
+   ],
+   "verl/workers/engine_workers.py": [
+    "206: lr = metrics.pop(\"lr\", None)",
+    "217: final_metrics[\"lr\"] = lr",
+    "385: output[\"metrics\"][\"lr\"] = lr"
    ]
+  },
+  "blobs": {
+   "verl/trainer/ppo/metric_utils.py": "3de61d360c644a8e982633b6832262fd7ea8df2f",
+   "verl/workers/utils/losses.py": "94684c0552c167f3603469b767afc671713f17d3",
+   "verl/trainer/ppo/core_algos.py": "afa86c25ba370c45dbf84b2597876ab817485fca",
+   "verl/trainer/ppo/ray_trainer.py": "9352bcfa4d56bda8e70fc7df183e588a65afb43d",
+   "verl/workers/engine_workers.py": "5a80004d7d233b8e65f8c4cae452465fa5b62526"
   }
  },
  "tinker_cookbook": {
@@ -319,12 +392,20 @@
     "124: metrics[\"reward/total\"] = np.mean(all_rewards).item() if all_rewards else 0.0"
    ],
    "tinker_cookbook/rl/metrics.py": [
+    "23: Compares the logprobs from when trajectories were sampled against the current",
+    "52: logprob_diff = sampling_logprobs_actions - training_logprobs_actions",
+    "58: kl_sample_train_v1 = flat_diffs.mean().item()",
     "64: \"optim/kl_sample_train_v1\": kl_sample_train_v1,",
     "66: \"optim/entropy\": entropy_sample,"
    ],
    "tinker_cookbook/rl/train.py": [
     "733: \"optim/lr\": config.learning_rate,"
    ]
+  },
+  "blobs": {
+   "tinker_cookbook/rl/metric_util.py": "ddb130f142160520a2508494dd934efd15b14d2d",
+   "tinker_cookbook/rl/metrics.py": "69ec235cd7eb99c11ce245e986137a50bb97fc65",
+   "tinker_cookbook/rl/train.py": "41b99718a5b4098212ebcda276d48fb75b101354"
   }
  }
 }

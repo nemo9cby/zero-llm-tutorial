@@ -12,7 +12,8 @@ const CSS = `
 .w-part2-stories .story { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--paper-2); border-radius: 6px;
   padding: .8rem 1rem; font: 15px/1.7 var(--serif); margin: .6rem 0 .3rem; min-height: 9rem; }`;
 
-const seen = (n) => (n >= 1e8 ? `${(n / 1e8).toFixed(2)} 亿` : `${fmt(n / 1e4)} 万`);
+// tokens_seen counts the checkpoint's real updates (iter_500 = 501 × 8,192), so round to whole 万: 410 万, 4,097 万
+const seen = (n) => (n >= 1e8 ? `${(n / 1e8).toFixed(2)} 亿` : `${fmt(Math.round(n / 1e4))} 万`);
 
 export async function mount(root, config) {
   root.append(h('style', {}, CSS));

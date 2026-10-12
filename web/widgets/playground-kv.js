@@ -89,8 +89,8 @@ export async function mount(root, config = {}) {
           cells.push(h('tr', {}, [ids.length + t.step + 1, tokenLabel(tok, t.id),
             t.refill ? `重算 ${t.window} 个` : t.step === 0 ? `prefill ${t.window}` : '缓存 1 个',
             `${ev.ms.toFixed(0)} ms`, t.computed.toLocaleString('en-US')].map((v) => h('td', {}, v))));
-          // Short cells and nowrap: the five columns fit a phone, and never break over several lines.
-          strip.replaceChildren(h('table', { class: 'w-pg-table', style: 'white-space:nowrap' },
+          // Short cells, no line breaks, narrow padding on phones (w-pg-tight): the five columns fit 375 px.
+          strip.replaceChildren(h('table', { class: 'w-pg-table w-pg-tight' },
             h('thead', {}, h('tr', {}, ['第几个', 'token', '前向传播', '用时', '累计位置数'].map((s) => h('th', {}, s)))),
             h('tbody', {}, cells)));
         });

@@ -9,6 +9,7 @@ from __future__ import annotations
 import ast
 import inspect
 import json
+import math
 import os
 import pickle
 import re
@@ -45,6 +46,12 @@ def items(rules: dict) -> list:
 def prefix_at_eot(data: bytes, approx: int) -> bytes:
     """The first stories of a corpus, cut just before the first <|endoftext|> at or after `approx`."""
     return data[: data.index(EOT.encode(), approx)]
+
+
+def same_statements(name: str, *rels: str) -> bool:
+    """True when function (or method `Class.name`) `name` has the same body, statement for statement, in every file
+    of `rels` (default arguments may differ)."""
+    return len({tuple(ast.dump(s) for s in function_ast(rel, name).body) for rel in rels}) == 1
 
 
 @pytest.fixture(scope="module")
@@ -115,6 +122,12 @@ def test_bpe_book_is_verbatim(m):
     loop = lambda rel: ast.dump(_ch04_data.book_node(rel, "train_bpe").body[-2])   # the `for step in ...` loop
     assert loop("ch04/02_bpe_cache.py") == loop("ch04/03_bpe_chunk.py") == loop("ch04/04_bpe_parallel.py") \
         == loop("storybot/tokenizer.py")
+    # storybot's train_bpe is 04's, statement for statement; only the default num_chunks differs (8 vs 64), which is
+    # why the full-train-set record (bench_runs/train_full.json) calls it with 04's arguments.
+    assert same_statements("train_bpe", "ch04/04_bpe_parallel.py", "storybot/tokenizer.py")
+    defaults = lambda rel: [ast.literal_eval(d) for d in function_ast(rel, "train_bpe").args.defaults]
+    assert (defaults("ch04/04_bpe_parallel.py"), defaults("storybot/tokenizer.py")) == \
+        (["<|endoftext|>", 8, 64], ["<|endoftext|>", 8, 8])
 
 
 def test_merges_json_match_pickles(m):
@@ -361,6 +374,7 @@ def test_spawn_needs_importable_worker(tmp_path):
     hung, rc, out, err = run_killing_tree([sys.executable, str(noguard)], timeout=10)
     assert hung and out == ""
     assert "RuntimeError" in err and "An attempt has been made to start a new process before the" in err
+    assert "if __name__ == '__main__':" in err             # the message shows the idiom that fixes it
 
 
 def test_parallel_pretokenize_equals_serial(m, valid_counts):
@@ -536,6 +550,12 @@ def test_encode_file_matches_official_bin(m, tmp_path):
                                                          cache_dir=str(tmp_path / "cache"))
     official = np.fromfile(VALID_BIN, dtype=np.uint16)
     assert out.read_bytes() == official[:total].tobytes() and int(official[total]) == 9999
+    # 4.7-e writes with tofile (07's _encode_chunk) instead of np.memmap, as the browser has no real disk:
+    # the same ids written that way give the same bytes (raw uint16, no header)
+    ids = m.ext.MemoTokenizer(m.story_rules).encode(src.read_bytes().decode("utf-8"))
+    alt = tmp_path / "tofile.bin"
+    np.array(ids, dtype=np.uint16).tofile(alt)
+    assert len(ids) == total and alt.read_bytes() == out.read_bytes()
 
 
 def test_uint16_limits():
@@ -611,6 +631,43 @@ def test_numpy1_wraps_out_of_range_ids_silently(tmp_path):
     assert "DeprecationWarning" not in results["worker"].stderr and results["worker"].stderr.strip() == ""
 
 
+@pytest.mark.slow
+def test_uv_run_uses_the_project_of_the_working_directory(tmp_path):
+    """The box at the end of 4.7: `uv run` takes the project from the working directory. Run from the tutorial's root,
+    a script inside third_party/dlfs6 gets the tutorial's environment (NumPy 2, as measured in this chapter); after
+    `cd third_party/dlfs6`, uv builds the book's own environment (torch, numpy<2). Probed offline with two nested
+    projects that have no dependencies, laid out like the tutorial and its submodule."""
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("uv is not on PATH")
+    book = (DLFS6 / "pyproject.toml").read_text(encoding="utf-8")
+    assert '"torch>=2.5.0"' in book and '"numpy>=1.24.0,<2.0.0"' in book
+    assert "workspace" not in (ROOT / "pyproject.toml").read_text(encoding="utf-8")   # the submodule is its own project
+    # 04 and 07 first change into the book's root, so run from anywhere they read and write the book's own files
+    for rel in ("ch04/04_bpe_parallel.py", "ch04/07_encode_parallel.py"):
+        head = (DLFS6 / rel).read_text(encoding="utf-8").splitlines()[:2]
+        assert head == ["import os, sys", "os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))"]
+    outer = tmp_path / "tutorial"
+    inner = outer / "third_party" / "book"
+    inner.mkdir(parents=True)
+    for d, name in [(outer, "tutorial"), (inner, "book")]:
+        (d / "pyproject.toml").write_text(f'[project]\nname = "{name}"\nversion = "0.1.0"\nrequires-python = ">=3.11"\n'
+                                          'dependencies = []\n', encoding="utf-8")
+    (inner / "probe.py").write_text("import sys\nprint(sys.prefix)\n", encoding="utf-8")
+    env = {k: v for k, v in os.environ.items() if k not in ("VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT")}
+
+    def prefix(cwd, script):
+        proc = subprocess.run([uv, "run", "--offline", "python", script], cwd=cwd, env=env, capture_output=True,
+                              text=True, encoding="utf-8", timeout=300)
+        if proc.returncode != 0:
+            pytest.skip(f"uv could not create a probe environment offline: {proc.stderr[-300:]}")
+        return os.path.normcase(os.path.realpath(proc.stdout.strip()))
+
+    venv = lambda d: os.path.normcase(os.path.realpath(d / ".venv"))
+    assert prefix(outer, "third_party/book/probe.py") == venv(outer)     # from the root: the root's environment
+    assert prefix(inner, "probe.py") == venv(inner)                      # after cd: the inner project's own one
+
+
 # ---------------------------------------------------------------- recorded measurements
 
 def recorded_bench() -> dict:
@@ -635,9 +692,77 @@ def test_bench_json_consistent():
     assert recorded["train_prefix_encode"]["identical_to_official_train_bin_prefix"]
     assert recorded["repeat_small"]["identical"] and len(recorded["repeat_small"]["cpu"]["naive"]) == 3
     # records made after the script moved into the repository carry their own commits and command
-    for name in ("repeat_small", "pretok_repeat", "pool_startup", "shrink"):
+    for name in ("repeat_small", "pretok_repeat", "pool_startup", "shrink", "train_full", "encode_full", "heaps_full"):
         prov = bench.load_raw(name)["provenance"]
         assert prov["script"] == "verify/_ch04_bench.py" and len(prov["dlfs6"]["commit"]) == 40, name
+
+
+def test_full_train_set_encode_record():
+    """The box at the end of 4.7: ch04/07's encode_file on the whole train file, recorded by verify/_ch04_bench.py
+    (bench_runs/encode_full.json): the output is the official tiny_stories_train.bin, byte for byte (size and sha256
+    as published on Hugging Face)."""
+    rec = bench.load_raw("encode_full")
+    assert rec["provenance"]["dlfs6"]["commit"].startswith("c9b6e2e") and not rec["provenance"]["dlfs6"]["dirty"]
+    assert rec["provenance"]["command"] == "python verify/_ch04_bench.py run encode_full --train-full <train_full>"
+    # 07's arguments: 8 processes (its __main__) and 64 chunks (its default). The run used storybot's BPETokenizer,
+    # whose bound _encode_chunk spawned workers can unpickle; it is 07's class method for method.
+    assert (rec["num_processes"], rec["num_chunks"]) == (8, 64)
+    src = (DLFS6 / "ch04" / "07_encode_parallel.py").read_text(encoding="utf-8")
+    assert '"storybot/tiny_stories_train.bin", num_processes=8)' in src
+    for name in ("_encode_chunk", "encode_file", "encode", "_encode_text"):
+        assert same_statements(f"BPETokenizer.{name}", "ch04/07_encode_parallel.py", "storybot/tokenizer.py"), name
+    # the published file: its listing gives the sha256 of the files we do have, so it is the right listing
+    official = rec["official"]
+    assert official == bench.OFFICIAL_TRAIN_BIN and official["bytes"] == 1_082_458_446
+    assert bench.sha256_file(DLFS6 / "storybot" / "merge_rules.pkl").startswith("8fb285d9")
+    assert bench.sha256_file(VALID_BIN).startswith("05a36c44")
+    assert rec["identical_to_official_train_bin"] is True and rec["cache_dir_removed"]
+    assert (rec["out_bytes"], rec["out_sha256"]) == (official["bytes"], official["sha256"])
+    assert 2 * rec["tokens"] == rec["out_bytes"] and rec["tokens"] == 541_229_223
+    # wall clock with the machine fully loaded, and the memory of the process plus its 8 workers
+    assert round(rec["run"]["wall"] / 60, 1) == 37.8 and rec["run"]["load"]["mean"] > 90
+    assert round(rec["peak_rss_mib"] / 1024, 1) == 2.0
+
+
+def test_full_train_set_heaps_record():
+    """4.1.1: the whole train file counted (bench_runs/heaps_full.json), against the extrapolation from its first
+    100 MiB in verify cell 4.1-b: 59,933 distinct pretokens where Heaps' law predicted about 2.7 x 21,808."""
+    rec = bench.load_raw("heaps_full")
+    assert rec["provenance"]["command"] == "python verify/_ch04_bench.py run heaps_full --train-full <train_full>"
+    assert (rec["bytes"], rec["occurrences"], rec["unique"]) == (2_227_753_162, 536_592_168, 59_933)
+    prefix = [r for r in recorded_bench()["heaps"] if r["file"] == "train_prefix.txt"]
+    first, last = prefix[0], prefix[-1]
+    beta = math.log(last["unique"] / first["unique"]) / math.log(last["occurrences"] / first["occurrences"])
+    factor = round(rec["bytes"] / last["bytes"])
+    predicted = last["unique"] * factor ** beta
+    assert factor == 21 and abs(predicted / rec["unique"] - 1) < 0.03            # the extrapolation was within 3%
+    assert round(rec["occurrences"] / last["occurrences"], 1) == 21.2
+    # and the frequencies are as skewed as in the validation set
+    assert (rec["top10_share"], rec["top1000_share"]) == (0.3192, 0.925)
+
+
+def test_full_train_set_record(m):
+    """4.5 and the box at the end of 4.7: ch04/04's training on the whole 2.2 GB train file, recorded by
+    verify/_ch04_bench.py (bench_runs/train_full.json), reproduces the official storybot/merge_rules.pkl."""
+    rec = bench.load_raw("train_full")
+    assert rec["provenance"]["dlfs6"]["commit"].startswith("c9b6e2e") and not rec["provenance"]["dlfs6"]["dirty"]
+    assert rec["provenance"]["command"] == "python verify/_ch04_bench.py run train_full --train-full <train_full>"
+    # the input is the whole train file (need() checked its sha256), the same file CS336 A1 uses
+    identity = json.loads((ROOT / "web" / "data" / "cs336" / "data_identity.json").read_text(encoding="utf-8"))
+    assert bench.INPUTS["train_full"]["sha256"] in json.dumps(identity) and rec["bytes"] == 2_227_753_162
+    # 04's arguments: 8 processes (its __main__) and 64 chunks (its default). The run called storybot's train_bpe,
+    # whose pool workers can import it; it is 04's train_bpe statement for statement.
+    assert (rec["vocab"], rec["num_processes"], rec["num_chunks"]) == (10000, 8, 64)
+    assert same_statements("train_bpe", "ch04/04_bpe_parallel.py", "storybot/tokenizer.py")
+    # the learned rules: the same list as the official pickle, which the recorded digest confirms independently
+    assert rec["equals_storybot_merge_rules_pkl"] is True and rec["first_difference"] is None
+    assert rec["merges"] == rec["same_pairs_as_set"] == len(m.story_rules) == 9743
+    assert rec["rules_sha256"] == bench.rules_digest(m.story_rules)
+    # where the time went (wall clock, the machine fully loaded): pretokenization, then the serial merge loop
+    run, minutes = rec["run"], lambda s: round(s / 60, 1)
+    pretok, loop = run["phases"]["Pretokenizing"]["wall"], run["phases"]["Training BPE"]["wall"]
+    assert (minutes(run["wall"]), minutes(pretok), minutes(loop)) == (9.4, 3.2, 6.1)
+    assert run["load"]["mean"] > 90 and round(rec["peak_rss_mib"] / 1024, 1) == 1.5   # GiB, far below CS336's 30 GB
 
 
 def test_bench_deterministic_facts(m, valid_counts):
@@ -683,20 +808,31 @@ def test_bench_full_valid_facts(m):
 
 
 def test_cs336_a1_bpe_record():
-    """4.2.4's CS336 box, read from the recorded A1 run (web/data/cs336/a1_results.json: commit, command, five timings)."""
+    """4.2.4's CS336 box, read from the recorded A1 runs (web/data/cs336/a1_results.json, written by
+    verify/cs336/run_a1.py; its speed_history keeps the timings of every recording session)."""
     rec = json.loads((ROOT / "web" / "data" / "cs336" / "a1_results.json").read_text(encoding="utf-8"))
     assert rec["dlfs6_commit"].startswith("c9b6e2e") and rec["cs336_a1"]["handout"].endswith("(v26.0.3)")
     shipped = rec["diagnostics"]["as_shipped"]["train_bpe"][0]
     fixed = rec["diagnostics"]["one_line_fixes"]["train_bpe"][0]
     assert (shipped["corpus"], shipped["vocab_size"], shipped["n_merges"]) == ("corpus.en", 500, 243)
     assert shipped["identical_positions"] == 170 and shipped["first_divergence"] + 1 == 93   # 0-based index 92
-    runs = shipped["train_seconds_runs"]
-    assert (min(runs), shipped["train_seconds_median"], max(runs)) == (1.267, 1.348, 1.519)
-    assert len(runs) == 5 and sum(t > 1.5 for t in runs) == 1                                 # the bar is 1.5 s
-    assert fixed["identical_positions"] == 243 and (min(fixed["train_seconds_runs"]), max(fixed["train_seconds_runs"])) == (1.796, 2.483)
-    speed = next(t for t in rec["tests"] if t["test"] == "test_train_bpe_speed")
-    assert (speed["as_shipped"]["outcome"], speed["one_line_fixes"]["outcome"]) == ("passed", "failed")
-    assert "id_bytes(pair[0], merge_rules)" in rec["fixes"]["bpe_tiebreak"]["after"]          # a helper call in the key
+    assert fixed["identical_positions"] == 243 and fixed["exact"]                              # the bytes key: all equal
+    span = lambda xs: f"{min(xs):.2f}–{max(xs):.2f}"
+    first, second = rec["speed_history"][:2]
+    assert (first["generated"][:10], second["generated"][:10]) == ("2026-10-11", "2026-10-12")
+    # first session: the book's key straddles the 1.5 s bar; a bytes key that calls a helper in the key is too slow
+    runs = first["train_seconds_runs"]
+    assert (span(runs["as_shipped"]), span(runs["one_line_fixes"])) == ("1.27–1.52", "1.80–2.48")
+    assert len(runs["as_shipped"]) == 5 and sum(t > 1.5 for t in runs["as_shipped"]) == 1
+    assert "id_bytes(pair[0], merge_rules)" in first["bpe_tiebreak_after"]
+    assert first["speed_test"] == {"as_shipped": "passed", "one_line_fixes": "failed"}
+    # second session: the bytes key reads a vocab_bytes table built once per merge, as fast as the book's key
+    runs = second["train_seconds_runs"]
+    assert (span(runs["as_shipped"]), span(runs["one_line_fixes"])) == ("0.95–1.11", "0.98–1.11")
+    assert "vocab_bytes[pair[0]]" in "".join(second["bpe_tiebreak_after"])
+    assert second["speed_test"] == {"as_shipped": "passed", "one_line_fixes": "passed"}
+    # Windows: the tokenizer tests import the Unix-only `resource` module; the runner supplies an empty stand-in
+    assert '(tmp / "resource.py").write_text(' in (ROOT / "verify" / "cs336" / "run_a1.py").read_text(encoding="utf-8")
 
 
 def test_pep393_piecewise_storage():

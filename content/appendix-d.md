@@ -8,12 +8,12 @@ lede: Adam 的两个移动平均都从 0 起步，早期的估计偏向 0。本�
 pyodide_packages: [numpy]
 ---
 
-[6.1 节](ch06.html#s6-1)介绍了 Adam：它维护梯度的移动平均 $m_t$（一阶矩）和梯度平方的移动平均 $v_t$（二阶矩），用 $m_t/\sqrt{v_t}$ 来决定每个参数走多远。DLFS6 在 `02_adamw.py` 里亲手实现了它，其中有两行“偏差校正”（バイアス補正）：
+[6.1 节](ch06.html#s6-1)介绍了 Adam：它维护梯度的移动平均 $m_t$（一阶矩）和梯度平方的移动平均 $v_t$（二阶矩），用 $m_t/\sqrt{v_t}$ 来决定每个参数走多远。DLFS6 在 `02_adamw.py` 里亲手实现了它，其中有两行**偏差校正**（bias correction）：
 
 ```listing ch06/02_adamw.py#L45-L60
 ```
 
-`m_hat = m / (1 - beta1**t)`：为什么要除以 $1-\beta_1^t$？不除会怎样？本附录回答这两个问题。我们先看移动平均从 0 起步会发生什么，然后推导 $\mathbb E[m_t] = (1-\beta^t)\,\mathbb E[g]$，并换一个角度理解校正：它把移动平均的权重重新归一化。接着计算不校正时的更新量，结果多半与直觉相反。最后看看校正修不好的东西，并用 NumPy 重现 `02_adamw.py` 的输出。
+最让人停下来的是 `m_hat = m / (1 - beta1**t)` 这一行：为什么要除以 $1-\beta_1^t$？不除又会怎样？本附录回答这两个问题。我们先看移动平均从 0 起步会发生什么，然后推导 $\mathbb E[m_t] = (1-\beta^t)\,\mathbb E[g]$，并换一个角度理解校正：它把移动平均的权重重新归一化。接着计算不校正时的更新量，结果多半与直觉相反。最后看看校正修不好的东西，并用 NumPy 重现 `02_adamw.py` 的输出。
 
 ## D.1 从 0 起步的移动平均
 
@@ -61,7 +61,7 @@ $$
 
 第二行可以手动展开前两步来确认：$m_1 = (1-\beta)g_1$，$m_2 = \beta(1-\beta)g_1 + (1-\beta)g_2$，越早的梯度乘上越多个 $\beta$。最后一行的等比数列求和是 $(1-\beta)(1 + \beta + \dots + \beta^{t-1}) = 1 - \beta^t$，把左边乘开，中间的项两两抵消就能看到。
 
-于是 $\hat m_t = m_t/(1-\beta^t)$ 的期望正好是 $\mathbb E[g]$，偏差消失了。$v_t$ 的推导一模一样，只是把 $g$ 换成 $g^2$、把 $\beta$ 换成 $\beta_2$：$\mathbb E[v_t] = (1-\beta_2^t)\,\mathbb E[g^2]$。Adam 的原论文在第 3 节对 $v_t$ 做的正是这个推导，并指出：如果 $\mathbb E[g_i]$ 随时间缓慢变化，结论只是近似成立（[Kingma & Ba, 2015](https://arxiv.org/abs/1412.6980)）。
+于是 $\hat m_t = m_t/(1-\beta^t)$ 的期望正好是 $\mathbb E[g]$，偏差消失了。$v_t$ 的推导一模一样，只是把 $g$ 换成 $g^2$、把 $\beta$ 换成 $\beta_2$：$\mathbb E[v_t] = (1-\beta_2^t)\,\mathbb E[g^2]$。Adam 的原论文在第 3 节对 $v_t$ 做的正是这个推导，并指出：如果二阶矩 $\mathbb E[g_i^2]$ 随时间变化（不平稳），式子里会多出一项 $\zeta$；不过只要衰减率让太久以前的梯度权重足够小，$\zeta$ 就很小（[Kingma & Ba, 2015](https://arxiv.org/abs/1412.6980)，2026-10 查证）。
 
 下面逐步数值验证：第二行（展开式）与递推式完全相等，最后一行的等比数列求和成立，再用蒙特卡洛确认期望的结论。梯度取自均值 $\mu = 0.5$、标准差 $\sigma = 1$ 的正态分布，重复 2 万次：
 
@@ -109,10 +109,13 @@ for t in range(1, T + 1):
 校正做的事情很朴素：
 
 $$
-\hat m_t = \frac{m_t}{1-\beta^t} = \sum_{i=1}^t w_i\, g_i,\qquad w_i = \frac{(1-\beta)\,\beta^{t-i}}{1-\beta^t},\qquad \sum_{i=1}^t w_i = 1
+\begin{aligned}
+\hat m_t &= \frac{m_t}{1-\beta^t} = \sum_{i=1}^t w_i\, g_i\\
+w_i &= \frac{(1-\beta)\,\beta^{t-i}}{1-\beta^t},\qquad \sum_{i=1}^t w_i = 1
+\end{aligned}
 $$
 
-也就是说，把分给 0 的那份权重拿掉，再把剩下的权重放大，让它们加起来等于 1。这样 $\hat m_t$ 就是一个真正的加权平均：最近的梯度权重最大，越早的越小。$t = 1$ 时只有一个梯度，$\hat m_1 = g_1$。这个角度也解释了原论文的附加说明：梯度的期望随时间变化时，$\mathbb E[\hat m_t] = \sum_i w_i\,\mathbb E[g_i]$ 是近期期望的加权平均，不再等于某一个固定值。
+也就是说，把分给 0 的那份权重拿掉，再把剩下的权重放大，让它们加起来等于 1。这样 $\hat m_t$ 就是一个真正的加权平均：最近的梯度权重最大，越早的越小。$t = 1$ 时只有一个梯度，$\hat m_1 = g_1$。这个角度也解释了原论文的那句附加说明：梯度的分布随时间变化时，校正后的估计是近期期望的加权平均（以 $\hat m_t$ 为例，$\mathbb E[\hat m_t] = \sum_i w_i\,\mathbb E[g_i]$），不再等于某一个固定值；越早的梯度权重越小，所以多出来的那一项 $\zeta$ 能保持很小。
 
 ```verify id=D-c title="校正 = 把权重重新归一化；梯度期望在变化时，得到近期期望的加权平均"
 for t in (1, 3, 10, 50):
@@ -133,6 +136,7 @@ for i in range(t):
 m_hat_mean = m.mean() / (1 - beta1**t)
 print(f"E[m̂_20] ≈ {m_hat_mean:.4f}，Σ w_i·E[g_i] = {w @ means:.4f}，"
       f"最新的 E[g_20] = {means[-1]:.1f}")
+# 标准误是 √(Σ w_i²)/√20000 ≈ 0.0018（Σ w_i² = 1/n_eff，n_eff ≈ 14.9，见 D.5 节），0.01 约是它的 5 倍
 assert abs(m_hat_mean - w @ means) < 0.01
 ```
 
@@ -149,7 +153,7 @@ Adam 的更新量是 $\mathrm{lr}\cdot\hat m_t/(\sqrt{\hat v_t}+\varepsilon)$。
 $$
 \begin{aligned}
 \frac{m_t}{\sqrt{v_t}} &= \frac{(1-\beta_1^t)\,\hat m_t}{\sqrt{(1-\beta_2^t)\,\hat v_t}}\\[-3pt]
-&\quad{\footnotesize\text{（代入 }m_t = (1-\beta_1^t)\hat m_t,\ v_t = (1-\beta_2^t)\hat v_t\text{）}}\\[2pt]
+&\quad{\footnotesize\text{（由 }\hat m_t\text{、}\hat v_t\text{ 的定义反解出 }m_t\text{、}v_t\text{）}}\\[2pt]
 &= \underbrace{\frac{1-\beta_1^t}{\sqrt{1-\beta_2^t}}}_{f(t)}\cdot\frac{\hat m_t}{\sqrt{\hat v_t}}\\[-3pt]
 &\quad{\footnotesize\text{（把与梯度无关的部分提出来）}}
 \end{aligned}
@@ -171,11 +175,11 @@ assert abs(f[999] - 1 / np.sqrt(1 - 0.999**1000)) < 1e-9       # 一千步后仍
 assert f[-1] < 1.0001
 ```
 
-默认的 $\beta_2 = 0.999$ 下，不校正的更新量在第 12 步是校正后的 6.6 倍，第 1000 步时仍然大 26%（$1/\sqrt{1-0.999^{1000}} \approx 1.258$）。$\beta_2$ 越接近 1，这个问题越严重。原论文第 3 节也指出了这一点：为了可靠地估计二阶矩需要平均很多个梯度（即 $\beta_2$ 接近 1），而恰恰在这种情况下，不做校正会让最初几步大得多。论文原文写的是“small value of β2”，结合上下文，指的是 $1-\beta_2$ 很小。
+默认的 $\beta_2 = 0.999$ 下，不校正的更新量在第 12 步是校正后的 6.6 倍，第 1000 步时仍然大 26%（$1/\sqrt{1-0.999^{1000}} \approx 1.258$）。$\beta_2$ 越接近 1，这个问题越严重。原论文第 3 节谈稀疏梯度时也指出了这一点：梯度稀疏时，为了可靠地估计二阶矩，需要平均很多个梯度（即 $\beta_2$ 接近 1），而恰恰在这种情况下，不做校正会让最初几步大得多。论文原文写的是“small value of β2”，结合上下文，指的是 $1-\beta_2$ 很小；第 5 节讨论 RMSProp 时，就直接写成了“$\beta_2$ 接近 1”。
 
 下面的交互图把 D.1 到 D.4 节的内容画在一起，可以调节两个衰减率，看看它们怎样影响偏差和 $f(t)$：
 
-```widget appendix-adam caption="上图：未校正的 m_t 从 0 起步，系统性地偏低；校正后的 m̂_t 没有这种偏差，500 次的平均几乎贴着 μ，但单次的早期值只平均了很少几个梯度，波动很大。下图：不校正时的更新量是校正后的 f(t) 倍，β₂ 越接近 1，峰值越高。"
+```widget appendix-adam caption="上图：未校正的 m_t 从 0 起步，系统性地偏低；校正后的 m̂_t 没有这种偏差，500 次的平均几乎贴着 μ。单次的 m̂_t 却只相当于平均了 n_eff 个梯度（β₁ = 0.9 时最多约 19 个，D.5 节），所以前后都会在 μ 上下漂移，两条细虚线是它的 ±1 个标准差（σ = 1 时后期约 ±0.23）。偏差校正保证的是平均值，不是单次。下图：不校正时的更新量是校正后的 f(t) 倍，β₂ 越接近 1，峰值越高。"
 {"beta1": 0.9, "beta2": 0.999, "mu": 0.5, "sigma": 1.0}
 ```
 
@@ -200,10 +204,12 @@ assert abs(step[0] - 1e-6 / (1e-6 + 1e-8)) < 1e-12     # 0.990099…
 所以在最初几步，每个权重大约移动它自身典型大小的 1.5%（$3\times10^{-4}/0.02$）。
 
 ::: confusion 把 loss（或 GRPO 的优势）整体乘以 10，Adam 走的步子会变大吗？
-对 SGD 来说会，梯度乘以 10，步子就大 10 倍，所以很自然地以为 Adam 也一样。但 Adam 的更新量是 $\hat m_t/\sqrt{\hat v_t}$：梯度乘以 $c$，$\hat m_t$ 乘以 $c$，$\hat v_t$ 乘以 $c^2$，开方之后也是 $c$，两者抵消。手算一下：梯度恒为 2 时，$\hat m = 2$、$\sqrt{\hat v} = 2$，比值是 1；梯度恒为 20 时是 $20/20$，还是 1。所以 [附录 C](appendix-c.html) 里 GRPO 组均值带来的 $(G-1)/G$ 倍缩放，在 Adam 下几乎没有影响。不过这只在两种情况之外成立：一是梯度小到与 $\varepsilon$（$10^{-8}$）可比；二是用了梯度裁剪。DLFS6 的 GRPO 和 StoryBot 预训练都做了 `clip_grad_norm_(..., 1.0)`，裁剪的比例每一步都不同，Adam 就不再能把它整体抵消。可以带走的结论：**纯 Adam 对梯度的整体缩放不敏感，加上 ε 和裁剪之后只是近似如此。**下面的验证分别检查这三种情况。
+对 SGD 来说会，梯度乘以 10，步子就大 10 倍，所以很自然地以为 Adam 也一样。但 Adam 的更新量是 $\hat m_t/\sqrt{\hat v_t}$：梯度乘以 $c$，$\hat m_t$ 乘以 $c$，$\hat v_t$ 乘以 $c^2$，开方之后也是 $c$，两者抵消。手算一下：梯度恒为 2 时，$\hat m = 2$、$\sqrt{\hat v} = 2$，比值是 1；梯度恒为 20 时是 $20/20$，还是 1。原论文第 2.1 节也指出了这一点。所以 [附录 C](appendix-c.html) 里 GRPO 组均值带来的 $(G-1)/G$ 倍缩放，在 Adam 下几乎没有影响。不过这只在两种情况之外成立：一是梯度小到与 $\varepsilon$（$10^{-8}$）可比；二是用了梯度裁剪。DLFS6 的 GRPO 和 StoryBot 预训练都做了 `clip_grad_norm_(..., 1.0)`，裁剪的比例每一步都不同，Adam 就不再能把它整体抵消。
+
+那么，DLFS6 的 GRPO 里，$7/8$ 这个因子还要紧吗？裁剪有一个简单的性质：先乘以 $c$ 再裁剪到 $\tau$，等于先裁剪到 $\tau/c$ 再乘以 $c$。Adam 又不在乎最后那个整体的 $c$，所以“梯度乘以 $7/8$、裁剪到 1”就等于“梯度不变、裁剪到 $8/7 \approx 1.14$”。$7/8$ 的全部影响，就是把裁剪的阈值放宽了 14%。梯度范数一直大于 1.14 时，两边都被裁剪成同一个方向上长度为 1 的向量，完全一样；一直小于 1 时，两边都不裁剪，Adam 把 $7/8$ 抵消掉；只有范数落在 1 到 1.14 之间的那些步，才相当于裁剪得松了一点。下面的验证把这几种情况都检查一遍。可以带走的结论：**纯 Adam 对梯度的整体缩放不敏感，加上 ε 和裁剪之后只是近似如此；裁剪时，整体缩放的效果等于换了一个裁剪阈值。**
 :::
 
-```verify id=D-f title="Adam 对梯度的整体缩放不敏感；ε 和梯度裁剪会打破这一点"
+```verify id=D-f title="Adam 对梯度的整体缩放不敏感；ε 和梯度裁剪会打破这一点；乘以 7/8 再裁剪到 1，等于裁剪到 8/7"
 def adam_path(grads, clip=None, eps=1e-8, lr=1e-3):
     """按 Adam（无权重衰减）更新，返回每一步之后的参数。"""
     theta = np.zeros(grads.shape[1])
@@ -232,18 +238,28 @@ for name, (a, b) in cases.items():
     ratio = np.abs(a - b).max() / size
     print(f"{name}：参数轨迹的最大差别是参数大小的 {ratio:.1e} 倍")
 diffs = [np.abs(a - b).max() / size for a, b in cases.values()]
+# ×10 时只差 ε 带来的 1e-8 量级；后两种差了 17%–18%，5% 的阈值只用来确认“明显不同”
 assert diffs[0] < 1e-6 and diffs[1] > 0.05 and diffs[2] > 0.05
+
+# GRPO 的 7/8：乘以 c 再裁剪到 τ = c × 裁剪到 τ/c，而 Adam 不在乎整体的 c
+seven_eighths = adam_path(7 / 8 * grads, clip=1.0)
+loose = adam_path(grads, clip=8 / 7)
+gap = np.abs(seven_eighths - loose).max() / size
+print(f"梯度 ×7/8、裁剪到 1，与梯度不变、裁剪到 8/7：最大差别是参数大小的 {gap:.1e} 倍")
+assert gap < 1e-6                                        # 只差 ε 带来的舍入
+norms = np.linalg.norm(grads, axis=1)
+assert norms.min() < 1 < 8 / 7 < norms.max()             # 这串梯度确实跨过了两个阈值
 ```
 
 ## D.5 校正修不好的：早期 v̂ 的噪声
 
-偏差校正修正的是期望，修不好波动。D.3 节说 $\hat v_t$ 是最近若干个 $g^2$ 的加权平均；$t$ 很小时，参与平均的梯度很少，估计就很吵。衡量“相当于平均了几个样本”可以用**有效样本数** $n_{\text{eff}} = 1/\sum_i w_i^2$（权重都相等时，它就是样本个数）。把 D.3 节的 $w_i$ 代进去，再做一次等比数列求和：
+偏差校正修正的是期望，修不好波动。D.3 节说 $\hat v_t$ 是最近若干个 $g^2$ 的加权平均；$t$ 很小时，参与平均的梯度很少，估计就很吵。衡量“相当于平均了几个样本”可以用**有效样本数**（effective sample size）$n_{\text{eff}} = 1/\sum_i w_i^2$（权重都相等时，它就是样本个数）。把 D.3 节的 $w_i$ 代进去，再做一次等比数列求和：
 
 $$
 n_{\text{eff}}(t) = \frac{1}{\sum_{i=1}^t w_i^2} = \frac{(1-\beta^t)(1+\beta)}{(1-\beta)(1+\beta^t)}
 $$
 
-$\beta_2 = 0.999$ 时，$n_{\text{eff}}(1) = 1$，$n_{\text{eff}}(10) \approx 10$，$n_{\text{eff}}(1000) \approx 924$，最终趋近于 $\frac{1+\beta_2}{1-\beta_2} = 1999$。如果梯度服从均值为 0 的正态分布，$g^2$ 的相对标准差是 $\sqrt2$，于是 $\hat v_t$ 的相对标准差约为 $\sqrt{2/n_{\text{eff}}}$：第 1 步是 141%，第 100 步还有 14%。
+$\beta_2 = 0.999$ 时，$n_{\text{eff}}(1) = 1$，$n_{\text{eff}}(10) \approx 10$，$n_{\text{eff}}(1000) \approx 924$，最终趋近于 $\frac{1+\beta_2}{1-\beta_2} = 1999$。如果梯度服从均值为 0 的正态分布，$g^2$ 的相对标准差是 $\sqrt2$，于是 $\hat v_t$ 的相对标准差约为 $\sqrt{2/n_{\text{eff}}}$：第 1 步是 141%，第 100 步还有 14%。同样的公式也适用于 $\hat m_t$：$\beta_1 = 0.9$ 时，$n_{\text{eff}}$ 最多只有 $1.9/0.1 = 19$，所以单次的 $\hat m_t$ 的标准差至少有 $\sigma/\sqrt{19} \approx 0.23\sigma$，早期还更大。D.4 节交互图里的两条细虚线画的就是 $\mu \pm \sigma/\sqrt{n_{\text{eff}}(t)}$。
 
 ```verify id=D-g title="有效样本数与 v̂ 的噪声：第 1 步相对标准差 141%"
 def n_eff(beta, t):
@@ -262,11 +278,24 @@ for t in range(1, 101):
         theory = np.sqrt(2 / n_eff(beta2, t))
         print(f"t = {t:3d}：n_eff = {n_eff(beta2, t):6.1f}，"
               f"v̂ 的相对标准差 {rel:.3f}（理论 √(2/n_eff) = {theory:.3f}）")
+        # 8000 次：这个估计本身的相对误差在 t = 1 时约 1.5%，t 越大越小，0.1 至少是它的 6 倍
         assert abs(rel / theory - 1) < 0.1
-print(f"t → ∞：n_eff → {(1 + beta2) / (1 - beta2):.0f}")
+print(f"t = 1000：n_eff = {n_eff(beta2, 1000):.1f}；t → ∞：n_eff → {(1 + beta2) / (1 - beta2):.0f}")
+assert abs(n_eff(beta2, 1000) - 924.2) < 0.1 and np.isclose((1 + beta2) / (1 - beta2), 1999)
+
+# 同样的公式用在 m̂_t 上：β₁ = 0.9 时 n_eff 最多 19，单次 m̂_t 的标准差至少是 σ/√19
+m_runs = rng.normal(0.0, 1.0, size=(20_000, 60))         # σ = 1
+m = np.zeros(20_000)
+for t in range(1, 61):
+    m = beta1 * m + (1 - beta1) * m_runs[:, t - 1]
+sd_60 = (m / (1 - beta1**60)).std()
+print(f"β₁ = 0.9：n_eff(60) = {n_eff(beta1, 60):.2f}，单次 m̂_60 的标准差 {sd_60:.3f}"
+      f"（理论 1/√n_eff = {1 / np.sqrt(n_eff(beta1, 60)):.3f}，极限 1/√19 = {1 / np.sqrt(19):.3f}）")
+assert np.isclose((1 + beta1) / (1 - beta1), 19)
+assert abs(sd_60 * np.sqrt(n_eff(beta1, 60)) - 1) < 0.03   # 2 万次，标准差的相对标准误约 0.5%
 ```
 
-分母 $\sqrt{\hat v_t}$ 这么吵，早期的步长就忽大忽小。这是学习率 **warmup**（[6.3 节](ch06.html#s6-3)）的一个常见解释：先用小学习率走几百步，等 $\hat v_t$ 积累了足够多的样本再全速前进。RAdam 的论文正是从“自适应学习率在训练早期方差过大”出发，分析了 warmup 为什么有效，并提出了另一种修正（[Liu et al., 2020](https://arxiv.org/abs/1908.03265)）。
+分母 $\sqrt{\hat v_t}$ 这么吵，早期的步长就忽大忽小。这是学习率 **warmup**（[6.3 节](ch06.html#s6-3)）的一个常见解释：先用小学习率走几百步，等 $\hat v_t$ 积累了足够多的样本再全速前进。RAdam 的论文正是从“自适应学习率在训练早期方差过大”出发，分析了 warmup 为什么有效，并提出了另一种修正（[Liu et al., 2020](https://arxiv.org/abs/1908.03265)，2026-10 查证）。
 
 ## D.6 回到 02_adamw.py
 
@@ -306,27 +335,35 @@ assert losses == ["8.0011", "5.8991", "4.1294", "2.6933", "1.5855"]
 
 脚本里实际训练用的是 `torch.optim.AdamW`，自己写的 `AdamW` 那一行被注释掉了。三者是否真的一致？下面的本地测试让本页的 `adamw_step`、`02_adamw.py` 的 `AdamW` 类和 `torch.optim.AdamW` 在同一个问题上各跑 200 步，比较参数：
 
-```localcheck verify/test_appendix.py::test_d_adamw title="本页的 NumPy AdamW = 原书的 AdamW 类 = torch.optim.AdamW"
+```localcheck verify/test_appendix.py::test_d_adamw needs="PyTorch" title="本页的 NumPy AdamW = 原书的 AdamW 类 = torch.optim.AdamW"
 ```
 
 ::: cs336 A1：自己实现 AdamW
-CS336 作业 1 同样要求继承 `torch.optim.Optimizer` 自己实现 AdamW，并在 `Linear(3, 2)` 上训练 1000 步后与 `torch.optim.AdamW` 对拍，容差 $10^{-4}$。上面的本地测试用的正是 `Linear(3, 2)`：在 float64 下跑 200 步，DLFS6 的手写版本与 `torch.optim.AdamW` 的参数差别小于 $10^{-10}$。2026 版讲义的更新记录里还有一条“修正 AdamW 中权重衰减与梯度更新的先后顺序”；DLFS6 的写法用更新前的参数计算衰减项，与 PyTorch“先衰减、再更新”的写法在代数上相同（[A1 仓库](https://github.com/stanford-cs336/assignment1-basics)）。
+CS336 作业 1 同样要求继承 `torch.optim.Optimizer` 自己实现 AdamW，它的测试在 `Linear(3, 2)` 上用 float32 训练 1000 步，与 `torch.optim.AdamW` 的参数差要在 $10^{-4}$ 以内。上面的本地测试也用 `Linear(3, 2)`，但在 float64 下跑 200 步，DLFS6 的手写版本与 `torch.optim.AdamW` 的差别小于 $10^{-10}$；按 CS336 的原样设置，差别是 $4.8\times10^{-6}$，远在 $10^{-4}$ 的容差之内（[6.2.3 节](ch06.html#s6-2-3)的本地验证）。2026 版讲义的更新记录里还有一条“修正 AdamW 中权重衰减与梯度更新的先后顺序”；DLFS6 的写法用更新前的参数计算衰减项，与 PyTorch“先衰减、再更新”的写法在代数上相同（[A1 仓库](https://github.com/stanford-cs336/assignment1-basics)，2026-10 查证）。
 :::
 
-另外，原论文第 2 节还给出了一种更省计算的等价写法：不单独计算 $\hat m_t$ 和 $\hat v_t$，而是把校正并进学习率，$\mathrm{lr}_t = \mathrm{lr}\cdot\sqrt{1-\beta_2^t}/(1-\beta_1^t)$，再用 $\mathrm{lr}_t\cdot m_t/\sqrt{v_t}$ 更新。$\varepsilon = 0$ 时两者完全相同；$\varepsilon \ne 0$ 时，$\varepsilon$ 的含义略有不同：
+另外，原论文第 2 节还给出了一种更省计算的等价写法：不单独计算 $\hat m_t$ 和 $\hat v_t$，而是把校正并进学习率，$\mathrm{lr}_t = \mathrm{lr}\cdot\sqrt{1-\beta_2^t}/(1-\beta_1^t)$，再用 $\mathrm{lr}_t\cdot m_t/(\sqrt{v_t} + \hat\varepsilon)$ 更新。$\varepsilon = 0$ 时两者完全相同。$\varepsilon \ne 0$ 时要小心：把原写法的分子分母同乘以 $\sqrt{1-\beta_2^t}$，可以看出两者相等的条件是 $\hat\varepsilon = \varepsilon\sqrt{1-\beta_2^t}$。论文在这里写的正是 $\hat\varepsilon$，而不是 $\varepsilon$。如果两边都写成 $10^{-8}$，并进学习率的写法在第 1 步就相当于把原写法的 $\varepsilon$ 放大了 31.6 倍（$1/\sqrt{0.001}$），步数越多越接近原写法：
 
-```verify id=D-i title="把校正并进学习率：ε = 0 时与原写法完全相同"
+```verify id=D-i title="把校正并进学习率：ε = 0 时与原写法完全相同；ε ≠ 0 时要换成 ε̂ = ε√(1−β₂ᵗ)"
 grads = rng.normal(size=(30, 4))
+eps = 1e-8
 m, v = np.zeros(4), np.zeros(4)
-theta_a, theta_b, lr = np.zeros(4), np.zeros(4), 1e-3
+theta_a, theta_b, theta_c, theta_d, lr = np.zeros(4), np.zeros(4), np.zeros(4), np.zeros(4), 1e-3
 for t, g in enumerate(grads, start=1):
     m = beta1 * m + (1 - beta1) * g
     v = beta2 * v + (1 - beta2) * g * g
-    theta_a -= lr * (m / (1 - beta1**t)) / np.sqrt(v / (1 - beta2**t))  # 原写法
     lr_t = lr * np.sqrt(1 - beta2**t) / (1 - beta1**t)      # 并进学习率
+    theta_a -= lr * (m / (1 - beta1**t)) / np.sqrt(v / (1 - beta2**t))  # 原写法，ε = 0
     theta_b -= lr_t * m / np.sqrt(v)
-print(f"30 步之后两种写法的最大差别：{np.abs(theta_a - theta_b).max():.1e}")
+    theta_c -= lr * (m / (1 - beta1**t)) / (np.sqrt(v / (1 - beta2**t)) + eps)  # 原写法，带 ε
+    theta_d -= lr_t * m / (np.sqrt(v) + eps * np.sqrt(1 - beta2**t))           # ε̂ = ε√(1−β₂ᵗ)
+print(f"ε = 0：30 步之后两种写法的最大差别 {np.abs(theta_a - theta_b).max():.1e}")
+print(f"ε = 1e-8、ε̂ = ε√(1−β₂ᵗ)：最大差别 {np.abs(theta_c - theta_d).max():.1e}")
+print(f"第 1 步 ε̂/ε = √(1−β₂) = {np.sqrt(1 - beta2):.4f}；两边都写 1e-8，"
+      f"等于把原写法的 ε 放大 {1 / np.sqrt(1 - beta2):.1f} 倍")
 assert np.allclose(theta_a, theta_b, rtol=1e-12, atol=1e-15)
+assert np.allclose(theta_c, theta_d, rtol=1e-12, atol=1e-15)
+assert abs(1 / np.sqrt(1 - beta2) - 31.6) < 0.05
 ```
 
 ## 小结
@@ -341,7 +378,7 @@ Adam 的移动平均从 0 起步，展开之后是 $m_t = (1-\beta)\sum_i\beta^{
 - $\mathbb E[m_t] = (1-\beta^t)\,\mathbb E[g]$，$v_t$ 同理；除以 $1-\beta^t$ 后期望正确（[验证 D-b](#v-D-b)）。
 - 校正等于把移动平均的权重重新归一化到和为 1；梯度期望变化时得到近期期望的加权平均（[验证 D-c](#v-D-c)）。
 - 不校正时更新量是校正后的 $f(t) = (1-\beta_1^t)/\sqrt{1-\beta_2^t}$ 倍：第 1 步 3.16，第 12 步 6.57（[验证 D-d](#v-D-d)）。
-- 校正后的第一步约为 lr·sign(g)；Adam 对梯度的整体缩放不敏感，但 ε 和梯度裁剪会打破这一点（[验证 D-e](#v-D-e)、[验证 D-f](#v-D-f)）。
+- 校正后的第一步约为 lr·sign(g)；Adam 对梯度的整体缩放不敏感，但 ε 和梯度裁剪会打破这一点；裁剪到 τ 时，梯度整体乘以 c 等于把阈值换成 τ/c，GRPO 的 7/8 相当于把裁剪放宽到 8/7（[验证 D-e](#v-D-e)、[验证 D-f](#v-D-f)）。
 - $\hat v_t$ 的有效样本数是 $(1-\beta^t)(1+\beta)/((1-\beta)(1+\beta^t))$，早期噪声很大（[验证 D-g](#v-D-g)）。
 - NumPy 版 AdamW 逐位重现了 `02_adamw.py` 的输出（[验证 D-h](#v-D-h)）。
 

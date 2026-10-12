@@ -8,7 +8,7 @@ float64, so that the JavaScript implementation can be compared with it to ~1e-12
 * parity-default.json: the trainer's real size (V=96, ctx 64, embed 64, 4 heads, 2 layers, ff 192)
   with weights from a formula that JavaScript can reproduce; stores the loss and per-parameter
   gradient checksums (the full gradients would be 750 KB).
-* erf.json: reference values for the JavaScript port of erf.
+* erf.json: correctly rounded erf(x) (mpmath, 120 bits) for the JavaScript port of erf.
 
     uv run python verify/_trainer_export.py      # rewrite tests/js/fixtures/trainer/*.json
 
@@ -130,11 +130,23 @@ def build_default() -> dict:
             "ln_v": math.log(V), "loss": loss, "grad_checks": checks}
 
 
+ERF_RANDOM = 10_000
+
+
 def build_erf() -> dict:
-    """Python's math.erf on a grid over [-7, 7] plus the branch points of fdlibm's erf (JavaScript has no Math.erf)."""
+    """Reference values for the JavaScript port of erf (JavaScript has no Math.erf): a 1/64 grid over [-7, 7],
+    the branch points of fdlibm's erf, and ERF_RANDOM uniform random points in [-7, 7]. Each value is computed
+    by mpmath at 120 bits and rounded once to float64, i.e. it is the correctly rounded erf(x); the JS test
+    counts how many float64 steps (ulps) the port is away from it. (Python's math.erf is not used as the
+    reference: it is the platform's C library erf, which on Windows is off by several ulps near x = 1.44.)"""
+    import mpmath
+
     xs = [i / 64 for i in range(-64 * 7, 64 * 7 + 1)]
     xs += [1e-30, -1e-30, 1e-10, 0.84375, 1.25, 1 / 0.35, 5.999, 6.0, 7.5, -0.3, 2.857142857142857]
-    return {"x": xs, "erf": [math.erf(x) for x in xs]}
+    xs += np.random.default_rng(0).uniform(-7, 7, ERF_RANDOM).tolist()
+    with mpmath.workprec(120):
+        ref = [float(mpmath.erf(mpmath.mpf(x))) for x in xs]
+    return {"source": "mpmath.erf at 120 bits, rounded to float64", "n": len(xs), "x": b64(xs), "erf": b64(ref)}
 
 
 def main() -> None:
@@ -142,7 +154,7 @@ def main() -> None:
     for name, data in (("parity-tiny.json", build_tiny()), ("parity-default.json", build_default())):
         (FIXTURES / name).write_text(json.dumps(data, indent=1), encoding="utf-8", newline="\n")
         print(f"{name}: loss {data['loss']:.12f}")
-    (FIXTURES / "erf.json").write_text(json.dumps(build_erf()), encoding="utf-8", newline="\n")
+    (FIXTURES / "erf.json").write_text(json.dumps(build_erf(), indent=1), encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":

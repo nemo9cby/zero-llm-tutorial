@@ -38,7 +38,7 @@ export function mount(root, config) {
     rewards = Array.from({ length: G }, () => (rand() < p ? 1 : 0));
     render();
   });
-  const stdToggle = toggle('除以标准差（DeepSeekMath 原版）', false, (v) => { stdNorm = v; render(); });
+  const stdToggle = toggle('除以标准差（DeepSeekMath 原版；无偏 std，除以 G−1，与 torch.std 相同）', false, (v) => { stdNorm = v; render(); });
   const chips = h('div', { class: 'chips', role: 'group', 'aria-label': '点击切换每个回答的对错' });
   const chart = h('div');
   const stats = h('div', { class: 'stat', 'aria-live': 'polite' });
@@ -84,6 +84,7 @@ export function mount(root, config) {
     const looNote = G >= 2 && !stdNorm
       ? `；RLOO 优势 × (G−1)/G = ${(((G - 1) / G) * loo[0]).toFixed(3)}，与 A₁ = ${A[0].toFixed(3)} 相同` : '';
     stats.textContent = `平均奖励 ${mean.toFixed(3)}；优势之和 ${Math.abs(sum) < 1e-12 ? '0' : sum.toFixed(3)}${looNote}。`
+      + stdNote(rewards, A, stdNorm)
       + ` 按 p = ${p.toFixed(2)} 抽一组，没有学习信号的概率 p^G + (1−p)^G = ${pNoSignal(p, G).toFixed(4)}。`;
     flag.replaceChildren(allSame
       ? h('span', { class: 'flag' }, G === 1
@@ -92,4 +93,20 @@ export function mount(root, config) {
       : h('span', { class: 'muted' }, `答对的回答被推高（蓝），答错的被压低（橙）${stdNorm ? '；除以标准差后，幅度随组内对错比例变化' : ''}。`));
   }
   render();
+  // SVG 的宽度按渲染时的容器宽度取：窗口缩放或手机旋转之后要重画，否则刻度字会跟着整张图一起缩小
+  let lastW = root.clientWidth;
+  new ResizeObserver(() => {
+    const w = root.clientWidth;
+    if (w && Math.abs(w - lastW) > 1) { lastW = w; render(); }
+  }).observe(root);
+}
+
+/** 打开“除以标准差”时，把答对者的优势与 3.7-h 专栏的公式 √((1−p)/p)（除以 G 的标准差）对上。 */
+export function stdNote(rewards, A, stdNorm) {
+  const G = rewards.length, k = rewards.filter((r) => r === 1).length;
+  if (!stdNorm || G < 2 || k === 0 || k === G) return '';
+  const p = k / G;
+  const aPlus = A[rewards.indexOf(1)];
+  return ` 答对者的优势 A₊ = ${aPlus.toFixed(3)}；专栏里按除以 G 的标准差写的 √((1−p)/p) = ${Math.sqrt((1 - p) / p).toFixed(3)}`
+    + `（p = ${k}/${G}），两者只差一个常数倍 √((G−1)/G) = ${Math.sqrt((G - 1) / G).toFixed(3)}。`;
 }
