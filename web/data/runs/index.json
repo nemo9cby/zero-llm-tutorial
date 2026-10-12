@@ -5,5 +5,10 @@
    "03_sft",
    "09_grpo"
   ]
+ },
+ "webbot-probe": {
+  "steps": [
+   "01_pretrain"
+  ]
  }
 }

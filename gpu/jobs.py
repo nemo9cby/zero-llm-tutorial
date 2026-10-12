@@ -23,7 +23,10 @@ WEBBOT = "ch09/01_pretrain.py"
 #   official        : the book's own checkpoint from Hugging Face (tools/fetch_data.py / Modal `prepare`)
 #   official-keyfix : the same, with StoryBot's `blocks.N.mlp.*` keys renamed to `blocks.N.ffn.*`
 #                     (the HF files predate the rename in storybot/model.py; load_state_dict fails otherwise)
+#   run:<run-id>    : the checkpoint an earlier *local* run of this tutorial produced (runs/<run-id>/work/),
+#                     so two variants can start from exactly the same weights (local runs only)
 SEED_HOW = {"official", "official-keyfix"}
+RUN_SEED = "run:"
 
 
 @dataclass(frozen=True)
@@ -58,6 +61,13 @@ class Plan:
         return Plan(**{**d, "patches": [Patch(**p) for p in d.get("patches", [])]})
 
 
+# ch03/09_grpo.py computes the policy's token probabilities in train() mode (dropout 0.1) but old_model's in
+# eval() mode, so the PPO ratio is noisy even before the first update. One line puts both in the same mode.
+GRPO_EVALFIX = Patch("ch03/09_grpo.py", "    for _ in range(n_update_per_generation):",
+                     "    model.eval()  # zero-llm fix: no dropout during the update (old_model is in eval mode too)\n"
+                     "    for _ in range(n_update_per_generation):",
+                     "勘误实验：更新前把 model 切到 eval 模式，与 old_model 一致（原书在 train 模式下算比率，dropout 让比率带噪声）")
+
 JOBS: dict[str, dict] = {
     "codebot": dict(bot="codebot", scripts=["ch03/01_pretrain.py", "ch03/02_generate.py",
                                             "ch03/03_sft.py", "ch03/09_grpo.py"], modal_gpu="L4"),
@@ -68,6 +78,9 @@ JOBS: dict[str, dict] = {
                         seeds={"codebot/model_pretrain.pt": "official"}),
     "codebot-grpo": dict(bot="codebot", scripts=["ch03/09_grpo.py"], modal_gpu="L4",
                          seeds={"codebot/model_sft.pt": "official"}),
+    "codebot-grpo-evalfix": dict(bot="codebot", scripts=["ch03/09_grpo.py"], modal_gpu="L4",
+                                 seeds={"codebot/model_sft.pt": RUN_SEED + "codebot-3060ti"},
+                                 patches=[GRPO_EVALFIX]),
     "storybot": dict(bot="storybot", scripts=["ch06/05_pretrain.py", "ch06/06_generate.py", "ch06/08_dpo.py"],
                      data=STORY_DATA, modal_gpu="H100"),
     "storybot-pretrain": dict(bot="storybot", scripts=["ch06/05_pretrain.py"], data=STORY_DATA, modal_gpu="H100"),
@@ -145,6 +158,7 @@ def plan(job: str, nproc: int = 1, max_iters: int | None = None, scale: str = "i
              seeds=dict(spec.get("seeds", {})), modal_gpu=spec.get("modal_gpu", "L4"), nproc=nproc)
     if spec["bot"] != "webbot" and (nproc != 1 or max_iters):
         raise ValueError("--nproc/--max-iters only apply to WebBot (ch09 is the only DDP script)")
+    p.patches += list(spec.get("patches", []))
     if job == "webbot-probe":
         if nproc != 1:
             raise ValueError("the probe measures one GPU; multiply by N yourself")

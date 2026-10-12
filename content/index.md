@@ -10,6 +10,7 @@ lede: 基于《ゼロから作るDeep Learning ❻ LLM編》的代码反向生�
 
 <header class="cover">
 <h1 class="cover-title">从零构建<br>大语言模型</h1>
+<figure class="widget hero" data-widget="index-hero" data-config='{"text": "从零构建大语言模型"}'><div class="widget-mount"><noscript>这里本该是书名的 token 拆解，需要 JavaScript。</noscript></div></figure>
 <p class="cover-lede">从一个字符一个编号的分词器出发，亲手搭出 GPT，训练会写 Python 的 CodeBot、会讲故事的 StoryBot，再用多块 GPU 训练 WebBot。书里的每一个技术断言，都配有一段可以在你浏览器里运行的最小验证。</p>
 <p class="cover-byline">依据斋藤康毅《ゼロから作る Deep Learning ❻ LLM編》（O'Reilly Japan，2026）的全部源代码反向编写。原书代码以 MIT 许可发布。</p>
 </header>

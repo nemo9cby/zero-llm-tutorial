@@ -25,6 +25,7 @@ Outputs:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
@@ -191,11 +192,17 @@ def seed_checkpoints(work: Path, seeds: dict[str, str], source: Path | None = No
         dst = work / rel
         if dst.exists():
             continue
-        src = source / rel
+        from_run = how.startswith(_jobs().RUN_SEED)
+        src = (ROOT / "runs" / how[len(_jobs().RUN_SEED):] / "work" / rel) if from_run else source / rel
         if not src.is_file():
-            sys.exit(f"{rel}: not in the run and not found at {src} (run tools/fetch_data.py)")
+            hint = "run that job first" if from_run else "run tools/fetch_data.py"
+            sys.exit(f"{rel}: not in the run and not found at {src} ({hint})")
         dst.parent.mkdir(parents=True, exist_ok=True)
-        if how == "official-keyfix":
+        if from_run:
+            shutil.copy2(src, dst)
+            records.append({"path": rel, "from": f"tutorial run {how[len(_jobs().RUN_SEED):]}",
+                            "sha256": hashlib.sha256(src.read_bytes()).hexdigest()})
+        elif how == "official-keyfix":
             n = fix_storybot_keys(src, dst)
             records.append({"path": rel, "from": "huggingface koki0702/zero-llm-data", "fix": f"{n} keys .mlp. -> .ffn."})
         else:

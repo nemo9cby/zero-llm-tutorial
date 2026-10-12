@@ -168,6 +168,8 @@ def run_job(plan: dict, run: str, meta: dict, force: bool = False) -> dict:
     for rel, how in p.seeds.items():
         if (work / rel).exists():
             continue
+        if how.startswith(jobs.RUN_SEED):
+            raise ValueError(f"{p.job}: seed {how!r} refers to a local run; run this job with gpu/run_local.py")
         src = _from_volume(rel, p.bot)
         (work / rel).parent.mkdir(parents=True, exist_ok=True)
         rec = {"path": rel, "from": "huggingface koki0702/zero-llm-data"}

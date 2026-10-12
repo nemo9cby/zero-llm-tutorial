@@ -1,0 +1,69 @@
+{
+ "run": "webbot-probe",
+ "tutorial_commit": "4cf7333568acbbeea1d92c83a681815643a54554",
+ "dlfs6_commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
+ "host": {
+  "platform": "Linux-4.19.0-gvisor-x86_64-with-glibc2.36",
+  "python": "3.12.10",
+  "torch": "2.14.1+cu130",
+  "cuda": "13.0",
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "gpu_count": 1,
+  "gpu_capability": "9.0",
+  "bf16": true,
+  "nvidia_smi": "NVIDIA H100 80GB HBM3, 580.95.05, 81559 MiB"
+ },
+ "provider": "modal",
+ "cost_usd": 0.27,
+ "steps": [
+  {
+   "script": "ch09/01_pretrain.py",
+   "started": "2026-10-12T02:32:36+00:00",
+   "seconds": 218.0,
+   "exit_code": 0,
+   "points": 201,
+   "final": {
+    "it": 200,
+    "loss": 6.1392,
+    "val_loss": 10.9833,
+    "lr": 0.000239
+   },
+   "produced": [
+    "webbot/__pycache__/model.cpython-312.pyc",
+    "webbot/__pycache__/utils.cpython-312.pyc",
+    "webbot/model_pretrain.pt",
+    "webbot_val_loss.png"
+   ],
+   "log_tail": [
+    "100%|█████████▉| 199/200 [03:24<00:00,  3.17it/s, loss=6.1392, val_loss=10.9833, lr=2.39e-04]",
+    "100%|██████████| 200/200 [03:24<00:00,  3.17it/s, loss=6.1392, val_loss=10.9833, lr=2.39e-04]",
+    "100%|██████████| 200/200 [03:24<00:00,  1.02s/it, loss=6.1392, val_loss=10.9833, lr=2.39e-04]",
+    "",
+    "モデル保存: webbot/model_pretrain.pt"
+   ],
+   "rate": "1.02s/it",
+   "s_per_it": 0.32,
+   "patches": [
+    {
+     "old": "pbar = tqdm(range(max_iters), disable=not is_main)",
+     "new": "pbar = tqdm(range(200), disable=not is_main)  # zero-llm probe",
+     "why": "计时探针：只跑真实训练的前 200 步（学习率调度、随机种子都不变），用 it/s 推算全程"
+    }
+   ],
+   "job": "webbot-probe",
+   "gpu": "1× NVIDIA H100 80GB HBM3"
+  }
+ ],
+ "billing": [
+  {
+   "started": "2026-10-12T02:32:36+00:00",
+   "job": "webbot-probe",
+   "gpu": "H100",
+   "usd_per_hour": 4.1075,
+   "price_src": "https://modal.com/pricing",
+   "price_checked": "2026-10-11",
+   "seconds": 239.8,
+   "usd": 0.2736
+  }
+ ]
+}

@@ -1,0 +1,72 @@
+{
+ "device": "cuda",
+ "device_name": "NVIDIA GeForce RTX 3060 Ti",
+ "threads": null,
+ "cpu_load_before_percent": null,
+ "torch": "2.14.1+cu130",
+ "python": "3.12.9",
+ "date": "2026-10-11",
+ "command": "uv run python verify/_ch05_kvbench.py --device cuda",
+ "per_step": [
+  {
+   "t": 1,
+   "full_ms": 20.355,
+   "decode_ms": 20.679
+  },
+  {
+   "t": 25,
+   "full_ms": 22.274,
+   "decode_ms": 17.93
+  },
+  {
+   "t": 50,
+   "full_ms": 21.56,
+   "decode_ms": 18.745
+  },
+  {
+   "t": 100,
+   "full_ms": 29.206,
+   "decode_ms": 22.332
+  },
+  {
+   "t": 200,
+   "full_ms": 20.238,
+   "decode_ms": 20.188
+  },
+  {
+   "t": 400,
+   "full_ms": 21.947,
+   "decode_ms": 20.539
+  },
+  {
+   "t": 800,
+   "full_ms": 21.108,
+   "decode_ms": 25.186
+  }
+ ],
+ "generate": [
+  {
+   "n": 50,
+   "no_cache_s": 1.091,
+   "cache_s": 1.199
+  },
+  {
+   "n": 100,
+   "no_cache_s": 1.67,
+   "cache_s": 1.744
+  },
+  {
+   "n": 200,
+   "no_cache_s": 3.517,
+   "cache_s": 3.41
+  }
+ ],
+ "model": {
+  "vocab_size": 1000,
+  "max_context_len": 1024,
+  "embed_dim": 384,
+  "n_head": 6,
+  "n_layer": 6,
+  "ff_dim": 1024
+ }
+}

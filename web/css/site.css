@@ -238,6 +238,16 @@ figure.widget figcaption { margin-top: .8rem; font-size: .88rem; color: var(--in
 }
 .cover-lede { font-size: 1.12rem; color: var(--ink-2); max-width: 34em; }
 .cover-byline { font-size: .9rem; color: var(--ink-3); margin-top: 1.2rem; }
+.cover figure.hero { margin: 0 0 1.8rem; padding: 0; border: 0; max-width: var(--measure); }
+.hero-bots { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .6rem; }
+.hero-bots button { font-size: .85rem; }
+.hero-bots button[aria-pressed="true"] { background: var(--ai); border-color: var(--ai); color: var(--paper); }
+.hero-tape { gap: 4px; margin: .2rem 0 .3rem; }
+.hero-tape .tok { padding: 3px 7px 2px; }
+.hero-tape .tok b { font-size: 15px; }
+.hero-count { color: var(--ink-2); font-size: .95rem; margin: .2rem 0 .8rem; }
+.hero-try { display: flex; flex-wrap: wrap; align-items: baseline; gap: .4rem; margin-bottom: .4rem; }
+.hero-sample { font-size: .82rem; }
 .book-toc { list-style: none; padding: 0; margin: 2rem 0; }
 .toc-chapter { margin: 0 0 1.4rem; }
 .toc-title { display: flex; gap: .9rem; align-items: baseline; font-weight: 700; font-size: 1.12rem; color: var(--ink); text-decoration: none; }
