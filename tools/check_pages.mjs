@@ -77,6 +77,29 @@ async function checkPage(browser, base, slug) {
   const overflow = async (label) => {
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     if (wide > 1) problems.push(`horizontal overflow ${wide}px at ${label}`);
+    // Elements sticking out of their figure (a few px of axis label slip past the page-level check),
+    // unless an ancestor inside the figure scrolls or clips them on purpose.
+    const sticking = await page.evaluate(() => {
+      const out = [];
+      document.querySelectorAll('figure.widget').forEach((fig, i) => {
+        const box = fig.getBoundingClientRect();
+        for (const el of fig.querySelectorAll('*')) {
+          const r = el.getBoundingClientRect();
+          if (!r.width || (r.right <= box.right + 2 && r.left >= box.left - 2)) continue;
+          let clipped = false;
+          for (let a = el.parentElement; a && a !== fig; a = a.parentElement) {
+            const ox = getComputedStyle(a).overflowX;
+            if (ox === 'auto' || ox === 'scroll' || ox === 'hidden') { clipped = true; break; }
+          }
+          if (!clipped) {
+            out.push(`figure ${i + 1} <${el.tagName.toLowerCase()}> sticks out by ${Math.round(Math.max(r.right - box.right, box.left - r.left))}px`);
+            break;
+          }
+        }
+      });
+      return out;
+    });
+    for (const s of sticking) problems.push(`${s} at ${label}`);
   };
   await overflow('1280px');
 

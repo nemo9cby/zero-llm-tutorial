@@ -194,9 +194,11 @@ def render_localcheck(arg: str, attrs: dict) -> str:
     file, src = extract_test_source(arg)
     cmd = f"uv run pytest {arg}"
     note = attrs.get("title", "")
+    needs = attrs.get("needs", "")          # e.g. needs="PyTorch" or needs="tiktoken"
+    label = f"本地验证（需要 {needs}）" if needs else "本地验证"
     return (
         f'<div class="localcheck"><div class="localcheck-head">'
-        f'<span class="localcheck-label">本地验证（需要 PyTorch）</span>'
+        f'<span class="localcheck-label">{esc(label)}</span>'
         + (f'<span class="localcheck-title">{esc(note)}</span>' if note else "")
         + f'</div><pre class="cmd"><code>{esc(cmd)}</code></pre>'
         f'<details><summary>查看测试代码 {esc(file)}</summary>'
@@ -472,6 +474,32 @@ def build(only: str | None, run: bool, out: Path) -> None:
                 .replace("{{body}}", head + rendered[ch.slug] + neighbors(chapters, ch))
                 .replace("{{slug}}", ch.slug))
         (out / f"{ch.slug}.html").write_text(page, encoding="utf-8")
+    check_links(out, list(rendered), full=not only)
+
+
+HREF_RE = re.compile(r'href="([^"#:?]*\.html)?(?:#([^"]+))?"')
+ID_RE = re.compile(r'\sid="([^"]+)"')
+
+
+def check_links(out: Path, built: list[str], full: bool) -> None:
+    """Every internal link must point at a page that exists and, with a #fragment, at an id on that page.
+    On partial (--only) builds, links into pages that were not rebuilt are only checked for the page."""
+    ids = {slug: set(ID_RE.findall((out / f"{slug}.html").read_text(encoding="utf-8"))) for slug in built}
+    known_pages = {p.stem for p in CONTENT.glob("*.md")} | {
+        read_front_matter(p.read_text(encoding="utf-8"))[0].get("slug", p.stem) for p in CONTENT.glob("*.md")}
+    broken = []
+    for slug in built:
+        for page, frag in HREF_RE.findall((out / f"{slug}.html").read_text(encoding="utf-8")):
+            target = page[:-5] if page else slug
+            if page and target not in known_pages:
+                broken.append(f"{slug}.html -> {page}#{frag} (no such page)")
+            elif frag and target in ids and html.unescape(frag) not in ids[target]:
+                broken.append(f"{slug}.html -> {page or ''}#{frag} (no such id on {target}.html)")
+    if broken:
+        msg = "broken internal links:\n  " + "\n  ".join(sorted(set(broken)))
+        if full:
+            raise BuildError(msg)
+        print(f"  warning: {msg}", file=sys.stderr)
 
 
 def copy_assets(out: Path) -> None:
@@ -482,7 +510,7 @@ def copy_assets(out: Path) -> None:
             dst = out / sub
             if dst.exists():
                 shutil.rmtree(dst)
-            shutil.copytree(src, dst)
+            shutil.copytree(src, dst, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     shutil.copy2(WEB / "cell_harness.py", out / "js" / "cell_harness.py")
     (out / "css" / "pygments.css").write_text(pygments_css(), encoding="utf-8")
 

@@ -130,6 +130,20 @@ th:first-child, td:first-child { min-width: 6em; }
 th { font-weight: 600; border-bottom-color: var(--ink-3); }
 blockquote { margin: 1.5rem 0; padding-left: 1rem; border-left: 2px solid var(--rule); color: var(--ink-2); }
 .math-block { position: relative; margin: 1.2rem 0; overflow-x: auto; overflow-y: hidden; }
+/* Edge shadows that appear only while the content is scrollable (wide derivations and tables on phones). */
+.math-block, .chapter table {
+  background:
+    linear-gradient(to right, var(--scroll-bg, var(--paper)) 30%, transparent) left / 2rem 100% no-repeat local,
+    linear-gradient(to left, var(--scroll-bg, var(--paper)) 30%, transparent) right / 2rem 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--ink) 22%, transparent), transparent) left / .7rem 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--ink) 22%, transparent), transparent) right / .7rem 100% no-repeat scroll;
+}
+.callout { --scroll-bg: var(--paper-2); }
+.callout-note, .callout-warn, .callout-confusion, .callout-think { --scroll-bg: var(--paper); }
+.callout-cs336 { --scroll-bg: color-mix(in srgb, var(--ai-2) 60%, var(--paper)); }
+.callout-gpu { --scroll-bg: var(--paper-3); }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.widget-mount pre.cmd { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* ---------- code ---------- */
 pre { margin: 0; }

@@ -127,3 +127,11 @@ CS336 的要求、DLFS6 的差异以及差异带来的后果。所有关于 CS33
 - [ ] 组件在明暗主题、桌面与 375px 宽度下都可用。
 - [ ] 小结有“本章所学的内容”，每条都链接到验证单元。
 - [ ] 中文通读一遍：没有翻译腔、没有配置清单式长句、没有未回答的设问。
+
+## 9. Windows 上的工具陷阱（作者必读）
+
+- Python 写文本文件一律 `Path.write_text(..., encoding="utf-8", newline="\n")`，否则会写出 CRLF，数据文件的哈希随之改变。
+- 含反斜杠的代码不要用 bash heredoc 写入（Git Bash 会吞掉反斜杠，`\b` 甚至会变成退格符）；用 Edit/Write 工具或 Python 脚本文件。
+- 隐藏 GPU 用 `CUDA_VISIBLE_DEVICES=-1`；Windows 会丢掉空字符串的环境变量，`""` 不起作用。
+- `localcheck` 默认标签是“本地验证”；需要特定依赖时写 `needs=PyTorch`（或 `needs=tiktoken`），标签会显示“本地验证（需要 PyTorch）”。
+- 全站构建会检查每一个站内链接（页面与 `#锚点` 都必须存在），改动节标题编号前先搜索引用它的地方。

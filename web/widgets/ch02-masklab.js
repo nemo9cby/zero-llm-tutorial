@@ -1,7 +1,7 @@
 /* 图：因果掩码实验台（2.6 节）。五种写法 × “改动未来的 token”：看哪些位置的输出跟着变了。
    与验证 2.6-c/d/e 是同一组实验（JS 测试对拍泄漏检测的结论）。 */
 import { h, visible } from './_lib.js';
-import { seqColor } from './_plot.js';
+import { seqColor, seqIsDark } from './_plot.js';
 import { mulberry32, gaussian, injectStyle, range } from './ch02-util.js';
 
 export const TOKENS = ['def', ' add', '(', 'a', ',', ' b'];
@@ -107,7 +107,7 @@ export function mount(root) {
     if (masked && v === 0) return h('span', { class: 'cell masked', role: 'cell', 'aria-label': `第 ${i} 行第 ${j} 列：被遮住，权重 0` }, '0');
     return h('span', { class: 'cell', role: 'cell', 'aria-label': `第 ${i} 行第 ${j} 列：${v.toFixed(2)}`,
       // The sequential palette is the same in both themes, so the text color must not follow the theme either.
-      style: { background: seqColor(v), color: v > 0.55 ? '#ffffff' : '#1b2233' } }, v.toFixed(2));
+      style: { background: seqColor(v), color: seqIsDark(v) ? '#ffffff' : '#1b2233' } }, v.toFixed(2));
   }
 
   function render() {

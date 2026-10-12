@@ -108,7 +108,8 @@ function onResize(el, fn) {
  * Line chart.
  * opts: { series: [{name, points: [[x, y], ...], dash?: '4 3', width?: 2, markers?: false}], xLabel, yLabel,
  *         height=260, yMin, yMax, xFormat, yFormat, logY=false, logX=false, xTicks?: number[],
- *         refLines: [{y, label, labelAt?: 'right'|'left'}], vLines: [{x, label}], table=true }
+ *         refLines: [{y, label, labelAt?: 'right'|'left'}],
+ *         vLines: [{x, label, labelAt?: 'right'|'left', labelY?: 'top'|'bottom'}], table=true }
  * Direct end labels are drawn only when they fit in the right margin and do not collide;
  * otherwise the legend carries identity.
  * Returns { update(newOpts) } so widgets can re-render with new data.
@@ -168,7 +169,12 @@ export function lineChart(root, opts) {
     }
     for (const v of o.vLines || []) {
       s.append(svg('line', { x1: sx(v.x), x2: sx(v.x), y1: m.t, y2: H - m.b, stroke: 'var(--ink-3)', 'stroke-width': 1, 'stroke-dasharray': '2 3' }));
-      if (v.label) s.append(svg('text', { class: 'end-label', x: sx(v.x) + 4, y: m.t + 10 }, v.label));
+      if (v.label) {
+        // labelAt: 'right' (default) or 'left' of the line; labelY: 'top' (default) or 'bottom' of the plot.
+        const left = v.labelAt === 'left' || (v.labelAt == null && sx(v.x) > W - m.r - 80);
+        s.append(svg('text', { class: 'end-label', x: sx(v.x) + (left ? -4 : 4),
+          y: v.labelY === 'bottom' ? H - m.b - 6 : m.t + 10, 'text-anchor': left ? 'end' : 'start' }, v.label));
+      }
     }
     series.forEach((ser, i) => {
       const d = ser.points.map((p, j) => `${j ? 'L' : 'M'}${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join('');
@@ -302,8 +308,14 @@ export function barChart(root, opts) {
 
 /** Sequential (one hue, light→dark) or diverging (blue↔gray↔red) color for t in [0,1] / [-1,1]. */
 export function seqColor(t) {
+  // Light theme: low = light, high = dark. Dark theme: the ramp runs the other way, so low values
+  // recede into the dark surface and high values stand out.
   const k = Math.max(0, Math.min(SEQ.length - 1, Math.round(t * (SEQ.length - 1))));
-  return SEQ[k];
+  return SEQ[isDark() ? SEQ.length - 1 - k : k];
+}
+/** True when seqColor(t) is a dark fill (so a label on it must be white). */
+export function seqIsDark(t) {
+  return isDark() ? t <= 0.45 : t > 0.55;
 }
 export function divColor(t) {
   const mid = isDark() ? '#383835' : '#f0efec';
@@ -358,7 +370,7 @@ export function heatmap(root, opts) {
         s.append(rect);
         if (cell >= 30 && !masked && o.showValues !== false) {
           // The fills are theme-independent, so the label colour is chosen from the fill, not from --ink.
-          const dark = o.scale === 'div' ? Math.abs(t) > 0.55 : t > 0.55;
+          const dark = o.scale === 'div' ? Math.abs(t) > 0.55 : seqIsDark(t);
           s.append(svg('text', { x: lab + cell * (c + 0.5), y: lab + cell * (r + 0.5) + 4, 'text-anchor': 'middle',
             'font-size': 10, fill: dark ? '#ffffff' : '#1b2233', 'pointer-events': 'none' }, fv(v)));
         }
