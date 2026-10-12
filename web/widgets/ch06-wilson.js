@@ -48,7 +48,14 @@ function injectStyle() {
 .w-ch06-ci select { font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; padding: .15rem .3rem; }
 .w-ch06-ci .presets { display: flex; flex-wrap: wrap; gap: .3rem; margin: .5rem 0; }
 .w-ch06-ci .presets button { font-size: .8rem; padding: .1rem .5rem; }
-.w-ch06-ci svg { width: 100%; height: auto; display: block; margin: .4rem 0; }
+.w-ch06-ci .scale { position: relative; height: 2.7rem; margin: .7rem .9rem .6rem; line-height: 1.2; }
+.w-ch06-ci .scale > * { position: absolute; }
+.w-ch06-ci .axis { left: 0; right: 0; top: calc(1rem - 1px); height: 2px; background: var(--rule); }
+.w-ch06-ci .tick { top: .625rem; width: 1px; height: .75rem; background: var(--rule); }
+.w-ch06-ci .tick.mid { background: var(--ink-2); }
+.w-ch06-ci .lab { top: 1.7rem; transform: translateX(-50%); font-size: .78rem; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.w-ch06-ci .band { top: .5rem; height: 1rem; min-width: 2px; border-radius: 3px; background: var(--ai); opacity: .35; }
+.w-ch06-ci .dot { top: .625rem; width: .75rem; height: .75rem; margin-left: -.375rem; border-radius: 50%; background: var(--ai); }
 .w-ch06-ci .read { font-size: .9rem; color: var(--ink-2); line-height: 1.7; }
 .w-ch06-ci .read b { color: var(--ink); font-variant-numeric: tabular-nums; }
 `));
@@ -69,19 +76,27 @@ export function mount(root, config = {}) {
     { label: '71 胜 29 负', w: 71, l: 29, t: 0 }];
   const presets = h('div', { class: 'presets', role: 'group', 'aria-label': '例子' }, presetList.map((p) =>
     h('button', { type: 'button', onclick: () => { winIn.value = p.w; lossIn.value = p.l; tieIn.value = p.t; render(); } }, p.label)));
-  const svgBox = h('div');
+  const scale = h('div', { class: 'scale', role: 'img' });
   const read = h('div', { class: 'read', 'aria-live': 'polite' });
   root.append(h('div', { class: 'ctrl' },
     h('label', {}, '胜', winIn), h('label', {}, '负', lossIn), h('label', {}, '平', tieIn), h('label', {}, '置信水平', confSel)),
-  presets, svgBox, read);
+  presets, scale, read);
 
-  const NS = 'http://www.w3.org/2000/svg';
-  const el = (tag, attrs, text) => {
-    const e = document.createElementNS(NS, tag);
-    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
-    if (text != null) e.textContent = text;
-    return e;
-  };
+  // 0–1 的数轴用 HTML 画：位置用百分比，字号固定，桌面和手机上一样清楚
+  const at = (v) => `${(100 * v).toFixed(3)}%`;
+  function drawScale(n, p, lo, hi) {
+    const parts = [h('div', { class: 'axis' })];
+    for (const v of [0, 0.25, 0.5, 0.75, 1]) {
+      parts.push(h('div', { class: v === 0.5 ? 'tick mid' : 'tick', style: { left: at(v) } }),
+        h('span', { class: 'lab', 'aria-hidden': 'true', style: { left: at(v) } }, String(v)));
+    }
+    if (n) {
+      parts.push(h('div', { class: 'band', style: { left: at(lo), width: at(hi - lo) } }),
+        h('div', { class: 'dot', style: { left: at(p) } }));
+    }
+    scale.setAttribute('aria-label', n ? `胜率 ${p.toFixed(3)}，区间 ${lo.toFixed(3)} 到 ${hi.toFixed(3)}` : '没有胜负记录');
+    scale.replaceChildren(...parts);
+  }
 
   function render() {
     const w = Math.max(0, Math.floor(+winIn.value || 0));
@@ -92,18 +107,7 @@ export function mount(root, config = {}) {
     const [lo, hi] = wilson(w, n, z);
     const [wlo, whi] = wald(w, n, z);
     const p = n ? w / n : NaN;
-    const X = (v) => 20 + v * 360;
-    const s = el('svg', { viewBox: '0 0 400 70', role: 'img', 'aria-label': `胜率 ${n ? p.toFixed(3) : '无'}，区间 ${lo.toFixed(3)} 到 ${hi.toFixed(3)}` });
-    s.append(el('line', { x1: X(0), x2: X(1), y1: 30, y2: 30, stroke: 'var(--rule)', 'stroke-width': 2 }));
-    for (const v of [0, 0.25, 0.5, 0.75, 1]) {
-      s.append(el('line', { x1: X(v), x2: X(v), y1: 24, y2: 36, stroke: v === 0.5 ? 'var(--ink-2)' : 'var(--rule)', 'stroke-width': 1 }));
-      s.append(el('text', { x: X(v), y: 56, 'text-anchor': 'middle', 'font-size': 11, fill: 'var(--ink-3)' }, String(v)));
-    }
-    if (n) {
-      s.append(el('rect', { x: X(lo), y: 22, width: Math.max(1, X(hi) - X(lo)), height: 16, rx: 3, fill: 'var(--ai)', opacity: 0.35 }));
-      s.append(el('circle', { cx: X(p), cy: 30, r: 5, fill: 'var(--ai)' }));
-    }
-    svgBox.replaceChildren(s);
+    drawScale(n, p, lo, hi);
     if (!n) {
       read.replaceChildren(h('div', {}, '去掉平局后没有胜负，无法估计胜率。'));
       return;

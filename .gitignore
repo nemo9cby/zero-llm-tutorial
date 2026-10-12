@@ -9,5 +9,3 @@ node_modules/
 /build/
 /site/
 /runs/
-# playground weights: decide after swapping in the tutorial's own trained checkpoints
-/web/data/playground/

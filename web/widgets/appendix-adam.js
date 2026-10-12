@@ -4,7 +4,7 @@
    下图：不校正时更新量是校正后的 f(t) = (1 − β₁ᵗ)/√(1 − β₂ᵗ) 倍（验证 D-d），横轴是对数刻度。 */
 import { h } from './_lib.js';
 import { lineChart, fmtNum } from './_plot.js';
-import { makeRng, nextId } from './appendix-common.js';
+import { makeRng, nextId, appendixRoot } from './appendix-common.js';
 
 /** 指数移动平均：返回每一步的 [m_t, m̂_t]（m_0 = 0）。 */
 export function emaPath(grads, beta) {
@@ -18,20 +18,34 @@ export function emaPath(grads, beta) {
 /** 不校正时的更新量 / 校正后的更新量。 */
 export const uncorrectedRatio = (t, beta1, beta2) => (1 - beta1 ** t) / Math.sqrt(1 - beta2 ** t);
 
-/** f(t) 在 t = 1…tMax 上的最大值与位置，以及第一次回落到 1.01 以下的步数。 */
+/** f(t) 在 t = 1…tMax 上的最大值与位置，以及从第几步起 f(t) 一直留在 1 ± 0.01 以内
+    （到 tMax 还没做到时为 null）。β₁ 不比 β₂ 小时，f(t) 从下方逼近 1，最大值没有意义，只看 settle。 */
 export function ratioSummary(beta1, beta2, tMax = 100000) {
-  let best = 0, at = 1, settle = null;
+  let best = -Infinity, at = 1, lastOut = 0;
   for (let t = 1; t <= tMax; t++) {
     const f = uncorrectedRatio(t, beta1, beta2);
     if (f > best) { best = f; at = t; }
-    if (settle === null && t > at && f < 1.01) settle = t;
+    if (Math.abs(f - 1) >= 0.01) lastOut = t;
   }
-  return { first: uncorrectedRatio(1, beta1, beta2), best, at, settle };
+  return { first: uncorrectedRatio(1, beta1, beta2), best, at, settle: lastOut < tMax ? lastOut + 1 : null, tMax };
+}
+
+/** 交互图下方的一句话总结。 */
+export function ratioText(s) {
+  const parts = [`f(1) = ${s.first.toFixed(2)}`];
+  parts.push(s.best > 1.01
+    ? `最大 ${s.best.toFixed(2)}，在第 ${fmtNum(s.at)} 步`
+    : 'f(t) 从未超过 1.01：这组 β 下，不校正的步子不会偏大（f < 1 时反而偏小）');
+  parts.push(s.settle
+    ? `第 ${fmtNum(s.settle)} 步之后一直在 1 ± 0.01 以内`
+    : `${fmtNum(s.tMax)} 步之内都没有稳定在 1 ± 0.01 以内`);
+  return `${parts.join('；')}。`;
 }
 
 const T = 60;
 
 export function mount(root, config = {}) {
+  appendixRoot(root);
   let beta1 = config.beta1 ?? 0.9;
   let beta2 = config.beta2 ?? 0.999;
   let sigma = config.sigma ?? 1.0;
@@ -54,7 +68,8 @@ export function mount(root, config = {}) {
     h('div', { class: 'w-row' }, h('label', { for: sId }, '噪声 σ = ', sigOut), sig, again),
     emaBox, ratioBox, stats);
 
-  const ts = [...new Set(Array.from({ length: 121 }, (_, i) => Math.round(10 ** (i / 24))))];  // 1 … 10⁵，对数等距
+  // 1 … 约 8 万步，对数等距（止于 10^4.9：最右边的刻度是 10,000，标签不会伸出图外；β₂ = 0.9999 时 f(t) 也已回落到 1 附近）
+  const ts = [...new Set(Array.from({ length: 119 }, (_, i) => Math.round(10 ** (i / 24))))];
   let ema = null, ratio = null;
   const render = () => {
     b1Out.textContent = beta1.toFixed(2);
@@ -82,15 +97,13 @@ export function mount(root, config = {}) {
     if (ema) ema.update(emaOpts); else ema = lineChart(emaBox, emaOpts);
 
     const ratioOpts = {
-      series: [{ name: 'f(t)', points: ts.map((t) => [Math.log10(t), uncorrectedRatio(t, beta1, beta2)]) }],
+      series: [{ name: 'f(t)', points: ts.map((t) => [t, uncorrectedRatio(t, beta1, beta2)]) }], logX: true,
       xLabel: '步数 t（对数刻度）', yLabel: '不校正的更新量 ÷ 校正后的更新量', height: 200, yMin: 0,
-      xFormat: (v) => fmtNum(Math.round(10 ** v)), refLines: [{ y: 1, label: '校正后 = 1' }], table: true,
+      refLines: [{ y: 1, label: '校正后 = 1' }], table: true,
     };
     if (ratio) ratio.update(ratioOpts); else ratio = lineChart(ratioBox, ratioOpts);
 
-    const s = ratioSummary(beta1, beta2);
-    stats.textContent = `f(1) = ${s.first.toFixed(2)}；最大 ${s.best.toFixed(2)}，在第 ${s.at} 步；`
-      + (s.settle ? `第 ${fmtNum(s.settle)} 步之后回落到 1.01 以内。` : '十万步之内都没有回落到 1.01 以内。');
+    stats.textContent = ratioText(ratioSummary(beta1, beta2));
   };
   b1.addEventListener('input', () => { beta1 = Number(b1.value); render(); });
   b2.addEventListener('change', () => { beta2 = Number(b2.value); render(); });

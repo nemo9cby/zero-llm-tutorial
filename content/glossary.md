@@ -160,10 +160,13 @@ assert actual == 12_455_936
 assert abs(12 * L * d * d / actual - 1) < 0.02 and 12 * L * ff * ff / actual > 6
 ```
 
+```localcheck verify/test_reference.py::test_cs336_storybot_parameter_count title="实例化真实的 StoryBot：4 个块共 12,455,936 个参数，与上面的手算相同"
+```
+
 带走一句话：**`hidden_size` = 残差流宽度 = `embed_dim` = `d_model` = `n_embd`；FFN 中间层的宽度是 `intermediate_size` = `ff_dim` = `d_ff`。**
 :::
 
-`n_head` 与“head size”也容易混。DLFS6 第 2 章的一行注释把头数 H 叫作“ヘッドサイズ”（[勘误 E34](errata.html#e34)），而 nanoGPT 注释里的 `hs`（head size）指的是每个头的维数 D。nanoGPT 还在构造模型时断言 `n_embd % n_head == 0`；DLFS6 用整除计算 `head_dim`，不检查能否整除（[勘误 E19](errata.html#e19)）。DLFS6 代码里的单字母记号是这样来的：
+`n_head` 与“head size”也容易混。DLFS6 第 2 章的一行注释把头数 H 叫作“ヘッドサイズ”（[勘误 E40](errata.html#e40)），而 nanoGPT 注释里的 `hs`（head size）指的是每个头的维数 D。nanoGPT 还在构造模型时断言 `n_embd % n_head == 0`；DLFS6 用整除计算 `head_dim`，不检查能否整除（[勘误 E19](errata.html#e19)）。DLFS6 代码里的单字母记号是这样来的：
 
 ```listing storybot/model.py#L69-L71
 ```
@@ -223,12 +226,18 @@ for phrase in ("The loss.", "Gradient norm.", "Token entropy.", "Train rewards (
 print("veRL @", src["verl"]["commit"][:7], " tinker-cookbook @", src["tinker_cookbook"]["commit"][:7],
       " CS336 A5 讲义 @", src["cs336_a5_2026"]["url"].rsplit("/", 1)[-1][:7])
 print("全部指标名核对通过")
+
+mu = dict(l.split(": ", 1) for l in src["verl"]["lines"]["verl/trainer/ppo/metric_utils.py"])
+line = lambda text: next(int(n) for n, code in mu.items() if code.startswith(text))
+order = [line(t) for t in ("if use_critic:", '"critic/values/mean"', "critic_value_metrics = {}", '"critic/rewards/mean"')]
+print("veRL metric_utils.py 的行号：if use_critic: {}，values {}，空字典 {}，rewards {}".format(*order))
+assert order == sorted(order)          # values 只在 use_critic 分支里；rewards 在分支之外，总会记录
 ```
 
 ::: confusion 指标名以 critic/ 开头，说明有 critic 吗？
 在 PPO 里，critic 是一个学习出来的价值网络，它估计“从这里往后能拿多少奖励”，用作基线。所以看到 veRL 日志里的 `critic/rewards/mean`，自然会以为训练里有一个 critic。
 
-其实没有。veRL 在计算数据指标的函数里，**不论用什么算法**，都把奖励、得分、advantage 和回报的统计放在 `critic/` 这个分组下面；只有 `critic/values/*` 和 `critic/vf_explained_var` 真正需要价值网络，没有价值网络时它们是 NaN。GRPO 根本没有价值网络：它用同一道题的一组回答的平均奖励作基线，DLFS6 的 `advantages = rewards - rewards.mean()` 就是这一行。
+其实没有。veRL 在计算数据指标的函数里，**不论用什么算法**，都把奖励、得分、advantage 和回报的统计放在 `critic/` 这个分组下面。真正需要价值网络的只有 `critic/values/*` 和 `critic/vf_explained_var`：它们写在 `if use_critic:` 分支里，没有价值网络时，日志里根本不会出现这几项（上面的验证单元核对了这几行源码的位置）。GRPO 根本没有价值网络：它用同一道题的一组回答的平均奖励作基线，DLFS6 的 `advantages = rewards - rewards.mean()` 就是这一行。
 
 手算一个小例子。三道题，每题采 4 个回答，奖励分别是 [1, 1, 0, 0]、[1, 0, 0, 0] 和 [1, 1, 1, 1]：
 
@@ -280,36 +289,62 @@ lo, hi = wilson(5, 8)
 assert abs(lo - 0.306) < 1e-3 and abs(hi - 0.863) < 1e-3
 lo, hi = wilson(44, 81)
 assert abs(lo - 0.435) < 1e-3 and abs(hi - 0.647) < 1e-3
+width = lambda k, n: wilson(k, n)[1] - wilson(k, n)[0]
+assert 0.30 < width(440, 810) / width(44, 81) < 0.34       # 样本多 10 倍，宽度约乘 1/√10 ≈ 0.316
 ```
 
-样本多 10 倍，区间才缩窄到原来的三分之一左右。所以第 0 步的评估要么多做些题，要么把区间一起报出来。
+样本多 10 倍，区间才缩窄到原来的三分之一左右（宽度大约按 $1/\sqrt{n}$ 缩小）。所以第 0 步的评估要么多做些题，要么把区间一起报出来。
 
-带走一句话：**说“probe”时说清是哪一种；训练前的“第 0 步”评估，要带上置信区间。**
+那么，训练之后再测一次，怎样判断提升是真的呢？两次都用同一组题，两次都对或者都错的题不提供信息，要看的是结果变了的题。假设有 21 道题的结果变了：13 道是训练后才做对的，8 道反而从对变成了错。如果训练其实没有效果，每道题往哪边变就像抛一次硬币；抛 21 次，出现 13 比 8 或者更悬殊的结果，概率是 0.38。这就是**符号检验**（sign test）。13 比 8 还说明不了训练有效，要到 16 比 5，p 值才低于 0.05：
+
+```verify id=Y.4-b title="结果变了的 21 道题：13 比 8 的双侧 p = 0.38；16 比 5 才低于 0.05"
+from math import comb
+
+def sign_test(better, worse):            # 双侧符号检验：只看结果变了的题
+    n, k = better + worse, max(better, worse)
+    return min(1.0, 2 * sum(comb(n, i) for i in range(k, n + 1)) / 2 ** n)
+
+for better, worse in ((13, 8), (15, 6), (16, 5)):
+    print(f"变好 {better}、变差 {worse}：双侧 p = {sign_test(better, worse):.3f}")
+assert abs(sign_test(13, 8) - 0.383) < 1e-3
+assert sign_test(15, 6) > 0.05 > sign_test(16, 5)
+```
+
+带走一句话：**说“probe”时说清是哪一种；训练前的“第 0 步”评估要带上置信区间，前后对比要看结果变了的那些题。**
 :::
 
 ### epoch
 
 **epoch** 指把数据完整过一遍，但“一遍”可以有不同的算法。第 3 章的 CodeBot 预训练常被说成“过了 61 个 epoch”：20,000 步 × 32 个窗口 × 256 个 token，约是语料 2,677,398 个 token 的 61 倍。可是从 `DataLoader` 的角度看，数据集里的每个样本是一个起点不同的窗口，共有 2,677,142 个，20,000 步只取了其中 640,000 个，连一遍都没有过完。两种说法都对，只是“一遍”的单位不同：一个按 token 算，一个按窗口算。
 
-```verify id=Y.4-b title="同一次预训练：按 token 是 61.2 个 epoch，按 DataLoader 的样本只有 0.24 个"
+微调的数据少，epoch 就多了起来。数的时候要以 `DataLoader` 实际给出的 batch 为准：SFT 的 1,092 条样本每轮分成 35 个 batch，最后一个只有 4 条，所以 500 步是 14.3 轮，而不是粗算的 500 × 32 ÷ 1,092 ≈ 14.7 轮。
+
+```verify id=Y.4-c title="同一次预训练：按 token 是 61.2 个 epoch，按 DataLoader 的样本只有 0.24 个；SFT 的 500 步是 14.3 轮"
+import math
+
 tokens, ctx, iters, batch = 2_677_398, 256, 20_000, 32          # ch03/01_pretrain.py
 windows = tokens - ctx                                            # len(TokenDataset)
 print(f"按 token 算：{iters * batch * ctx:,} ÷ {tokens:,} = {iters * batch * ctx / tokens:.1f} 个 epoch")
 print(f"按窗口算：{iters * batch:,} ÷ {windows:,} = {iters * batch / windows:.3f} 个 epoch")
-print(f"SFT：500 × 32 ÷ 1,092 = {500 * 32 / 1092:.1f} 个 epoch；DPO：1,000 × 8 ÷ 144 = {1000 * 8 / 144:.1f} 个 epoch")
 assert round(iters * batch * ctx / tokens, 1) == 61.2 and round(iters * batch / windows, 3) == 0.239
+
+for name, n, bs, steps in (("SFT", 1_092, 32, 500), ("DPO", 144, 8, 1_000)):    # ch03/03_sft.py、ch06/08_dpo.py
+    per_pass = math.ceil(n / bs)                  # DataLoader 默认保留最后一个不满的 batch
+    print(f"{name}：每轮 {per_pass} 个 batch，{steps:,} 步 = {steps / per_pass:.1f} 轮"
+          f"（粗算 {steps:,} × {bs} ÷ {n:,} = {steps * bs / n:.1f}）")
+assert round(500 / math.ceil(1092 / 32), 1) == 14.3 and round(1000 / math.ceil(144 / 8), 1) == 55.6
 ```
 
 强化学习里还有第三种用法：CS336 2025 年 A5 的 `epochs_per_rollout_batch` 指“同一批 rollout 拿来更新几遍”，相当于 DLFS6 的 `n_update_per_generation = 2`。
 
-```localcheck verify/test_reference.py::test_glossary_epoch_two_ways title="从 ch03/01_pretrain.py 读出超参数，两种 epoch 分别是 61.2 与 0.239"
+```localcheck verify/test_reference.py::test_glossary_epoch_two_ways title="从原书脚本读出超参数：预训练的两种 epoch 是 61.2 与 0.239；用真实的 DataLoader 数，SFT 14.3 轮、DPO 55.6 轮"
 ```
 
 ### step
 
 **step** 至少有四种意思。在 DLFS6 的训练循环里，一次 **iteration** 通常就是一次参数更新（一个 optimizer step）。但有了梯度累积，一次更新要先跑好几个 **micro-step**：WebBot 每次更新累积 4 个 micro-batch，每张卡每步处理 32 × 4 × 1,024 = 131,072 个 token。GRPO 的一次 iteration 包含一次生成和两次更新，也就是两个 optimizer step。生成时的一个 **decode step**，则是让模型多吐出一个 token 的那一次前向计算。
 
-```verify id=Y.4-c title="一个 step 里有多少东西：WebBot 每次更新 131,072 个 token；GRPO 每次迭代 256 条回答、2 次更新"
+```verify id=Y.4-d title="一个 step 里有多少东西：WebBot 每次更新 131,072 个 token；GRPO 每次迭代 256 条回答、2 次更新"
 micro_batch, accum, ctx = 32, 4, 1024                      # ch09/01_pretrain.py
 print(f"WebBot：每次更新 = {accum} 个 micro-step，每张卡 {micro_batch * accum * ctx:,} 个 token")
 prompts, G, updates = 32, 8, 2                            # ch03/09_grpo.py
@@ -323,7 +358,7 @@ assert micro_batch * accum * ctx == 131_072 and prompts * G == 256
 
 窗口限制的是**单次请求**，消耗算的是**所有请求之和**。智能体每一轮都把完整的历史重新发一遍，单次请求的长度随轮数线性增长，累计消耗却按平方增长。举个例子：系统提示 3,000 个 token，每轮新增 800 个，跑 300 轮：
 
-```verify id=Y.4-d title="单次请求最多 243,000 个 token，没超过 256K 的窗口；300 轮累计却有 3,700 万"
+```verify id=Y.4-e title="单次请求最多 243,000 个 token，没超过 256K 的窗口；300 轮累计却有 3,700 万"
 rounds = np.arange(1, 301)
 request = 3_000 + 800 * rounds                  # 第 k 轮发出的请求长度
 print(f"单次请求的最大长度：{request.max():,}")
@@ -337,7 +372,7 @@ DLFS6 的 `generate()` 也有类似的区分：生成的总长度可以超过 25
 
 名字的问题，说到底是“同一个东西，不同的叫法”和“同一个叫法，不同的东西”。前者靠对照表解决：遇到陌生的参数名，先找它在 DLFS6 里叫什么，再看它出现在哪些矩阵的形状里；后者靠追问一句“这里指的是哪一种”。判断一个参数到底是什么，最可靠的办法往往是算一算参数量：残差流的宽度会以平方的形式出现。
 
-这一页是全书的最后一页参考资料。正文里遇到不认识的词或参数名，可以随时回来查；想知道某段原书代码有没有已知的问题，去看[勘误](errata.html)；想把本书和 CS336 对照着读，去看 [CS336 对照总表](cs336.html)。
+正文里遇到不认识的词或参数名，可以随时回来查；想把本书和 CS336 对照着读，去看 [CS336 对照总表](cs336.html)。
 
 本章所学的内容：
 
@@ -345,6 +380,8 @@ DLFS6 的 `generate()` 也有类似的区分：生成的总长度可以超过 25
 - 一层 Transformer 的参数量约为 $12d^2$，所以平方出现的那个数就是残差流宽度（[验证 Y.2-b](#v-Y.2-b)）。
 - veRL、tinker-cookbook 与 CS336 A5 的指标名都能在源码或讲义原文里找到，名字不同，看的东西相通（[验证 Y.3-a](#v-Y.3-a)）。
 - `critic/rewards/mean` 只是平均奖励，组均值基线下 advantage 的均值恒为 0（[验证 Y.3-b](#v-Y.3-b)）。
-- 8 道题对 5 道的 95% 区间是 [0.31, 0.86]：小样本的“第 0 步”评估要带上区间（[验证 Y.4-a](#v-Y.4-a)）。
-- 同一次预训练，按 token 是 61.2 个 epoch，按样本只有 0.24 个（[验证 Y.4-b](#v-Y.4-b)）。
-- 上下文窗口限制单次请求，累计消耗随轮数按平方增长（[验证 Y.4-d](#v-Y.4-d)）。
+- 8 道题对 5 道的 95% 区间是 [0.31, 0.86]；前后对比时 13 比 8 的符号检验 p = 0.38：小样本的评估要带上区间和检验（[验证 Y.4-a](#v-Y.4-a)、[验证 Y.4-b](#v-Y.4-b)）。
+- 同一次预训练，按 token 是 61.2 个 epoch，按样本只有 0.24 个（[验证 Y.4-c](#v-Y.4-c)）。
+- 上下文窗口限制单次请求，累计消耗随轮数按平方增长（[验证 Y.4-e](#v-Y.4-e)）。
+
+名字对齐了，还剩下原书代码本身。下一页把我们在原书代码里找到的问题逐条列出来，每一条都配有能重跑的复现。

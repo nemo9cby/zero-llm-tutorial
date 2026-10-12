@@ -6,12 +6,12 @@ DLFS6 的训练脚本在模块顶层就开始训练，所以只用 ast 抽出需
 """
 import ast
 import random
-import sys
 from collections import Counter
 
+import pytest
 from _appendix_cells import cell_source, page_namespace
 
-sys.dont_write_bytecode = True  # 不往 third_party/dlfs6 里写 __pycache__
+# 不往 third_party/dlfs6 里写 __pycache__ 由 conftest.py 统一处理；本文件的张量都建在 CPU 上。
 
 
 def _load_defs(path, names, ns):
@@ -63,6 +63,7 @@ def test_a_decode_matches_dlfs6(dlfs6_path):
             reasons[e.reason] += 1
     assert reasons == {"unexpected end of data": 150, "invalid start byte": 7}
     assert tok.id_to_bytes[290] == "’".encode("utf-8")[:2] == b"\xe2\x80"
+    assert all(c.encode("utf-8")[:2] == b"\xe2\x80" for c in "’“”—")   # 弯引号与破折号共用这两个字节
     assert tok.id_to_bytes[6091] == "€".encode("utf-8")[1:] == b"\x82\xac"
 
     # 本页的解码器与 DLFS6 的 decode（errors="replace"）逐字相同：先逐个 token，再随机拼成序列
@@ -85,6 +86,29 @@ def test_a_decode_matches_dlfs6(dlfs6_path):
                for _ in range(rng.randint(1, 8))]
         joined = b"".join(tok.id_to_bytes[i] for i in ids)
         assert utf8_decode(joined, errors="replace") == tok.decode(ids), ids
+
+
+def test_a_corpora_are_ascii(dlfs6_path):
+    """A.1：DLFS6 的三份语料几乎全是 ASCII。OWT 只有分词之后的 owt_valid.bin，用 WebBot 的词表把 token 换回字节再数。"""
+    import numpy as np
+    from storybot.tokenizer import BPETokenizer
+
+    paths = [dlfs6_path / p for p in ("codebot/tiny_codes.txt", "storybot/tiny_stories_valid.txt",
+                                      "webbot/owt_valid.bin", "webbot/merge_rules.pkl")]
+    missing = [p.name for p in paths if not p.is_file()]
+    if missing:
+        pytest.skip(f"数据文件不在本地：{missing}（运行 tools/fetch_data.py）")
+    codes = np.fromfile(paths[0], dtype=np.uint8)
+    stories = np.fromfile(paths[1], dtype=np.uint8)
+    assert codes.size == 6_487_033 and int((codes >= 0x80).sum()) == 0          # TinyCodes：纯 ASCII
+    assert round(float((stories >= 0x80).mean()) * 100, 2) == 0.06             # TinyStories 验证集：0.06%
+
+    tok = BPETokenizer.load_from(str(paths[3]))
+    lengths = np.array([len(tok.id_to_bytes[i]) for i in range(tok.vocab_size)])
+    high = np.array([sum(x >= 0x80 for x in tok.id_to_bytes[i]) for i in range(tok.vocab_size)])
+    counts = np.bincount(np.fromfile(paths[2], dtype=np.uint16), minlength=tok.vocab_size)
+    assert counts.size == tok.vocab_size == 50_000
+    assert round(float(counts @ high) / float(counts @ lengths) * 100, 1) == 1.4  # OWT 验证集：1.4%
 
 
 def test_a_chunk_boundaries(dlfs6_path, tmp_path):
@@ -125,26 +149,28 @@ def test_b_codebot_scores(dlfs6_path):
     import torch
     from codebot.model import GPT
 
-    torch.manual_seed(0)
-    model = GPT(1000, 256, 384, 6, 6, 1536, 0.1).eval()   # ch03/01_pretrain.py 的配置
-    attn = model.blocks[0].attn
-    assert (attn.n_head, attn.head_dim) == (6, 64)
-    ids = torch.randint(0, 1000, (4, 256))
-    with torch.no_grad():
-        h = model.blocks[0].norm1(model.embed(ids) + model.pos_embed(torch.arange(256)))
-        B, C, _ = h.shape
-        q, k, v = (w(h).view(B, C, 6, 64).transpose(1, 2) for w in (attn.W_q, attn.W_k, attn.W_v))
+    pred = 384 * 0.02**2 * 0.0008 / (0.0008 + 1e-5)       # 附录 B.3 的预测：0.1517
+    measured = {0: 0.1511, 1: 0.1514, 2: 0.1515}             # 正文引用的三个种子的实测值
+    for seed, expected in measured.items():
+        torch.manual_seed(seed)
+        model = GPT(1000, 256, 384, 6, 6, 1536, 0.1).eval()   # ch03/01_pretrain.py 的配置
+        attn = model.blocks[0].attn
+        assert (attn.n_head, attn.head_dim) == (6, 64)
+        ids = torch.randint(0, 1000, (4, 256))
+        with torch.no_grad():
+            h = model.blocks[0].norm1(model.embed(ids) + model.pos_embed(torch.arange(256)))
+            B, C, _ = h.shape
+            q, k, v = (w(h).view(B, C, 6, 64).transpose(1, 2) for w in (attn.W_q, attn.W_k, attn.W_v))
 
-        def full(scale):
-            return attn.W_o(_causal_attention(q, k, v, scale).transpose(1, 2).reshape(B, C, 384))
+            def full(scale):
+                return attn.W_o(_causal_attention(q, k, v, scale).transpose(1, 2).reshape(B, C, 384))
 
-        assert torch.allclose(attn(h), full(1 / math.sqrt(64)), atol=1e-6)      # 除以 √64 = 8
-        assert not torch.allclose(attn(h), full(1 / math.sqrt(384)), atol=1e-4)  # 不是 √384
+            assert torch.allclose(attn(h), full(1 / math.sqrt(64)), atol=1e-6)      # 除以 √64 = 8
+            assert not torch.allclose(attn(h), full(1 / math.sqrt(384)), atol=1e-4)  # 不是 √384
 
-        scores = q @ k.transpose(-2, -1) / math.sqrt(64)
-        pred = 384 * 0.02**2 * 0.0008 / (0.0008 + 1e-5)   # 附录 B.3：0.1517
-        std = scores.std().item()                          # 种子 0、1、2：0.1511、0.1514、0.1515
-        assert abs(std / pred - 1) < 0.01, (std, pred)
+            std = (q @ k.transpose(-2, -1) / math.sqrt(64)).std().item()
+            assert abs(std - expected) < 1e-4, (seed, std)
+            assert abs(std / pred - 1) < 0.01, (seed, std, pred)   # 与预测相差不到 1%
 
 
 def test_b_sdpa_default_scale(dlfs6_path):
@@ -305,6 +331,19 @@ def test_e_dpo_loss(dlfs6_path):
     dpo_loss = page_namespace("appendix-e", upto="E-g")["dpo_loss"]
     beta = _script_constant(script, "beta")
     assert beta == 0.1
+
+    # 正文引用的设置：AdamW、学习率 5e-6；model 与 ref_model 都从预训练完成的同一个检查点加载
+    source = script.read_text(encoding="utf-8")
+    assert _script_constant(script, "learning_rate") == 5e-6
+    assert "torch.optim.AdamW(model.parameters(), lr=learning_rate)" in source
+    assert "model = GPT.load_from(pretrain_model_path" in source
+    assert "ref_model = GPT.load_from(pretrain_model_path" in source
+    assert _script_constant(script, "pretrain_model_path") == "storybot/model_pretrain.pt"
+
+    # 偏好数据：144 对，每对共用一个故事开头；正文举的第一对，chosen 是快乐的结局，rejected 是悲伤的结局
+    pairs = json.loads((dlfs6_path / "storybot" / "tiny_stories_dpo.json").read_text(encoding="utf-8"))
+    assert len(pairs) == 144 and all(sorted(p) == ["chosen", "prompt", "rejected"] for p in pairs)
+    assert "Tim was so happy" in pairs[0]["chosen"] and "Tim was very sad" in pairs[0]["rejected"]
 
     tok = BPETokenizer.load_from(str(dlfs6_path / "storybot" / "merge_rules.pkl"))
     data = ns["DPODataset"](str(dlfs6_path / "storybot" / "tiny_stories_dpo.json"), tok, 256)

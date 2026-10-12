@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
-import { ratioPos, summarize } from '../../web/widgets/cs336-a1.js';
+import { everFailed, ratioPos, summarize } from '../../web/widgets/cs336-a1.js';
 
 const rec = JSON.parse(fs.readFileSync(new URL('../../web/data/cs336/a1_results.json', import.meta.url), 'utf8'));
 
@@ -36,4 +36,12 @@ test('passing comparisons sit below the tolerance line; tolerance failures above
     }
   }
   assert.equal(failures, 4);   // two LM tests as shipped + the cosine schedule in both variants
+});
+
+test('“失败过的” lists the 10 as-shipped failures plus the speed test that only fails after the fix', () => {
+  const failed = rec.tests.filter(everFailed).map((t) => t.test);
+  assert.equal(failed.length, rec.summary.as_shipped.failed + 1);
+  assert.equal(failed.length, 11);
+  const onlyAfterFix = rec.tests.filter((t) => t.as_shipped.outcome !== 'failed' && everFailed(t)).map((t) => t.test);
+  assert.deepEqual(onlyAfterFix, ['test_train_bpe_speed']);
 });

@@ -40,6 +40,38 @@ def src(rel: str) -> str:
     return (DLFS6 / rel).read_text(encoding="utf-8")
 
 
+def git(*args: str) -> str:
+    """Run git in the pinned DLFS6 submodule (read-only commands only)."""
+    import subprocess
+
+    return subprocess.check_output(["git", "-C", str(DLFS6), *args], text=True, encoding="utf-8")
+
+
+def consts(rel: str) -> dict:
+    """Module-level `name = <literal>` assignments of a DLFS6 script, i.e. its hyperparameters."""
+    return {t.id: ast.literal_eval(n.value) for n in ast.parse(src(rel)).body if isinstance(n, ast.Assign)
+            for t in n.targets if isinstance(t, ast.Name) and isinstance(n.value, ast.Constant)}
+
+
+def finetune_passes() -> dict[str, tuple[int, int, int, float]]:
+    """(samples, batch_size, max_iters, passes) of the cycle(DataLoader) loops of SFT, DPO and GRPO.
+
+    A pass is counted in the batches the real DataLoader yields: it keeps the last, partial batch.
+    """
+    from torch.utils.data import DataLoader
+
+    grpo = load_defs("ch03/09_grpo.py", names={"GRPODataset"})["GRPODataset"](tokenizer=None)
+    sizes = {"SFT": ("ch03/03_sft.py", len(json.loads(src("codebot/tiny_codes_sft.json")))),
+             "DPO": ("ch06/08_dpo.py", len(json.loads(src("storybot/tiny_stories_dpo.json")))),
+             "GRPO": ("ch03/09_grpo.py", len(grpo))}
+    out = {}
+    for name, (script, n) in sizes.items():
+        c = consts(script)
+        per_pass = len(DataLoader(range(n), batch_size=c["batch_size"], shuffle=True))
+        out[name] = (n, c["batch_size"], c["max_iters"], c["max_iters"] / per_pass)
+    return out
+
+
 def page_cell(slug: str, cell_id: str) -> str:
     """Source of a verify cell on content/<slug>.md (to prove a page's copy of book code is verbatim)."""
     text = (ROOT / "content" / f"{slug}.md").read_text(encoding="utf-8")
@@ -70,15 +102,18 @@ def test_e01_grpo_policy_updates_in_train_mode(dlfs6_path):
     ds = g["GRPODataset"](tok)                                      # the 81 prompts i+j=
     ids, mask = ds.get_batch([p for p, _ in ds.data], [str(gt) for _, gt in ds.data], CPU)
     on = mask[:, 1:].bool()
-    torch.manual_seed(0)
+    outside = lambda r: ((r < 0.8) | (r > 1.2)).float().mean().item()     # PPO clip range, eps=0.2
     with torch.no_grad():
         p_old = g["compute_probs"](old, ids)
-        r_train = (g["compute_probs"](model, ids) / (p_old + 1e-8))[on]    # first update, same weights
+        fractions = []
+        for seed in range(20):                                      # 20 dropout masks, same weights
+            torch.manual_seed(seed)
+            r_train = (g["compute_probs"](model, ids) / (p_old + 1e-8))[on]    # the first update's ratio
+            fractions.append(outside(r_train))
         model.eval()
         r_eval = (g["compute_probs"](model, ids) / (p_old + 1e-8))[on]
-    outside = lambda r: ((r < 0.8) | (r > 1.2)).float().mean().item()     # PPO clip range, eps=0.2
     assert r_train.numel() == 117
-    assert outside(r_train) > 0.4                                   # measured 0.52 (seed 0)
+    assert round(sum(fractions) / 20, 2) == 0.48 and 0.41 < min(fractions) and max(fractions) < 0.59
     assert outside(r_eval) == 0 and (r_eval - 1).abs().max() < 1e-5
 
 
@@ -111,6 +146,10 @@ def test_e02_hf_storybot_checkpoints_use_mlp_keys(dlfs6_path):
     model = GPT(*(ck[k] for k in ("vocab_size", "max_context_len", "embed_dim", "n_head", "n_layer", "ff_dim", "theta")))
     model.load_state_dict({k.replace(".mlp.", ".ffn."): v for k, v in ck["model_state_dict"].items()})
     assert "self.mlp" in src("webbot/model.py") and "self.ffn" in src("storybot/model.py")
+    # the rename happened in 234a9c6 (the checkpoints were not re-uploaded)
+    show = git("show", "234a9c6", "--format=%ad %s", "--date=short", "--", "storybot/model.py")
+    assert show.startswith("2026-03-27 原稿との整合性修正")
+    assert "-        self.mlp = SwiGLU(embed_dim, ff_dim)" in show and "+        self.ffn = SwiGLU(embed_dim, ff_dim)" in show
 
 
 def test_e12_ch04_05_eval_is_missing():
@@ -118,7 +157,7 @@ def test_e12_ch04_05_eval_is_missing():
     assert numbers == ["01", "02", "03", "04", "06", "07"]
 
 
-def test_e42_download_script_lists_unpublished_dpo_model():
+def test_e48_download_script_lists_unpublished_dpo_model():
     assert "storybot/model_dpo.pt" in src("storybot/download.sh")
     assert "model" not in src("webbot/download.sh").split("# === tokenizer files ===")[1].replace("merge_rules", "")
     assert "'dpo': 'storybot/model_dpo.pt'" in src("ch06/09_llm_judge.py")
@@ -222,6 +261,10 @@ def test_e07_cycle_dataloader_replays_first_epoch_and_keeps_batches():
     # ch03/01 never finishes its first pass: 20000 x 32 windows < len(TokenDataset)
     n_windows = 2_677_398 - 256
     assert 20_000 * 32 < n_windows and 20_000 * 2 * 32 * 256 * 8 == 2_621_440_000   # bytes kept (x, y int64)
+    # the fine-tuning loops do finish passes, and every pass after the first is a replay
+    fp = finetune_passes()
+    assert [round(fp[k][3], 1) for k in ("SFT", "DPO", "GRPO")] == [14.3, 55.6, 166.7]
+    assert [len(b) for b in DataLoader(range(81), batch_size=fp["GRPO"][1])] == [32, 32, 17]
 
 
 def test_e08_encode_file_deletes_the_whole_cache_dir(dlfs6_path, tmp_path):
@@ -252,6 +295,10 @@ def test_e15_grpo_logs_accuracy_after_the_updates():
     upd = next(k for k, s in enumerate(kinds) if s.startswith("for _ in range(n_update_per_generation)"))
     ev = next(k for k, s in enumerate(kinds) if s.startswith("if i % eval_interval == 0"))
     assert upd < ev
+    # the recorded research run (seed 0, as shipped) logged "iteration 0" at 55.56%, not the SFT start 44/81
+    base = json.loads((WEB / "errata" / "grpo_dropout_runs.json").read_text(encoding="utf-8"))["runs"]["base"]
+    assert (base["seed"], base["acc_it"][0], base["greedy_acc"][0]) == (0, 0, 55.56)
+    assert round(100 * 44 / 81, 1) == 54.3
 
 
 def test_e09_calculate_reward_swallows_every_error():
@@ -316,6 +363,20 @@ def test_e21_grpo_has_no_length_cap_but_codebot_has_256_positions(dlfs6_path):
     m = GPT(1000, 256, 32, 2, 1, 64, 0.1).eval()
     with pytest.raises(IndexError):
         g["compute_probs"](m, ids)
+    # why the book never hit it: at T=1 the SFT model almost always answers one number and stops
+    sft = GPT.load_from(str(DLFS6 / "codebot" / "model_sft.pt")).eval()
+    eos = tok.encode("<|endoftext|>")
+    assert {len(tok.encode(str(a))) for a in range(19)} == {1, 2}       # every sum 0..18 is 1-2 tokens
+    short = []
+    with torch.no_grad():
+        for prompt, _ in ds.data:
+            p = tok.encode(prompt)
+            seqs = [p + tok.encode(str(a)) + eos for a in range(19)]
+            width = max(map(len, seqs))
+            logp = torch.log_softmax(sft(torch.tensor([s + [0] * (width - len(s)) for s in seqs])), -1)
+            short.append(sum(row[torch.arange(len(p) - 1, len(s) - 1), torch.tensor(s[len(p):])].sum().exp().item()
+                             for row, s in zip(logp, seqs)))                 # P(answer, then EOS)
+    assert round(min(short), 3) == 0.976 and round(sum(short) / len(short), 3) == 0.997
 
 
 def test_e11_special_token_text_is_injected(dlfs6_path):
@@ -494,46 +555,48 @@ def test_e27_merge_rules_order_is_part_of_the_data(dlfs6_path):
 def test_z6_comment_doc_and_portability_facts():
     facts = [
         # (entry, file, text that must be present)
-        ("E30", "ch05/05_kvcache.py", "# Causal Mask（KVキャッシュ使用時は不要）"),
-        ("E30", "ch05/05_kvcache.py", "start_ids = torch.tensor([[42]])  # 固定シード"),
-        ("E31", "README.md", "$ python ch02/10_gpt.py"),
-        ("E33", "ch05/03_rmsnorm.py", "def __init__(self, x):"),
-        ("E34", "ch02/08_multi_head.py", "H, D = self.n_head, self.head_dim  # ヘッドサイズ、ヘッドの次元数"),
-        ("E35", "ch03/09_grpo.py", 'plt.savefig("loss_grpo.png")'),
-        ("E36", "ch06/lr_graph.py", "plt.rcParams['font.family'] = 'Hiragino Sans'  # macOS"),
-        ("E38", "ch09/01_pretrain.py", "with autocast(device_type='cuda', dtype=torch.bfloat16):"),
-        ("E39", "ch09/01_pretrain.py", "is_main = (not ddp) or (local_rank == 0)"),
-        ("E39", "ch09/01_pretrain.py", "'effective_batch_size': micro_batch_size * accumulation_steps,"),
-        ("E39", "ch09/01_pretrain.py", "train_loss = loss.item() * accumulation_steps"),
-        ("E41", "ch01/08_eval.py", 'sample_text = open("codebot/tiny_codes.txt").read()[:10000]'),
-        ("E48", "README.md", "* PyTorch 2.x"),
-        ("E48", "requirements.txt", "torch>=2.5.0"),
-        ("E48", "webbot/model.py", "enable_gqa=True"),
+        ("E35", "ch05/05_kvcache.py", "# Causal Mask（KVキャッシュ使用時は不要）"),
+        ("E35", "ch05/05_kvcache.py", "start_ids = torch.tensor([[42]])  # 固定シード"),
+        ("E36", "README.md", "$ python ch02/10_gpt.py"),
+        ("E39", "ch05/03_rmsnorm.py", "def __init__(self, x):"),
+        ("E40", "ch02/08_multi_head.py", "H, D = self.n_head, self.head_dim  # ヘッドサイズ、ヘッドの次元数"),
+        ("E41", "ch03/09_grpo.py", 'plt.savefig("loss_grpo.png")'),
+        ("E42", "ch06/lr_graph.py", "plt.rcParams['font.family'] = 'Hiragino Sans'  # macOS"),
+        ("E44", "ch09/01_pretrain.py", "with autocast(device_type='cuda', dtype=torch.bfloat16):"),
+        ("E45", "ch09/01_pretrain.py", "is_main = (not ddp) or (local_rank == 0)"),
+        ("E45", "ch09/01_pretrain.py", "'effective_batch_size': micro_batch_size * accumulation_steps,"),
+        ("E45", "ch09/01_pretrain.py", "train_loss = loss.item() * accumulation_steps"),
+        ("E47", "ch01/08_eval.py", 'sample_text = open("codebot/tiny_codes.txt").read()[:10000]'),
+        ("E38", "README.md", "* PyTorch 2.x"),
+        ("E38", "requirements.txt", "torch>=2.5.0"),
+        ("E38", "webbot/model.py", "enable_gqa=True"),
     ]
     for entry, rel, needle in facts:
         assert needle in src(rel), (entry, rel, needle)
     assert not (DLFS6 / "ch02" / "10_gpt.py").exists() and (DLFS6 / "ch02" / "10_gpt2.py").exists()
-    assert "torch.manual_seed" not in src("ch05/05_kvcache.py")                                          # E30
+    assert "torch.manual_seed" not in src("ch05/05_kvcache.py")                                          # E35
     kv_tree = ast.parse(src("ch05/05_kvcache.py"))
     kv_names = {t.id for n in kv_tree.body if isinstance(n, ast.Assign) for t in n.targets if isinstance(t, ast.Name)}
     kv_strings = [n.value.value for n in kv_tree.body if isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant)]
-    assert "max_new_tokens" not in kv_names and any("max_new_tokens=max_new_tokens" in s for s in kv_strings)  # E30
+    assert "max_new_tokens" not in kv_names and any("max_new_tokens=max_new_tokens" in s for s in kv_strings)  # E35
     unseeded = [r for r in ("ch03/01_pretrain.py", "ch03/03_sft.py", "ch03/09_grpo.py", "ch06/05_pretrain.py",
                             "ch06/08_dpo.py") if "manual_seed" not in src(r)]
-    assert len(unseeded) == 5 and "torch.manual_seed(42 + seed_offset)" in src("ch09/01_pretrain.py")   # E37
+    assert len(unseeded) == 5 and "torch.manual_seed(42 + seed_offset)" in src("ch09/01_pretrain.py")   # E43
     plots = ast.unparse(ast.parse(src("ch03/09_grpo.py")))
-    assert "plt.plot(steps, accuracies)" in plots and "plt.ylabel('Accuracy (%)')" in plots              # E35
+    assert "plt.plot(steps, accuracies)" in plots and "plt.ylabel('Accuracy (%)')" in plots              # E41
     strings = [n.value for n in ast.walk(ast.parse(src("ch01/08_eval.py")))
                if isinstance(n, ast.Constant) and isinstance(n.value, str)]
-    assert any("import tiktoken" in s for s in strings)                                                   # E41
+    assert any("import tiktoken" in s for s in strings)                                                   # E47
     tok_tree = ast.parse(src("storybot/tokenizer.py"))
     fns = {n.name: n for n in tok_tree.body if isinstance(n, ast.FunctionDef)}
     body = lambda f: [ast.dump(s) for s in f.body if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant))]
-    assert body(fns["process_single_chunk"]) == body(fns["pretoken_chunk"])[1:]   # E40: same body minus the args unpacking
+    assert body(fns["process_single_chunk"]) == body(fns["pretoken_chunk"])[1:]   # E46: same body minus the args unpacking
     assert "process_single_chunk" not in {n.id for n in ast.walk(tok_tree) if isinstance(n, ast.Name)}
+    assert git("show", "-s", "--format=%ad", "--date=short", "f85907f").strip() == "2026-04-10"           # E38
+    assert set(git("show", "--name-only", "--format=", "f85907f").split()) == {"pyproject.toml", "requirements.txt"}
 
 
-def test_e36_hiragino_falls_back_to_a_font_without_japanese():
+def test_e42_hiragino_falls_back_to_a_font_without_japanese():
     matplotlib = pytest.importorskip("matplotlib")
     matplotlib.use("Agg")
     from matplotlib import font_manager
@@ -546,7 +609,7 @@ def test_e36_hiragino_falls_back_to_a_font_without_japanese():
     assert ord("A") in charmap and ord("学") not in charmap and ord("ウ") not in charmap
 
 
-def test_e38_cuda_autocast_does_nothing_on_cpu():
+def test_e44_cuda_autocast_does_nothing_on_cpu():
     x = torch.randn(4, 4)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -557,7 +620,7 @@ def test_e38_cuda_autocast_does_nothing_on_cpu():
         assert any("CUDA is not available" in str(w.message) for w in caught)
 
 
-def test_e41_compression_on_the_first_10k_chars_vs_whole_corpus(dlfs6_path):
+def test_e47_compression_on_the_first_10k_chars_vs_whole_corpus(dlfs6_path):
     from codebot.tokenizer import BPETokenizer
 
     tok = BPETokenizer.load_from(str(DLFS6 / "codebot" / "merge_rules.pkl"))
@@ -568,7 +631,7 @@ def test_e41_compression_on_the_first_10k_chars_vs_whole_corpus(dlfs6_path):
     assert round(len(text.encode()) / n_tokens, 4) == 2.4229
 
 
-def test_e43_text_files_are_opened_with_the_locale_encoding():
+def test_e29_text_files_are_opened_with_the_locale_encoding():
     no_encoding = []
     for rel in ("ch01/07_tiny_codes.py", "ch03/03_alpaca.py", "ch03/03_sft.py", "ch04/01_bpe_optimize.py",
                 "ch06/08_dpo.py"):
@@ -585,7 +648,7 @@ def test_e43_text_files_are_opened_with_the_locale_encoding():
         (DLFS6 / "storybot" / "tiny_stories_valid.txt").read_bytes().decode("gbk")
 
 
-def test_e44_soft_dictionary_softmax_overflows():
+def test_e30_soft_dictionary_softmax_overflows():
     soft = load_defs("ch02/01_soft_dict.py", names={"soft_dictionary"})["soft_dictionary"]
     movies = {(8, 2, 3): 85, (3, 9, 1): 70}
     rating, _ = soft((6, 4, 5), movies)                                 # returns (result, weights)
@@ -596,7 +659,7 @@ def test_e44_soft_dictionary_softmax_overflows():
     assert math.isnan(rating) and np.isnan(weights).all()
 
 
-def test_e45_rope_tables_are_saved_into_every_layer(dlfs6_path):
+def test_e31_rope_tables_are_saved_into_every_layer(dlfs6_path):
     from storybot.model import GPT
 
     m = GPT(50, 16, 32, 2, 3, 64)
@@ -605,7 +668,7 @@ def test_e45_rope_tables_are_saved_into_every_layer(dlfs6_path):
         GPT(50, 32, 32, 2, 3, 64).load_state_dict(m.state_dict())     # same weights, longer context
 
 
-def test_e46_grpo_evaluation_scores_prompt_plus_response():
+def test_e32_grpo_evaluation_scores_prompt_plus_response():
     tree = ast.parse(src("ch03/09_grpo.py"))
     reward = load_defs("ch03/09_grpo.py", names={"calculate_reward"})["calculate_reward"]
     lines = src("ch03/09_grpo.py").splitlines()
@@ -617,7 +680,7 @@ def test_e46_grpo_evaluation_scores_prompt_plus_response():
     assert tree is not None
 
 
-def test_e47_shipped_merge_rules_pickles_hold_only_data():
+def test_e33_shipped_merge_rules_pickles_hold_only_data():
     import pickletools
 
     data_ops = {"PROTO", "FRAME", "EMPTY_DICT", "MEMOIZE", "MARK", "BININT1", "BININT2", "BININT",
@@ -629,9 +692,7 @@ def test_e47_shipped_merge_rules_pickles_hold_only_data():
 
 
 def test_fixed_upstream_history_is_in_the_pinned_submodule():
-    import subprocess
-
-    log = subprocess.check_output(["git", "-C", str(DLFS6), "log", "--format=%h %s"], text=True, encoding="utf-8")
+    log = git("log", "--format=%h %s")
     for sha in ("8b3911f", "1760066", "c240183", "6855e70"):
         assert sha in log, sha
     assert "ß" not in src("ch06/07_llm_judge.py")                     # issue #4 (stray character) is fixed
@@ -689,6 +750,20 @@ def test_cs336_a1_record_is_consistent():
     bpe = rec["diagnostics"]["as_shipped"]["train_bpe"][0]
     assert (bpe["first_divergence"], bpe["identical_positions"]) == (92, 170)
     assert rec["diagnostics"]["one_line_fixes"]["train_bpe"][0]["exact"]
+    ts = rec["diagnostics"]["as_shipped"]["train_bpe"][1]                       # 5 MB TinyStories sample
+    assert (ts["first_divergence"], ts["n_merges"], ts["vocab_values_equal"]) == (34, 743, True)
+    assert rec["diagnostics"]["one_line_fixes"]["train_bpe"][1]["exact"]
+    # the speed gate (1.5 s) on corpus.en: as shipped the five timings straddle it, after the fix all miss it
+    shipped, fixed = (rec["diagnostics"][v]["train_bpe"][0]["train_seconds_runs"] for v in ("as_shipped", "one_line_fixes"))
+    assert (round(min(shipped), 2), round(max(shipped), 2)) == (1.27, 1.52) and min(shipped) < 1.5 < max(shipped)
+    assert (round(min(fixed), 2), round(max(fixed), 2)) == (1.80, 2.48)
+    rms = rec["diagnostics"]["as_shipped"]["rmsnorm_vs_snapshot"]
+    assert round(rms["nn.RMSNorm(d) default eps"], 6) == 1.7e-05                  # "only 1.7e-5" for test_rmsnorm
+    worst = lambda name, v: tests[name][v]["worst"]
+    assert round(worst("test_transformer_block", "as_shipped")["max_abs_diff"], 6) == 9.2e-05   # one block passes
+    assert round(worst("test_transformer_lm", "as_shipped")["max_abs_diff"], 5) == 4.6e-04
+    assert round(worst("test_transformer_lm", "one_line_fixes")["max_abs_diff"], 7) == 1.05e-05
+    assert round(worst("test_transformer_lm_truncated_input", "as_shipped")["tol_ratio"], 2) == 1.53
 
 
 @pytest.mark.skipif(not os.environ.get("CS336_A1_DIR"), reason="set CS336_A1_DIR to a clone of assignment1-basics")
@@ -800,17 +875,19 @@ def test_glossary_sources_match_the_pinned_code():
 
 
 def test_glossary_epoch_two_ways():
-    tree = ast.parse(src("ch03/01_pretrain.py"))
-    c = {t.id: ast.literal_eval(n.value) for n in tree.body if isinstance(n, ast.Assign)
-         for t in n.targets if isinstance(t, ast.Name) and isinstance(n.value, ast.Constant)}
+    c = consts("ch03/01_pretrain.py")
     tokens = (DLFS6 / "codebot" / "tiny_codes.bin").stat().st_size // 2
     windows = tokens - c["context_len"]                                 # len(TokenDataset)
     seen = c["max_iters"] * c["batch_size"]
     assert round(seen * c["context_len"] / tokens, 1) == 61.2            # "61 epochs" of tokens
     assert round(seen / windows, 3) == 0.239                            # 0.24 epoch of the DataLoader
+    fp = finetune_passes()                                              # fine-tuning: counted in real batches
+    assert fp["SFT"][:3] == (1092, 32, 500) and round(fp["SFT"][3], 1) == 14.3      # 35 batches a pass
+    assert round(500 * 32 / 1092, 1) == 14.7                                          # the naive count
+    assert fp["DPO"][:3] == (144, 8, 1000) and round(fp["DPO"][3], 1) == 55.6
 
 
 if __name__ == "__main__":
     out = WEB / "errata" / "grpo_dropout_runs.json"
-    out.write_text(json.dumps(grpo_dropout_runs(), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    out.write_text(json.dumps(grpo_dropout_runs(), ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
     print(f"wrote {out}")

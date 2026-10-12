@@ -13,6 +13,7 @@ import builtins
 import cProfile
 import inspect
 import json
+import lzma
 import pstats
 import time
 from collections import Counter
@@ -266,7 +267,7 @@ def test_gpt2_reference(tok, owt):
     text = owt["1m"].read_bytes().decode("utf-8")
     n = len(text.encode("utf-8"))
     web, gpt2 = n / len(tok.encode(text)), n / len(g.encode(text, allowed_special="all"))
-    assert 4.4 < gpt2 < web < 4.7
+    assert (round(gpt2, 2), round(web, 2)) == (4.52, 4.61)                 # bytes per token, as on the page
 
 
 # ─── 7.4 ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -326,3 +327,21 @@ def test_webbot_parameter_counts(dlfs6_path):
     assert sum(p.numel() for p in build(257).parameters()) == 75_911_424               # byte-level vocabulary
     kv = 2 * 12 * m.n_kv_head * (768 // 12) * 2                                        # K and V, bf16
     assert kv == 12 * 1024
+
+
+# ─── 7.6 ──────────────────────────────────────────────────────────────────────────────────────────────────
+def test_storybot_bytes_per_token_and_predictability(sb, tok):
+    """StoryBot's official valid.bin decodes to exactly tiny_stories_valid.txt (4.117 bytes per token), and a
+    general-purpose compressor finds OWT much harder to predict than TinyStories."""
+    st = sb.BPETokenizer.load_from(str(DLFS6 / "storybot" / "merge_rules.pkl"))
+    txt = DLFS6 / "storybot" / "tiny_stories_valid.txt"
+    arr = np.memmap(DLFS6 / "storybot" / "tiny_stories_valid.bin", dtype=np.uint16, mode="r")
+    counts = np.bincount(arr, minlength=st.vocab_size)
+    lengths = np.array([len(st.id_to_bytes[i]) for i in range(st.vocab_size)], dtype=np.int64)
+    assert int((counts * lengths).sum()) == txt.stat().st_size == 22_502_601   # the .bin decodes to the .txt
+    assert round(txt.stat().st_size / len(arr), 3) == 4.117
+    stories = txt.read_bytes()
+    stories = stories[: stories.index(EOT.encode(), 1_000_000)]                # ~1 MB, cut at a document end
+    web = owt_text(tok, 1_000_000).encode("utf-8")
+    bpb = {name: len(lzma.compress(data, preset=9)) * 8 / len(data) for name, data in [("ts", stories), ("owt", web)]}
+    assert 1.75 < bpb["ts"] < 1.85 and 2.5 < bpb["owt"] < 2.65, bpb           # page: "约 1.8" / "约 2.6"

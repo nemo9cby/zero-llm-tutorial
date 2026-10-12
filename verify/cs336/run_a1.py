@@ -313,12 +313,12 @@ def main() -> None:
         "tests": tests,
     }
     text = json.dumps(result, ensure_ascii=False, indent=1)
-    args.out.write_text(text + "\n", encoding="utf-8")
+    args.out.write_text(text + "\n", encoding="utf-8", newline="\n")
     print(f"wrote {args.out}")
     if args.web:
         web = ROOT / "web" / "data" / "cs336" / "a1_results.json"
         web.parent.mkdir(parents=True, exist_ok=True)
-        web.write_text(text + "\n", encoding="utf-8")
+        web.write_text(text + "\n", encoding="utf-8", newline="\n")
         print(f"wrote {web}")
     for v in VARIANTS:
         print(v, result["summary"][v], "|", result["pytest_tail"][v])

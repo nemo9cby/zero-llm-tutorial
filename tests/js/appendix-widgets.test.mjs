@@ -2,9 +2,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { makeRng, softmax, histogram } from '../../web/widgets/appendix-common.js';
-import { meanMaxWeight } from '../../web/widgets/appendix-scaling.js';
-import { bandit, PRESETS } from '../../web/widgets/appendix-baseline.js';
-import { emaPath, uncorrectedRatio, ratioSummary } from '../../web/widgets/appendix-adam.js';
+import { attentionRow, meanMaxWeight } from '../../web/widgets/appendix-scaling.js';
+import { bandit, histRange, PRESETS } from '../../web/widgets/appendix-baseline.js';
+import { emaPath, uncorrectedRatio, ratioSummary, ratioText } from '../../web/widgets/appendix-adam.js';
 import { optimalPolicy, kl, sigmoid } from '../../web/widgets/appendix-dpo.js';
 
 const close = (a, b, tol, msg) => assert.ok(Math.abs(a - b) <= tol, `${msg ?? ''} ${a} vs ${b}`);
@@ -25,6 +25,34 @@ test('appendix-common：随机数可复现，均值方差、类别频率、直�
   const hist = histogram(xs, -5, 5, 50);
   close(hist.reduce((s, [, d]) => s + d * 0.2, 0), 1, 1e-3, 'histogram integral');
   close(softmax([1, 2, 3]).reduce((s, x) => s + x, 0), 1, 1e-12);
+});
+
+test('histogram：边界上的值不被浮点误差劈开；hi 本身计入，[lo, hi] 之外不计', () => {
+  // 0.7 − 0.4 = 0.29999999999999993，只比边界 0.3 小一点浮点误差，应当与 0.3 落进同一个区间；0.6 = hi 计入最后一个区间
+  const counts = histogram([0.7 - 0.4, 0.3, 0.6, 0.61, -0.01], 0, 0.6, 2).map(([, d]) => Math.round(d * 5 * 0.3));
+  assert.deepEqual(counts, [0, 3]);
+  // N = 8 时梯度估计只取格点值 k·0.09375；让格点正好是区间的左边界，再加上左右各差一个 ulp 的值
+  const lattice = Array.from({ length: 8 }, (_, k) => (k * 3) / 32);
+  const xs = lattice.flatMap((v) => [v * (1 - 2 ** -52), v, v * (1 + 2 ** -52)]);
+  const perBin = histogram(xs, 0, 0.75, 8).map(([, d]) => Math.round(d * xs.length * 0.09375));
+  assert.deepEqual(perBin, [3, 3, 3, 3, 3, 3, 3, 3]);   // 不加容差时是 [4, 3, 3, 3, 3, 3, 3, 2]
+});
+
+test('appendix-baseline：直方图的横轴以真梯度为中心，真梯度在中间那个区间的中点', () => {
+  const [lo, hi] = histRange(0.1875, 0.2679);
+  const w = (hi - lo) / 41;
+  close((0.1875 - lo) / w, 20.5, 1e-9, 'center bin');
+  close(hi - lo, 41 * (8 * 0.2679) / 40, 1e-12, 'width');
+});
+
+test('appendix-scaling：给定 q 时，一行分数的标准差就是 |q|（验证 B-f）', () => {
+  for (const scaled of [false, true]) {
+    const { qNorm, scores } = attentionRow(makeRng(5), 64, 20000, scaled);
+    const m = scores.reduce((a, b) => a + b, 0) / scores.length;
+    const sd = Math.sqrt(scores.reduce((a, b) => a + (b - m) ** 2, 0) / scores.length);
+    const expected = scaled ? qNorm / 8 : qNorm;
+    close(sd / expected, 1, 0.03, `scaled=${scaled}`);   // 2 万个分数，标准差的相对标准误约 0.5%
+  }
 });
 
 test('appendix-scaling：不缩放时最大权重随 d 上升，缩放后基本不变（验证 B-g）', () => {
@@ -64,6 +92,25 @@ test('appendix-adam：m_t = 1 − 0.9ᵗ；f(t) 在第 12 步达到 6.5685（验
   assert.equal(s.at, 12);
   close(s.best, 6.5685, 1e-4);
   assert.equal(s.settle, 3925);
+  assert.match(ratioText(s), /最大 6\.57，在第 12 步；第 3,925 步之后/);
+});
+
+test('appendix-adam：β₁ ≥ β₂ 时 f(t) 从下方逼近 1，总结里不再报“最大值”', () => {
+  // β₁ = β₂ = 0.9：f(t) = √(1 − 0.9ᵗ)，0.9ᵗ ≤ 0.0199 即 t ≥ 38 时进入 1 ± 0.01
+  const same = ratioSummary(0.9, 0.9);
+  assert.ok(same.best <= 1 && same.first < 1);
+  assert.equal(same.settle, 38);
+  // β₁ = 0.99、β₂ = 0.9：1 − 0.99ᵗ ≈ 0.99 即 t ≈ 459
+  const slow = ratioSummary(0.99, 0.9);
+  assert.equal(slow.settle, 459);
+  const text = ratioText(slow);
+  assert.match(text, /从未超过 1\.01/);
+  assert.doesNotMatch(text, /最大/);
+  // 在 tMax 步之内回不到 1 ± 0.01 时如实说明（β₂ = 0.9999 要到第 39,268 步）
+  const short = ratioSummary(0.9, 0.9999, 1000);
+  assert.equal(short.settle, null);
+  assert.match(ratioText(short), /1,000 步之内都没有稳定/);
+  assert.equal(ratioSummary(0.9, 0.9999).settle, 39268);
 });
 
 test('appendix-dpo：π*、Z、隐式奖励与验证 E-c、E-e 相同', () => {

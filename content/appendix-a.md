@@ -56,13 +56,16 @@ print(f"代理对 = {hi:04X} {lo:04X}")
 pair = hi.to_bytes(2, "big") + lo.to_bytes(2, "big")
 assert "😁".encode("utf-16-be") == pair
 assert 0xD800 <= hi <= 0xDBFF and 0xDC00 <= lo <= 0xDFFF  # 都在留出的区间里
+units = len(pair) // 2                                   # UTF-16 的单位个数
+print(f"UTF-16 单位 {units} 个，码位 {len('😁')} 个")
+assert units == 2 and len("😁") == 1                     # 见下面的提示框
 ```
 
 ::: note 网页里的字符串是 UTF-16
-JavaScript 的字符串按 UTF-16 的单位计数，所以 `"😁".length` 是 2，而 Python 的 `len("😁")` 是 1（[MDN：String.length](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/length)）。所以本附录的交互图在逐字符处理文字时，用 `[...text]` 按码位切分，避免把一个 emoji 劈成两半。
+JavaScript 的字符串按 UTF-16 的单位计数，所以 `"😁".length` 是 2，而 Python 的 `len("😁")` 是 1（[MDN：String.length](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/length)；单位的个数见[验证 A-b](#v-A-b) 的最后一行）。所以本附录的交互图在逐字符处理文字时，用 `[...text]` 按码位切分，避免把一个 emoji 劈成两半。
 :::
 
-UTF-8 是变长的：ASCII 字符只占 1 个字节，而且这个字节就等于码位本身。所以一个纯 ASCII 的文件，原封不动就是合法的 UTF-8 文件。另外，除了 U+0000 本身，UTF-8 的输出里不会出现值为 0 的字节；而用 UTF-16、UTF-32 写英文时，每个字符都带着值为 0 的字节（上面 `A` 的两行就是例子）。
+UTF-8 是变长的：ASCII 字符只占 1 个字节，而且这个字节就等于码位本身。所以一个纯 ASCII 的文件，原封不动就是合法的 UTF-8 文件。另外，除了 U+0000 本身，UTF-8 的输出里不会出现值为 0 的字节（[验证 A-f](#v-A-f) 会在全部码位上确认）；而用 UTF-16、UTF-32 写英文时，每个字符都带着值为 0 的字节（上面 `A` 的两行就是例子）。
 
 那么，为什么“任何字符都能写成 0–255 的数列”呢？答案其实很朴素：三种编码的输出都是字节，一个字节有 8 位，取值只能是 0–255。字节级分词器用哪一种编码都行，真正的区别在于长度：
 
@@ -84,7 +87,12 @@ assert size_in(zh, "utf-16-be") == 2 * len(zh)      # 而 UTF-16 每字 2 字节
 assert all(0x4E00 <= ord(c) <= 0x9FFF for c in zh)  # 这几个字的码位范围
 ```
 
-对英文和代码来说，UTF-8 的长度是 UTF-16 的一半、UTF-32 的四分之一；对中文来说，UTF-8 反而比 UTF-16 多出一半。DLFS6 的三份语料（Python 代码、英文童话、英文网页）几乎全是 ASCII，选 UTF-8 是自然的。它的分词器第一步就是 `text.encode("utf-8")`：
+对英文和代码来说，UTF-8 的长度是 UTF-16 的一半、UTF-32 的四分之一；对中文来说，UTF-8 反而比 UTF-16 多出一半。DLFS6 的三份语料（Python 代码、英文童话、英文网页）几乎全是 ASCII：`tiny_codes.txt` 里一个非 ASCII 字节都没有；TinyStories 的验证集里，非 ASCII 字节只占 0.06%；OpenWebText 的验证集里也只占 1.4%。
+
+```localcheck verify/test_appendix.py::test_a_corpora_are_ascii title="三份语料里非 ASCII 字节的比例：0、0.06%、1.4%"
+```
+
+所以选 UTF-8 是自然的。DLFS6 的分词器第一步就是 `text.encode("utf-8")`：
 
 ```listing codebot/tokenizer.py#L81-L85
 ```
@@ -209,9 +217,10 @@ ours = np.concatenate(blocks).astype(np.uint8).tobytes()
 
 # UTF-32 的字节就是码位本身：按 UTF-32 解码，得到全部字符连成的字符串
 everything = cps.astype("<u4").tobytes().decode("utf-32-le")
-print(f"{len(cps):,} 个码位 → {len(ours):,} 个字节")
+print(f"{len(cps):,} 个码位 → {len(ours):,} 个字节，其中值为 0 的字节 {ours.count(0)} 个")
 assert len(cps) == 1_112_064 and len(everything) == len(cps)
 assert ours == everything.encode("utf-8")
+assert ours.count(0) == 1                                  # 只有 U+0000 本身
 ```
 
 一百多万个码位，四百多万个字节，一个不差。下面的交互图可以输入任意文字，看看每个字符的码位是怎样被拆开、填进模板的。
@@ -267,7 +276,7 @@ print(f"{len(data)} 个起点都能对齐，最多跳过 {max_skip} 个字节")
 assert max_skip == 3
 ```
 
-第二个好处在 DLFS6 里派上了用场。[4.3 节](ch04.html#s4-3)训练分词器时，要把好几 GB 的文件切成若干块分给多个进程。`find_chunk_boundaries` 先按字节数把文件等分，再从每个切点往后找最近的 `<|endoftext|>`，把切点挪到那里：
+第二个好处在 DLFS6 里派上了用场。[4.3 节](ch04.html#s4-3)训练分词器时，要把好几 GB 的文件切成若干块，一块一块地读（[4.4 节](ch04.html#s4-4)再把这些块分给多个进程并行处理）。负责切分的 `find_chunk_boundaries` 先按字节数把文件等分，再从每个切点往后找最近的 `<|endoftext|>`，把切点挪到那里：
 
 ```listing storybot/tokenizer.py#L53-L71
 ```
@@ -328,11 +337,11 @@ UTF-8 的规则也决定了哪些字节序列不合法。归纳起来有下面�
 
 先看超长编码。如果不管规矩，硬把 `C0 80` 按模板拆开，数据位是 `00000` 和 `000000`，拼起来就是 U+0000。可 U+0000 明明只需要一个字节 `00`。如果两种写法都算合法，同一段文字就会有多种字节表示，分词器给出的 token 序列也就不再唯一。更危险的是安全检查：一个程序禁止输入里出现 NUL 字节 `00`，却放过了 `C0 80`，后面的解码器又把它还原成了 NUL。这正是 UTF-8 的规范 RFC 3629 在第 10 节举的例子，所以规范要求只接受最短的写法（[RFC 3629](https://www.rfc-editor.org/rfc/rfc3629)）。这也解释了首字节为什么从 `C2` 开始：`C0` 和 `C1` 开头的 2 字节序列只能装下小于 0x80 的码位，必然是超长编码。
 
-再看后两种。代理区 U+D800–U+DFFF 是 A.1 节里留给 UTF-16 的“零件”，单独出现没有意义。至于上限，早期的规范 RFC 2279 允许最多 6 个字节；RFC 3629 把范围收窄到 0x10FFFF，也就是 UTF-16 能表示的范围，于是最多 4 个字节。这样一来，`F5–F7` 开头的 4 字节序列表示的码位都超过了 0x10FFFF，`F8–FD` 属于已经废除的 5、6 字节格式，`FE` 和 `FF` 则连旧规范里都没有用到（[RFC 2279](https://www.rfc-editor.org/rfc/rfc2279)），所以首字节 `F5–FF` 永远不会出现。
+再看后两种。代理区 U+D800–U+DFFF 是 A.1 节里留给 UTF-16 的“零件”，单独出现没有意义。至于上限，早期的规范 RFC 2279 允许最多 6 个字节；RFC 3629 把范围收窄到 0x10FFFF，也就是 UTF-16 能表示的范围，于是最多 4 个字节。这样一来，首字节 `F5–FF` 就永远不会出现了：`F5–F7` 开头的 4 字节序列表示的码位都超过了 0x10FFFF；`F8–FD` 属于已经废除的 5、6 字节格式；`FE` 和 `FF` 则连旧规范里都没有用到（[RFC 2279](https://www.rfc-editor.org/rfc/rfc2279)）。
 
 把这些规则合起来，就是 Unicode 标准中的“合法 UTF-8 字节序列”表（[Unicode 16.0 第 3.9.3 节，表 3-7](https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G27506)）。它的关键在于：第 2 个字节允许的范围取决于首字节：
 
-| 码位范围 | 首字节 | 第 2 字节 | 第 3 字节 | 第 4 字节 |
+| 码位范围 | 首字节 | 第 2 个 | 第 3 个 | 第 4 个 |
 |---|---|---|---|---|
 | U+0000–U+007F | `00–7F` | | | |
 | U+0080–U+07FF | `C2–DF` | `80–BF` | | |
@@ -344,7 +353,12 @@ UTF-8 的规则也决定了哪些字节序列不合法。归纳起来有下面�
 | U+40000–U+FFFFF | `F1–F3` | `80–BF` | `80–BF` | `80–BF` |
 | U+100000–U+10FFFF | `F4` | **`80–8F`** | `80–BF` | `80–BF` |
 
-加粗的四格各自排除了一种不合法的情况：`E0` 后面不能是 `80–9F`（否则是超长编码），`ED` 后面不能是 `A0–BF`（否则落进代理区），`F0` 后面不能是 `80–8F`（超长编码），`F4` 后面不能是 `90–BF`（超出 0x10FFFF）。
+加粗的四格各自排除了一种不合法的情况：
+
+- `E0` 后面不能是 `80–9F`，否则是超长编码；
+- `ED` 后面不能是 `A0–BF`，否则落进代理区；
+- `F0` 后面不能是 `80–8F`，否则是超长编码；
+- `F4` 后面不能是 `90–BF`，否则超出 0x10FFFF。
 
 把这张表原样搬进代码，就是下面的 `TABLE_3_7` 和解码器 `utf8_decode`。遇到不合法的序列时，它与 Python 一样抛出 `UnicodeDecodeError`，并且报告出错的起止位置和原因。`errors="replace"` 那一支在 A.5 节解释：
 
@@ -490,7 +504,7 @@ print("增量解码：", pieces)
 assert "".join(pieces) == "世界😁" and chr(0xFFFD) not in "".join(pieces)
 ```
 
-“半个字符”的 token 并不是理论上的担心。WebBot 的分词器在 OpenWebText 上训练出了 5 万个 token（[7.1 节](ch07.html#s7-1)），其中有 157 个合并出来的 token 单独拿出来不是合法的 UTF-8：150 个以不完整的序列结尾，例如 id 290 是 `E2 80`，它是弯引号 `’` `“` `”` 和破折号 `—` 共同的前两个字节；另外 7 个以后续字节开头，例如 id 6091 是 `82 AC`，它是欧元符号 `€`（`E2 82 AC`）的后两个字节。下面的本地测试读取真实的 WebBot 词表，确认这些数字，并用本页的解码器对 5 万个 token 逐个、对随机拼成的 token 序列逐段，与 DLFS6 的 `decode` 对拍：
+“半个字符”的 token 并不是理论上的担心。WebBot 的分词器在 OpenWebText 上训练出了 5 万个 token（[7.1 节](ch07.html#s7-1)），其中有 157 个合并出来的 token，单独拿出来不是合法的 UTF-8。150 个以不完整的序列结尾，例如 id 290 是 `E2 80`，它是弯引号 `’` `“` `”` 和破折号 `—` 共同的前两个字节。另外 7 个以后续字节开头，例如 id 6091 是 `82 AC`，它是欧元符号 `€`（`E2 82 AC`）的后两个字节。下面的本地测试读取真实的 WebBot 词表，确认这些数字；再用本页的解码器与 DLFS6 的 `decode` 对拍，先逐个解码 5 万个 token，再解码随机拼成的 token 序列：
 
 ```localcheck verify/test_appendix.py::test_a_decode_matches_dlfs6 title="WebBot 词表：157 个“半个字符”的 token；本页解码器与 DLFS6 的 decode 逐字相同"
 ```

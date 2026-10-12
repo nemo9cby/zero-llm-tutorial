@@ -116,8 +116,11 @@ def main() -> None:
         "verl": {
             "repo": "https://github.com/verl-project/verl", "commit": COMMITS["verl"],
             "lines": {
-                "verl/trainer/ppo/metric_utils.py": matching_lines(ext / "verl" / "metric_utils.py",
-                                                                   r'^\s+"(critic|response_length)/[a-z_/]+":'),
+                "verl/trainer/ppo/metric_utils.py": matching_lines(
+                    ext / "verl" / "metric_utils.py",
+                    # every metric key, plus the branch that decides whether the value-network keys exist
+                    r'^\s+"(critic|response_length)/[a-z_/]+":|^\s+if use_critic:|Response mask is all False'
+                    r'|critic_value_metrics = \{\}'),
                 "verl/workers/utils/losses.py": matching_lines(ext / "verl" / "losses.py", r'"actor/pg_loss"'),
                 "verl/trainer/ppo/core_algos.py": matching_lines(ext / "verl" / "core_algos.py",
                                                                  r'"actor/(pg_clipfrac|ppo_kl)"')[:2],
@@ -137,7 +140,7 @@ def main() -> None:
         },
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    OUT.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
     print(f"wrote {OUT} ({OUT.stat().st_size:,} bytes)")
 
 

@@ -49,8 +49,7 @@ function injectStyle() {
   document.head.append(h('style', {}, `
 .w-ch07-presets { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0 0 .5rem; }
 .w-ch07-presets button[aria-pressed="true"] { border-color: var(--ai); color: var(--ai); font-weight: 600; }
-.w-ch07-text { width: 100%; min-height: 4.6rem; resize: vertical; font: 14px/1.5 var(--mono); color: var(--ink);
-  background: var(--paper); border: 1px solid var(--rule); border-radius: 4px; padding: .5rem .7rem; }
+.w-ch07-text { min-height: 4.6rem; resize: vertical; font-size: 14px; }
 .w-ch07-opt { display: flex; align-items: flex-start; gap: .4rem; font-size: .85rem; color: var(--ink-2); margin: .3rem 0 .6rem; }
 .w-ch07-opt input { margin-top: .3rem; flex: none; }
 .w-ch07-row { margin: .7rem 0 .2rem; }
@@ -63,15 +62,10 @@ function injectStyle() {
 .w-ch07-bar span { display: block; height: 100%; background: var(--ai); border-radius: 3px; }
 .w-ch07-bar.base span { background: var(--ink-3); }
 .w-ch07-row .tokens { margin: .3rem 0 .2rem; }
-.w-ch07-row .tok.partial b { font-size: 11px; color: var(--ink-2) !important; }
-.w-ch07-row .tok.special { outline: 1.5px solid var(--kincha); outline-offset: -1.5px; }
+.w-ch07-row .tok.partial b { font-size: 11px; color: var(--ink-2); }
+.w-ch07-row .tok.special { outline: 1.5px solid var(--plum); outline-offset: -1.5px; }
 .w-ch07-more { font-size: .8rem; color: var(--ink-3); }
-/* Chips tinted from the paper colour, so text keeps its contrast in both themes (the shared dark-mode rule
-   dims text and background together with a filter). */
-.w-ch07 .tok { filter: none !important; color: var(--ink) !important; }
-.w-ch07 .tok i { color: var(--ink-2); }
-${['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300'].map((c, i) =>
-    `.w-ch07 .tok.c${i} { background: color-mix(in srgb, ${c} 20%, var(--paper)) !important; }`).join('\n')}
+.w-ch07-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 `));
 }
 
@@ -95,7 +89,7 @@ export async function mount(root, config = {}) {
   }
   status.remove();
 
-  const text = h('textarea', { class: 'w-ch07-text', 'aria-label': '输入任意文字，比较三个分词器', spellcheck: 'false' });
+  const text = h('textarea', { class: 'w-input w-ch07-text', 'aria-label': '输入任意文字，比较三个分词器', spellcheck: 'false' });
   const presetBar = h('div', { class: 'w-ch07-presets', role: 'group', 'aria-label': '示例文字' });
   const presetButtons = presets.map((p, i) => {
     const b = h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => choose(i) }, p.name);
@@ -105,8 +99,9 @@ export async function mount(root, config = {}) {
   const plain = h('input', { type: 'checkbox', id: `w-ch07-plain-${++mounted}` });
   const opt = h('label', { class: 'w-ch07-opt', for: plain.id }, plain,
     '把文字里的 <|endoftext|> 当作普通字符（tiktoken 的 encode_ordinary；原书的 encode 总是把它变成特殊 token）');
-  const rowsBox = h('div', { 'aria-live': 'polite' });
-  root.append(presetBar, text, opt, rowsBox);
+  const rowsBox = h('div');
+  const live = h('div', { class: 'w-ch07-sr', 'aria-live': 'polite' });   // counts only, for screen readers
+  root.append(presetBar, text, opt, live, rowsBox);
 
   function choose(i) {
     text.value = presets[i].text;
@@ -153,6 +148,7 @@ export async function mount(root, config = {}) {
       h('div', { class: 'w-ch07-bar base', role: 'presentation' },
         h('span', { style: { width: `${maxTokens ? (100 * bytes) / maxTokens : 0}%` } })));
     rowsBox.replaceChildren(...BOTS.map((b, i) => row(b, toks[i], rows[i], maxTokens)), base);
+    live.textContent = `${fmt(bytes)} 字节：` + BOTS.map((b, i) => `${b.label} ${fmt(rows[i].tokens)} 个 token`).join('，');
   }
 
   text.addEventListener('input', () => {

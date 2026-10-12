@@ -1,7 +1,8 @@
 /* CS336 作业 1 的测试，跑在 DLFS6 的代码上：结果浏览器。
    config: {
      data: "data/cs336/a1_results.json",      // verify/cs336/run_a1.py 的输出（B 层记录）
-     notes: { "test_name": "一句话解释", ... }   // 可选：展开后显示
+     notes: { "test_name": "一句话解释", ... },  // 可选：展开后显示
+     filter: "failed"                           // 可选：初始筛选（all | failed | dlfs6 | torch | design | none），默认 all
    }
    每一行：测试名、DLFS6 用的是什么、两种变体的结果，以及“实测误差 ÷ 容差”（对数刻度，竖线 = 1，超过即失败）。 */
 import { h } from './_lib.js';
@@ -31,6 +32,9 @@ export function summarize(tests, key) {
   for (const t of tests) out[t[key]?.outcome || 'skipped'] += 1;
   return out;
 }
+
+/** A test that failed in at least one of the two variants. */
+export const everFailed = (t) => VARIANTS.some((v) => t[v.key]?.outcome === 'failed');
 
 let styled = false;
 function injectStyle() {
@@ -113,10 +117,10 @@ export async function mount(root, config) {
 
   const FILTERS = [
     { key: 'all', label: '全部 48 项', test: () => true },
-    { key: 'failed', label: '失败过的', test: (t) => VARIANTS.some((v) => t[v.key]?.outcome === 'failed') },
+    { key: 'failed', label: '失败过的', test: everFailed },
     ...Object.entries(KIND).map(([k, label]) => ({ key: k, label, test: (t) => t.kind === k })),
   ];
-  let filter = 'all';
+  let filter = FILTERS.some((f) => f.key === config.filter) ? config.filter : 'all';
   const fbtns = FILTERS.map((f) => h('button', { type: 'button', 'aria-pressed': String(f.key === filter) }, f.label));
   box.append(h('div', { class: 'w-a1-filters', role: 'group', 'aria-label': '筛选测试' }, ...fbtns));
   const list = h('div');

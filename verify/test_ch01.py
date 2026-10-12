@@ -12,7 +12,6 @@ import random
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 from collections import Counter, defaultdict
@@ -40,6 +39,14 @@ def page_files(book):
     """The web/data/ch01 files, rebuilt in memory from the book's files."""
     from _ch01_data import build_files
     return build_files(book)
+
+
+@pytest.fixture(scope="module")
+def tie_runs(book):
+    """743 merges on TinyCodes under each tie-break rule (ids = codebot, first = ch01/03-06, bytes = CS336)."""
+    from _ch01_bpe import train_dedup
+    return {rule: train_dedup(book["pieces"], book["counts"], 743, rule, book["n_end"])
+            for rule in ("ids", "first", "bytes")}
 
 
 def load_script(rel: str):
@@ -180,12 +187,10 @@ def test_tie_breaks_on_the_cs336_fixture(dlfs6_path):
     assert [(by_bytes.vocab[a], by_bytes.vocab[b]) for a, b in by_bytes.merges] == reference
 
 
-def test_tie_breaks_on_tiny_codes(book):
-    from _ch01_bpe import train_dedup
+def test_tie_breaks_on_tiny_codes(book, tie_runs):
     official = book["merges"]
-    runs = {rule: train_dedup(book["pieces"], book["counts"], 743, rule, book["n_end"])
-            for rule in ("ids", "first", "bytes")}
-    assert runs["ids"].merges == official                           # the book's rule reproduces merge_rules.pkl
+    runs = tie_runs
+    assert runs["ids"].merges == official                          # the book's rule reproduces merge_rules.pkl
     print("steps with a tie in the official run:", sum(t > 1 for t in runs["ids"].tied), "of 743")
 
     expected = {"first": (123, b"))", b"ve"), "bytes": (290, b"pre", b"ctor")}
@@ -262,6 +267,28 @@ def test_codebot_tokenizer_is_ch01_06_plus_one_line():
     methods = lambda cls: {n.name: ast.dump(n) for n in cls.body if isinstance(n, ast.FunctionDef)}
     m06, mcb = methods(book06["BPETokenizer"]), methods(codebot["BPETokenizer"])
     assert set(mcb) - set(m06) == {"load_from"} and all(mcb[k] == m06[k] for k in m06)
+
+
+def test_first_wins_breaks_in_the_ch04_trainer(tie_runs):
+    """1.7.2: ch04's trainer deletes and re-inserts pairs, so with ch01/06's first-wins line it learns other merges."""
+    from storybot import tokenizer as sb
+    src = (DLFS6 / "storybot" / "tokenizer.py").read_text(encoding="utf-8")
+    active = "best_pair = max(pair_counts, key=lambda pair: (pair_counts[pair], pair[0], pair[1]))"
+    assert src.count(active) == 1 and "del pair_counts[pair]" in src
+    ns = {"__name__": "storybot_first_wins"}
+    exec(compile(src.replace(active, "best_pair = max(pair_counts, key=pair_counts.get)"), "storybot_first_wins",
+                 "exec"), ns)
+    for name, obj in list(ns.items()):          # keep the real module's workers: multiprocessing must pickle them
+        if callable(obj) and name != "train_bpe" and hasattr(sb, name):
+            ns[name] = getattr(sb, name)
+    corpus = str(DLFS6 / "codebot" / "tiny_codes.txt")
+    fast_first = list(quiet(ns["train_bpe"], corpus, 1000, num_processes=8, num_chunks=64))
+    naive_first = tie_runs["first"].merges        # == ch01/06 (test_dedup_trainer_matches_the_book_trainers)
+    k = first_difference(fast_first, naive_first)
+    print(f"first-wins: ch04 trainer vs ch01/06 differ from merge #{k + 1}; "
+          f"{sum(a == b for a, b in zip(fast_first, naive_first))}/743 positions equal")
+    assert k + 1 == 302 and set(fast_first) != set(naive_first)
+    # with the (count, id0, id1) rule the same trainer reproduces merge_rules.pkl (see test_training_cost_naive_vs_fast)
 
 
 def test_training_cost_naive_vs_fast(book):

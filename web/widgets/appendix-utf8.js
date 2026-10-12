@@ -4,7 +4,7 @@
                           （config.hex 为初始字节）。
    编解码算法与附录 A 的验证 A-d、A-j 相同；tests/js/appendix-utf8.test.mjs 用 TextEncoder / TextDecoder 对拍。 */
 import { h } from './_lib.js';
-import { makeRng } from './appendix-common.js';
+import { makeRng, appendixRoot } from './appendix-common.js';
 
 const REPLACEMENT = String.fromCodePoint(0xfffd);  // U+FFFD
 const hex = (v, width = 2) => v.toString(16).toUpperCase().padStart(width, '0');
@@ -228,6 +228,7 @@ function mountDecode(root, config) {
 
 export function mount(root, config = {}) {
   injectStyle();
+  appendixRoot(root);
   if (config.mode === 'decode') mountDecode(root, config);
   else mountEncode(root, config);
 }

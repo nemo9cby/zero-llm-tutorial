@@ -241,13 +241,13 @@ assert abs(init - np.log(2)) < 1e-12 and abs(hand - 0.5981) < 1e-4
 assert abs(grad_w - (-0.1 * sigmoid(-0.2))) < 1e-8
 ```
 
-真实的 StoryBot 上是不是也一样？下面的本地测试从 `ch06/08_dpo.py` 里取出 `DPODataset`、`get_sequence_logprobs` 和 `compute_dpo_loss`，用发布的 StoryBot 检查点（第 5000 步的模型当策略、预训练完成的模型当参考）在前 4 对真实的偏好数据上，比较原书的 PyTorch 损失与本页的 NumPy `dpo_loss`；还确认了两点：策略等于参考时损失恰为 $\ln 2$；把问题部分也算进对数概率，损失不变，因为同一个问题在两条回答里贡献的对数概率完全相同，在差值里抵消了：
+真实的 StoryBot 上是不是也一样？下面的本地测试从 `ch06/08_dpo.py` 里取出 `DPODataset`、`get_sequence_logprobs` 和 `compute_dpo_loss` 这三个部件。它拿发布的 StoryBot 检查点来算：第 5000 步的模型当策略，预训练完成的模型当参考，在前 4 对真实的偏好数据上，比较原书的 PyTorch 损失与本页的 NumPy `dpo_loss`。测试还确认了三件事。第一，`08_dpo.py` 的 `model` 和 `ref_model` 都从预训练完成的同一个检查点加载，所以训练开始时策略等于参考。第二，策略等于参考时，损失恰为 $\ln 2$。第三，把问题部分也算进对数概率，损失不变：同一个问题在两条回答里贡献的对数概率完全相同，在差值里抵消了。
 
 ```localcheck verify/test_appendix.py::test_e_dpo_loss title="真实 StoryBot：原书的 compute_dpo_loss = 本页的 dpo_loss；初始为 ln 2"
 ```
 
 ::: confusion DPO 的损失里有 π_θ(y_w)，训练时是不是要让 π_θ 先生成回答？
-GRPO 训练时确实要让模型自己生成回答（3.9 节），所以很容易以为 DPO 也一样。其实不用：$y_w$ 和 $y_l$ 是事先准备好的文字（DLFS6 的 `tiny_stories_dpo.json` 里，结局快乐的一条当 $y_w$，悲伤的一条当 $y_l$），$\pi_\theta$ 和 $\pi_{\text{ref}}$ 只负责给这两段固定的文字“打分”，也就是把文字喂进去，算出每个 token 的对数概率再求和，就像 SFT 计算交叉熵那样，一次前向传播就够了，没有任何采样。上面的验证 E-g 只用了四个对数概率，也说明了这一点。可以带走的对照：**SFT 用数据里的回答、以交叉熵打分；GRPO 让策略自己生成、用奖励函数打分；DPO 用事先配好对的回答、以隐式奖励的差打分。**本地测试还检查了 `08_dpo.py` 里确实没有调用生成函数，而 `09_grpo.py` 调用了。
+GRPO 训练时确实要让模型自己生成回答（3.9 节），所以很容易以为 DPO 也一样。其实不用：$y_w$ 和 $y_l$ 是事先准备好的文字。DLFS6 的 `tiny_stories_dpo.json` 里有 144 对，每对共用一个故事开头，`chosen`（$y_w$）是快乐的结局，`rejected`（$y_l$）是悲伤的结局。比如第一对里，找到玩具的 Tim “was so happy”，没找到的 Tim “was very sad”。$\pi_\theta$ 和 $\pi_{\text{ref}}$ 只负责给这两段固定的文字“打分”：把文字喂进去，算出每个 token 的对数概率再求和。这和 SFT 计算交叉熵一样，一次前向传播就够了，没有任何采样。上面的验证 E-g 只用了四个对数概率，也说明了这一点。可以带走的对照：**SFT 用数据里的回答、以交叉熵打分；GRPO 让策略自己生成、用奖励函数打分；DPO 用事先配好对的回答、以隐式奖励的差打分。**本地测试还检查了 `08_dpo.py` 里确实没有调用生成函数，而 `09_grpo.py` 调用了。
 :::
 
 ## E.6 DPO 训练到最后，得到的就是 π*

@@ -5,7 +5,7 @@
    抽样时对所有 b 使用同一批样本（公共随机数），拖动 b 时看到的变化只来自 b 本身。 */
 import { h } from './_lib.js';
 import { lineChart, fmtNum } from './_plot.js';
-import { makeRng, softmax, dot, histogram, stairs, nextId } from './appendix-common.js';
+import { makeRng, softmax, dot, histogram, stairs, nextId, appendixRoot } from './appendix-common.js';
 
 export const PRESETS = {
   uniform: { label: '均匀策略：θ = (0, 0, 0, 0)，r = (0, 0, 1, 0)', theta: [0, 0, 0, 0], r: [0, 0, 1, 0] },
@@ -26,11 +26,22 @@ export function bandit({ theta, r }) {
 }
 
 const B_MIN = -1, B_MAX = 2;
+const BINS = 41;   // 奇数个区间：真梯度正好落在中间那个区间的中点，竖线不会被柱子的边线盖住
+
+/** 直方图的横轴范围：以真梯度为中心、左右各 4 个标准差，区间宽度为 8sd/40。 */
+export function histRange(center, sd) {
+  const w = (8 * sd) / (BINS - 1);
+  return [center - (BINS / 2) * w, center + (BINS / 2) * w];
+}
+
+/** 把 b 显示成最多 4 位小数（滑块的 0.01 步长与 b* 这样的精确值都能看清）。 */
+const fmtB = (x) => String(+x.toFixed(4));
 
 export function mount(root, config = {}) {
+  appendixRoot(root);
   let preset = PRESETS[config.preset] ? config.preset : 'uniform';
   let n = config.n ?? 8;
-  let b = 0;
+  let b = 0;          // 当前的基线；“b = b*”等按钮给出精确值，不受滑块步长的限制
   let seed = 1;
   const M = 400;
 
@@ -40,7 +51,8 @@ export function mount(root, config = {}) {
     [1, 8, 64].map((v) => h('option', { value: v, selected: v === n }, `N = ${v}`)));
   const slider = h('input', { type: 'range', min: B_MIN, max: B_MAX, step: 0.01, value: b, 'aria-label': '基线 b' });
   const bOut = h('output', { style: 'min-width:4.5em;font-variant-numeric:tabular-nums' });
-  const jump = (label, get) => h('button', { type: 'button', onclick: () => { b = get(); slider.value = b; render(); } }, label);
+  const setB = (value) => { b = value; slider.value = String(value); render(); };
+  const jump = (label, get) => h('button', { type: 'button', onclick: () => setB(get()) }, label);
   const stats = h('div', { class: 'w-label', 'aria-live': 'polite', style: 'margin:.3rem 0 .5rem;line-height:1.7' });
   const histBox = h('div');
   const varBox = h('div', { style: 'margin-top:.4rem' });
@@ -57,7 +69,8 @@ export function mount(root, config = {}) {
   const placeholder = [{ name: '', points: [[0, 0], [1, 0]] }];
   const hist = lineChart(histBox, { series: placeholder, yLabel: `${M} 次估计的分布（密度）`, height: 200, table: false });
   const varChart = lineChart(varBox, {
-    series: placeholder, xLabel: '基线 b', yLabel: '单个样本的总方差 V(b)', height: 200, yMin: 0, table: true,
+    series: placeholder, xLabel: '基线 b', yLabel: '单个样本的总方差 V(b)（没有标注的虚线是当前的 b）',
+    height: 200, yMin: 0, table: true,
   });
 
   let model, comp, arms, xRange;
@@ -70,27 +83,27 @@ export function mount(root, config = {}) {
     comp = PRESETS[preset].r.indexOf(Math.max(...PRESETS[preset].r));     // 奖励最高的那一臂
     // 横轴范围按滑块两端（方差最大处）定好，拖动 b 时坐标不动，宽窄的变化一目了然
     const sd = Math.sqrt(Math.max(model.compVar(B_MIN, comp), model.compVar(B_MAX, comp)) / n);
-    xRange = [model.grad[comp] - 4 * sd, model.grad[comp] + 4 * sd];
+    xRange = histRange(model.grad[comp], sd);
     resample();
     const bs = Array.from({ length: 61 }, (_, i) => B_MIN + (i * (B_MAX - B_MIN)) / 60);
     varChart.update({ series: [{ name: 'V(b)', points: bs.map((x) => [x, model.totalVar(x)]) }] });
   };
 
   const render = () => {
-    b = Number(slider.value);
-    bOut.textContent = b.toFixed(2);
-    slider.setAttribute('aria-valuetext', `b = ${b.toFixed(2)}`);
+    bOut.textContent = fmtB(b);
+    slider.setAttribute('aria-valuetext', `b = ${fmtB(b)}`);
     const { S } = model;
     const { r } = PRESETS[preset];
     const est = arms.map((group) => group.reduce((acc, a) => acc + (r[a] - b) * S[a][comp], 0) / n);
     const mean = est.reduce((acc, x) => acc + x, 0) / M;
     const spread = est.reduce((acc, x) => acc + (x - mean) ** 2, 0) / M;
     hist.update({
-      series: [{ name: '估计值的分布', points: stairs(histogram(est, xRange[0], xRange[1], 40)) }],
+      series: [{ name: '估计值的分布', points: stairs(histogram(est, xRange[0], xRange[1], BINS)) }],
       xLabel: `第 ${comp} 号臂那一维的梯度估计`, vLines: [{ x: model.grad[comp], label: '真梯度' }],
     });
+    // 当前 b 的竖线不加文字：它可能贴着右端，文字会伸出图外；图的标题说明了它是什么
     varChart.update({
-      vLines: [{ x: b, label: Math.abs(b - model.bStar) > 0.5 ? '当前 b' : '' }, { x: model.bStar, label: 'b*' }],
+      vLines: [{ x: b }, { x: model.bStar, label: 'b*' }],
       refLines: [{ y: model.totalVar(model.bStar), label: `最小值 ${fmtNum(model.totalVar(model.bStar))}` }],
     });
     stats.replaceChildren(
@@ -103,7 +116,7 @@ export function mount(root, config = {}) {
 
   presetSel.addEventListener('change', () => { preset = presetSel.value; setup(); render(); });
   nSel.addEventListener('change', () => { n = Number(nSel.value); setup(); render(); });
-  slider.addEventListener('input', render);
+  slider.addEventListener('input', () => { b = Number(slider.value); render(); });
   setup();
   render();
 }

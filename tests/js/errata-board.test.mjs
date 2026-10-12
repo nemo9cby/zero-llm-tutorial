@@ -21,7 +21,11 @@ test('locations map to the book parts', () => {
 test('every row of the errata index is classified (no orphan locations)', () => {
   const md = fs.readFileSync(new URL('../../content/errata.md', import.meta.url), 'utf8');
   const rows = md.split('\n').filter((l) => /^\| \[E\d\d\]/.test(l));
-  assert.equal(rows.length, 42);
+  const stated = Number(md.match(/整理出了 (\d+) 个问题/)[1]);       // the count the lede promises
+  assert.equal(rows.length, stated);
+  const ids = rows.map((r) => r.match(/^\| \[(E\d\d)\]/)[1]);
+  assert.deepEqual(ids, Array.from({ length: stated }, (_, i) => `E${String(i + 1).padStart(2, '0')}`));
+  for (const id of ids) assert.ok(md.includes(`<div id="${id.toLowerCase()}"></div>`), `anchor for ${id}`);
   for (const row of rows) {
     const cells = row.split(/(?<!\\)\|/).map((c) => c.trim());   // ['', id, title, location, severity, effect, '']
     assert.ok(partsOf(cells[3]).length > 0, cells[1]);

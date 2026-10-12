@@ -243,7 +243,7 @@ if __name__ == "__main__":
     if sys.argv[1:2] == ["--json"]:
         out = Path(sys.argv[2])
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(summary(), ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        out.write_text(json.dumps(summary(), ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
         print(f"wrote {out}")
     else:
         for rel in sorted(EXPECTED_INVENTORY):

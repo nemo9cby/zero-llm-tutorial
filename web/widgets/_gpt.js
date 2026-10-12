@@ -48,7 +48,7 @@
  */
 
 // ─── WebAssembly SIMD kernels ───────────────────────────────────────────────────────────────────────────────
-// Source: web/data/playground/kernels.wat (compiled with wabt 1.0.39; tests/js/fixtures/playground/compile_kernels.mjs).
+// Source: web/data/playground/kernels.wat, compiled with wabt (tests/js/fixtures/playground/compile_kernels.cjs).
 //   matvec(W, x, y, nIn, nOut)        y[o] = Σ_i W[o·nIn + i]·x[i]                  nIn % 4 == 0
 //   matmul(X, W, Y, n, nIn, nOut)     Y[t·nOut + o] = Σ_i X[t·nIn + i]·W[o·nIn + i]   n % 4 == 0, nOut % 2 == 0
 // Arguments are byte offsets into the module's memory. Each output keeps one f32x4 accumulator that walks i in
@@ -554,16 +554,18 @@ function dotJS(m, w, x, n) {
  * @param {CodeBot} bot
  * @param {number[]} promptIds
  * @param {{temperature?: number, topK?: number, topP?: number, maxNewTokens?: number, seed?: number,
- *          rand?: () => number, stopAtEnd?: boolean, top?: number}} [opts]
+ *          rand?: () => number, stopAtEnd?: boolean, top?: number, cache?: boolean}} [opts]
+ *   cache: false re-runs the whole window for every token, exactly like the book's generate (no KV cache);
+ *          the tokens are the same, because prefill and step are bit-identical.
  * Yields {id, prob, top, step, end, refill, window, computed}:
  *   prob     probability of id in the distribution it was drawn from (after temperature/top-k/top-p)
  *   top      [[id, p], ...] the model's own top candidates at temperature 1 (for display)
  *   end      id is <|endoftext|> and stopAtEnd: the book stops here and does not append it
- *   refill   this token's forward pass re-ran the whole window (the sequence had outgrown T)
+ *   refill   this token's forward pass re-ran the whole window (the sequence had outgrown T, or cache: false)
  *   window   tokens the forward pass saw (≤ T);  computed  positions computed so far (prompt included)
  */
 export function* generate(bot, promptIds, opts = {}) {
-  const { temperature = 1, topK = 0, topP = 1, maxNewTokens = 128, seed = 0, stopAtEnd = true, top = 5 } = opts;
+  const { temperature = 1, topK = 0, topP = 1, maxNewTokens = 128, seed = 0, stopAtEnd = true, top = 5, cache = true } = opts;
   const rand = opts.rand ?? mulberry32(seed);
   const T = bot.cfg.T;
   if (!promptIds.length) throw new RangeError('prompt 至少要有一个 token');
@@ -582,12 +584,12 @@ export function* generate(bot, promptIds, opts = {}) {
     if (end) return;
     seq.push(id);
     if (step === maxNewTokens - 1) return;       // the last token needs no forward pass
-    if (seq.length <= T) {                       // the window still starts at position 0: extend the cache
+    if (cache && seq.length <= T) {              // the window still starts at position 0: extend the cache
       window = seq;
       logits = bot.step(id);
       computed += 1;
       refill = false;
-    } else {                                     // learned positions cannot slide: recompute the last T tokens
+    } else {                                     // no cache, or learned positions cannot slide: recompute the window
       window = seq.slice(-T);
       bot.reset();
       logits = bot.prefill(window);

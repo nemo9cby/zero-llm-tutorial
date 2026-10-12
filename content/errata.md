@@ -57,26 +57,26 @@ pyodide_packages: [numpy, regex]
 | [E26](#e26) | 两个 `count_pairs` 的参数不一样 | codebot、storybot 的 tokenizer.py | 低 | 否 |
 | [E27](#e27) | `merge_rules` 的顺序本身就是数据 | codebot、storybot 的 tokenizer.py | 低 | 否 |
 | [E28](#e28) | `measure_generation_time` 清缓存的条件写反了 | ch05/05_kvcache.py | 低 | 否 |
-| [E29](#e29) | 注释里的 id 930 应为 932 | ch03/03_alpaca.py | 低 | 否 |
-| [E30](#e30) | 两处注释与代码的行为不符 | ch05/05_kvcache.py | 低 | 否 |
-| [E31](#e31) | README 写的是 ch02/10_gpt.py | README.md | 低 | 否 |
-| [E32](#e32) | README 的正误表链接打不开 | README.md | 低 | 否 |
-| [E33](#e33) | `RMSNorm.__init__(self, x)` 的参数名 | ch05/03_rmsnorm.py | 低 | 否 |
-| [E34](#e34) | 注释把头数叫作“ヘッドサイズ” | ch02/08_multi_head.py | 低 | 否 |
-| [E35](#e35) | `loss_grpo.png` 画的是准确率 | ch03/09_grpo.py | 低 | 否 |
-| [E36](#e36) | 字体写死成 macOS 的 Hiragino Sans | ch06/lr_graph.py | 低 | 否 |
-| [E37](#e37) | 训练脚本都没有设随机种子 | ch03、ch06 的训练脚本 | 低 | 否 |
-| [E38](#e38) | `autocast` 写死了 `device_type='cuda'` | ch09/01_pretrain.py | 低 | 否 |
-| [E39](#e39) | 多卡训练的几处日志细节 | ch09/01_pretrain.py | 低 | 否 |
-| [E40](#e40) | 一份与 `pretoken_chunk` 相同的死代码 | storybot/tokenizer.py | 低 | 否 |
-| [E41](#e41) | 压缩率只在前 10,000 个字符上测 | ch01/08_eval.py | 低 | 否 |
-| [E42](#e42) | `model_dpo.pt` 与 WebBot 权重没有发布 | storybot/download.sh；HF | 低 | 否 |
-| [E43](#e43) | 读文本不指定编码，中文 Windows 上静默乱码 | ch03/03_sft、03_alpaca；ch01、ch04、ch06/08 | 低 | 仅中文 Windows |
-| [E44](#e44) | 软字典的 softmax 没有减去最大值 | ch02/01_soft_dict.py | 低 | 否 |
-| [E45](#e45) | RoPE 的 cos/sin 表存进了每一层的检查点 | storybot、webbot 的 model.py | 低 | 否 |
-| [E46](#e46) | GRPO 评估时把“提示 + 回答”整段交给奖励函数 | ch03/09_grpo.py | 低 | 否 |
-| [E47](#e47) | 用 pickle 保存与读取分词规则 | codebot、storybot 的 tokenizer.py | 低 | 否 |
-| [E48](#e48) | README 写 PyTorch 2.x，实际需要 2.5 以上 | README.md；requirements.txt | 低 | 否 |
+| [E29](#e29) | 读文本不指定编码，中文 Windows 上静默乱码 | ch03/03_sft、03_alpaca；ch01、ch04、ch06/08 | 低 | 仅中文 Windows |
+| [E30](#e30) | 软字典的 softmax 没有减去最大值 | ch02/01_soft_dict.py | 低 | 否 |
+| [E31](#e31) | RoPE 的 cos/sin 表存进了每一层的检查点 | storybot、webbot 的 model.py | 低 | 否 |
+| [E32](#e32) | GRPO 评估时把“提示 + 回答”整段交给奖励函数 | ch03/09_grpo.py | 低 | 否 |
+| [E33](#e33) | 用 pickle 保存与读取分词规则 | codebot、storybot 的 tokenizer.py | 低 | 否 |
+| [E34](#e34) | 注释里的 id 930 应为 932 | ch03/03_alpaca.py | 低 | 否 |
+| [E35](#e35) | 两处注释与代码的行为不符 | ch05/05_kvcache.py | 低 | 否 |
+| [E36](#e36) | README 写的是 ch02/10_gpt.py | README.md | 低 | 否 |
+| [E37](#e37) | README 的正误表链接打不开 | README.md | 低 | 否 |
+| [E38](#e38) | README 写 PyTorch 2.x，实际需要 2.5 以上 | README.md；requirements.txt | 低 | 否 |
+| [E39](#e39) | `RMSNorm.__init__(self, x)` 的参数名 | ch05/03_rmsnorm.py | 低 | 否 |
+| [E40](#e40) | 注释把头数叫作“ヘッドサイズ” | ch02/08_multi_head.py | 低 | 否 |
+| [E41](#e41) | `loss_grpo.png` 画的是准确率 | ch03/09_grpo.py | 低 | 否 |
+| [E42](#e42) | 字体写死成 macOS 的 Hiragino Sans | ch06/lr_graph.py | 低 | 否 |
+| [E43](#e43) | 训练脚本都没有设随机种子 | ch03、ch06 的训练脚本 | 低 | 否 |
+| [E44](#e44) | `autocast` 写死了 `device_type='cuda'` | ch09/01_pretrain.py | 低 | 否 |
+| [E45](#e45) | 多卡训练的几处日志细节 | ch09/01_pretrain.py | 低 | 否 |
+| [E46](#e46) | 一份与 `pretoken_chunk` 相同的死代码 | storybot/tokenizer.py | 低 | 否 |
+| [E47](#e47) | 压缩率只在前 10,000 个字符上测 | ch01/08_eval.py | 低 | 否 |
+| [E48](#e48) | `model_dpo.pt` 与 WebBot 权重没有发布 | storybot/download.sh；HF | 低 | 否 |
 
 </div>
 
@@ -102,7 +102,7 @@ assert s["total"] == 38
 assert s["totals"] == {"exact": 30, "repr": 3, "defaultdict": 1, "torch.Size": 3, "stale": 1}
 ```
 
-38 处里只有 1 处真的对不上，它就是下面的 [E29](#e29)。另外 7 处只是写法上的差别，值并没有错。
+38 处里只有 1 处真的对不上，它就是下面的 [E34](#e34)。另外 7 处只是写法上的差别，值并没有错。
 
 ```localcheck verify/test_book_comments.py::test_book_comments_hold title="逐个脚本运行，注释与输出一致（过期的一处必须恰好差在第 30 个 id）"
 ```
@@ -123,7 +123,7 @@ assert s["totals"] == {"exact": 30, "repr": 3, "defaultdict": 1, "torch.Size": 3
 ```listing ch03/09_grpo.py#L110-L118
 ```
 
-按 PPO 的设计，每批数据的第一次更新时两份模型的权重完全相同，比值 ratio 应该处处等于 1，裁剪（clip）还不起作用。可是有了 dropout，ratio 变成了一个随机数。我们拿真实的 SFT 权重 `model_sft.pt`，把 81 道加法题的正确答案当作回答喂进去（共 117 个回答 token），实测在训练模式下有 52% 的 token 的 ratio 落在裁剪区间 [0.8, 1.2] 之外；切到 eval 模式后，这个比例是 0，ratio 与 1 的最大偏差不到 $10^{-5}$。
+按 PPO 的设计，每批数据的第一次更新时两份模型的权重完全相同，比值 ratio 应该处处等于 1，裁剪（clip）还不起作用。可是有了 dropout，ratio 变成了一个随机数。我们拿真实的 SFT 权重 `model_sft.pt`，把 81 道加法题的正确答案当作回答喂进去（共 117 个回答 token），实测在训练模式下，约一半的 token 的 ratio 落在裁剪区间 [0.8, 1.2] 之外（换 20 个随机种子，这个比例在 42% 到 58% 之间，平均 48%）；切到 eval 模式后，这个比例是 0，ratio 与 1 的最大偏差不到 $10^{-5}$。
 
 ```localcheck verify/test_reference.py::test_e01_grpo_policy_updates_in_train_mode title="真实 SFT 权重：训练模式下约一半的 ratio 超出裁剪区间，eval 模式下全部等于 1"
 ```
@@ -362,7 +362,7 @@ batch_bytes = 2 * 32 * 256 * 8             # 预训练一个 batch 的 x 与 y�
 print(f"预训练 20,000 步，cycle 存下的 batch 共 {20_000 * batch_bytes / 2**30:.2f} GiB")
 ```
 
-影响因脚本而异。SFT（1,092 条样本，batch 32，500 步，约 14.6 轮）、GRPO（81 道题分成 32、32、17 三批）、DPO（144 对，batch 8，1,000 步，约 55.6 轮）从第二轮起顺序就固定了。预训练反而不会重放：20,000 步只取了 640,000 个窗口，还不到一轮（共 2,677,142 个窗口）；但 `cycle` 会把这 20,000 个 batch 都留在内存里，多占约 2.4 GiB。
+影响因脚本而异。SFT 的 1,092 条样本每轮分成 35 个 batch，500 步约是 14.3 轮；DPO 的 144 对每轮 18 个 batch，1,000 步约是 55.6 轮；GRPO 的 81 道题每轮分成 32、32、17 三批，500 次迭代约是 167 轮。这三个脚本从第二轮起，每个 batch 的组成和顺序都固定不变。预训练反而不会重放：20,000 步只取了 640,000 个窗口，还不到一轮（共 2,677,142 个窗口）；但 `cycle` 会把这 20,000 个 batch 都留在内存里，多占约 2.4 GiB。
 
 ```localcheck verify/test_reference.py::test_e07_cycle_dataloader_replays_first_epoch_and_keeps_batches title="真实的 DataLoader：第二轮的 batch 与第一轮是同一批对象"
 ```
@@ -557,12 +557,12 @@ assert kept(513).tolist() == [0] and kept(514).tolist() == [0, 256]
 
 ### E15 GRPO 的第 0 次准确率是两次更新之后测的
 
-GRPO 的训练循环里，评估写在两次更新之后（见 [E01](#e01) 中的代码），所以 `accuracies` 的第一个值并不是 SFT 模型的起点，而是已经更新过两次的模型。我们直接测了 SFT 模型 `model_sft.pt` 的 greedy 准确率：81 道题对了 44 道，即 54.3%；研究阶段的一次运行中，脚本记录的“第 0 次”是 55.6%。画出来的曲线因此整体右移了一格。
+GRPO 的训练循环里，评估写在两次更新之后（见 [E01](#e01) 中的代码），所以 `accuracies` 的第一个值并不是 SFT 模型的起点，而是已经更新过两次的模型。我们直接测了 SFT 模型 `model_sft.pt` 的 greedy 准确率：81 道题对了 44 道，即 54.3%；而在研究阶段记录的一次运行中（seed 0，也就是 [E01](#e01) 那张图里的数据），脚本记下的“第 0 次”是 55.6%。画出来的曲线因此整体右移了一格。
 
 ```localcheck verify/test_reference.py::test_e15_sft_greedy_baseline_is_44_of_81 title="SFT 起点：81 道题 greedy 答对 44 道"
 ```
 
-```localcheck verify/test_reference.py::test_e15_grpo_logs_accuracy_after_the_updates title="语法树：评估块排在更新循环之后"
+```localcheck verify/test_reference.py::test_e15_grpo_logs_accuracy_after_the_updates title="语法树：评估块排在更新循环之后；记录的运行里“第 0 次”是 55.56%，SFT 的起点是 54.3%"
 ```
 
 **修法**：在训练循环之前先测一次准确率作为第 0 个点，循环里改成在 `i + 1` 是 `eval_interval` 的倍数时评估。
@@ -666,10 +666,10 @@ assert 4.7e-4 < d.max() < 4.8e-4
 
 `generate_group` 调用 `generate()` 时没有传 `max_new_tokens`，用的是默认值 1000。生成本身不会出错，因为 `generate()` 每步只看最近的 256 个 token；但更新时 `compute_probs` 要把“提示 + 回答”整段送进模型，而 CodeBot 的位置嵌入只有 256 个。提示 22 个 token，回答只要超过 234 个 token，就会触发 `IndexError`。
 
-```localcheck verify/test_reference.py::test_e21_grpo_has_no_length_cap_but_codebot_has_256_positions title="默认 max_new_tokens=1000；超过 256 个 token 的批次让 compute_probs 报 IndexError"
+```localcheck verify/test_reference.py::test_e21_grpo_has_no_length_cap_but_codebot_has_256_positions title="默认 max_new_tokens=1000；超过 256 个 token 的批次让 compute_probs 报 IndexError；SFT 模型答一个数就结束的概率最低 97.6%"
 ```
 
-SFT 之后的模型回答只有 1–8 个 token，所以在书中没有触发；换成更长的任务就会出问题。**修法**：调用时显式传 `max_new_tokens`，让“提示 + 回答”不超过 256。
+书中没有触发，是因为 SFT 之后的模型几乎总是只答一个数就结束。在温度 1 下，81 道题里的每一道，模型回答“0 到 18 中的某个数（1 到 2 个 token），随即输出结束 token”的概率最低也有 97.6%，平均 99.7%。换成需要长回答的任务，就会出问题。**修法**：调用时显式传 `max_new_tokens`，让“提示 + 回答”不超过 256。
 
 <div id="e22"></div>
 
@@ -724,17 +724,18 @@ WebBot 的 5 万词表里，除了 128 个高位单字节，还有 157 个合并
 
 ### E25 用 uint16 存 id，词表不能超过 65,536
 
-编码后的数据用 `np.uint16` 存盘，2 个字节一个 token，比 `int64` 省 4 倍空间。书中的词表最大是 5 万，没有问题；但如果把词表调到 65,536 以上，NumPy 1.26 会回绕（65536 变成 0，70000 变成 4464，只给出一条 DeprecationWarning），NumPy 2 则直接报错：
+编码后的数据用 `np.uint16` 存盘，2 个字节一个 token，只占 `int64` 的四分之一。书中的词表最大是 5 万，没有问题；但如果把词表调到 65,536 以上，id 就放不下了。NumPy 1.x 会把它悄悄回绕成除以 65,536 的余数：65536 变成 0，70000 变成 4464；从 1.24 版起才多了一个 DeprecationWarning（[NumPy 1.24 的发行说明](https://numpy.org/doc/stable/release/1.24.0-notes.html#conversion-of-out-of-bound-python-integers)，我们在 NumPy 1.26.4 上确认过）。NumPy 2 则直接报错：
 
-```verify id=Z.5-h title="NumPy 2：70000 放不进 uint16"
+```verify id=Z.5-h title="70000 放不进 uint16：回绕的话是 4464，NumPy 2 直接报错"
 print("uint16 的最大值：", np.iinfo(np.uint16).max)
+print("70000 回绕后是：", 70000 % 2**16)                 # NumPy 1.x 存进去的值
 try:
     np.array([70000], dtype=np.uint16)
     raised = False
 except OverflowError as e:
     raised = True
-    print("OverflowError:", e)
-assert raised
+    print("NumPy 2：OverflowError:", e)
+assert raised and 70000 % 2**16 == 4464
 ```
 
 **修法**：词表超过 65,536 时改用 `np.uint32`，读取时的 `dtype` 也要同步修改。
@@ -795,9 +796,9 @@ pickle 会保存字典的顺序，所以书中的流程没有问题；但如果�
 ```localcheck verify/test_reference.py::test_e28_measure_generation_time_clears_the_wrong_cache title="连续两次有缓存的测量：cache_offset 从 5 变成 10"
 ```
 
-<div id="e43"></div>
+<div id="e29"></div>
 
-### E43 读文本不指定编码，中文 Windows 上会静默乱码
+### E29 读文本不指定编码，中文 Windows 上会静默乱码
 
 不少脚本用 `open(path)` 读文本文件，没有写 `encoding=`。这时 Python 用操作系统的区域编码；在简体中文的 Windows 上，它是 cp936，也就是 GBK（本机 `locale.getencoding()` 返回的正是 `'cp936'`）。只有开启 Python 的 UTF-8 模式（`PYTHONUTF8=1` 或 `-X utf8`）时，才会按 UTF-8 读取。
 
@@ -811,14 +812,14 @@ print("按 GBK 读  ：", utf8.decode("gbk"))
 assert utf8.decode("gbk") == "O(n虏) time"
 ```
 
-```localcheck verify/test_reference.py::test_e43_text_files_are_opened_with_the_locale_encoding title="5 个脚本用区域编码读文件；按 GBK 读 SFT 数据有 2 条变成乱码，读 TinyStories 则报错"
+```localcheck verify/test_reference.py::test_e29_text_files_are_opened_with_the_locale_encoding title="5 个脚本用区域编码读文件；按 GBK 读 SFT 数据有 2 条变成乱码，读 TinyStories 则报错"
 ```
 
 **修法**：一律写 `open(path, encoding="utf-8")`，或者运行时设置 `PYTHONUTF8=1`。本教程给出的所有命令都设置了它。
 
-<div id="e44"></div>
+<div id="e30"></div>
 
-### E44 软字典的 softmax 没有减去最大值
+### E30 软字典的 softmax 没有减去最大值
 
 第 2 章开头的软字典直接对相似度取指数：
 
@@ -839,23 +840,23 @@ assert np.isnan(naive).all() and np.allclose(stable, [0.5, 0.5])
 
 第 2 章后面的代码改用 PyTorch 的 `F.softmax`，它在内部做了减去最大值这一步。**修法**：`np.exp(similarity - np.max(similarity))`，结果不变（softmax 对平移不变），也不会溢出。
 
-```localcheck verify/test_reference.py::test_e44_soft_dictionary_softmax_overflows title="书中的 soft_dictionary：查询 (100, 100, 100) 时结果是 NaN"
+```localcheck verify/test_reference.py::test_e30_soft_dictionary_softmax_overflows title="书中的 soft_dictionary：查询 (100, 100, 100) 时结果是 NaN"
 ```
 
-<div id="e45"></div>
+<div id="e31"></div>
 
-### E45 RoPE 的 cos/sin 表存进了每一层的检查点
+### E31 RoPE 的 cos/sin 表存进了每一层的检查点
 
 RoPE 预先算好的 cos、sin 表是用 `register_buffer` 注册的，默认会写进 `state_dict`；6 个 Transformer 块共用一个 RoPE 模块，表却在每一层的键下各出现一次。这些表完全由 θ 和 `max_context_len` 算出，本不需要保存；保存下来反而带来一个限制：想换一个更长的 `max_context_len`（比如第 8 章的上下文扩展），用原来的检查点加载会因为形状不同而报错。
 
-```localcheck verify/test_reference.py::test_e45_rope_tables_are_saved_into_every_layer title="3 层的模型：state_dict 里有 6 个 cos/sin 表；换一个上下文长度加载就报 size mismatch"
+```localcheck verify/test_reference.py::test_e31_rope_tables_are_saved_into_every_layer title="3 层的模型：state_dict 里有 6 个 cos/sin 表；换一个上下文长度加载就报 size mismatch"
 ```
 
 **修法**：注册时写 `self.register_buffer("cos_cache", cos, persistent=False)`，sin 表同理。
 
-<div id="e46"></div>
+<div id="e32"></div>
 
-### E46 GRPO 评估时把“提示 + 回答”整段交给奖励函数
+### E32 GRPO 评估时把“提示 + 回答”整段交给奖励函数
 
 训练时，`generate_group` 会先把提示切掉，只把回答交给奖励函数（第 85 行 `response = full_text[len(prompt):]`）；评估时却直接用了 `generate()` 的返回值，而它包含提示：
 
@@ -872,18 +873,18 @@ print("0+5=、回答为空：得分 =", calculate_reward(5, template.format(0, 5
 assert sum(empty) == 0 and calculate_reward(5, template.format(0, 5)) == 1.0
 ```
 
-```localcheck verify/test_reference.py::test_e46_grpo_evaluation_scores_prompt_plus_response title="源码中训练与评估的两种写法；书中的奖励函数在 0+5= 上给出假阳性"
+```localcheck verify/test_reference.py::test_e32_grpo_evaluation_scores_prompt_plus_response title="源码中训练与评估的两种写法；书中的奖励函数在 0+5= 上给出假阳性"
 ```
 
 **修法**：评估时也写 `response = generate(...)[len(prompt):]`。
 
-<div id="e47"></div>
+<div id="e33"></div>
 
-### E47 用 pickle 保存与读取分词规则
+### E33 用 pickle 保存与读取分词规则
 
 `BPETokenizer.load_from` 用 `pickle.load` 读取 `merge_rules.pkl`，而这些文件要从网上下载。Python 的文档明确提醒：pickle 不安全，只能读取你信任的数据，因为反序列化时可以执行任意代码（[pickle 模块的文档](https://docs.python.org/3/library/pickle.html)）。我们检查了三个随书发布的文件：里面只有构造字典与整数元组的操作码，没有导入或调用任何函数，所以它们本身是安全的。
 
-```localcheck verify/test_reference.py::test_e47_shipped_merge_rules_pickles_hold_only_data title="三个 merge_rules.pkl 只含数据操作码"
+```localcheck verify/test_reference.py::test_e33_shipped_merge_rules_pickles_hold_only_data title="三个 merge_rules.pkl 只含数据操作码"
 ```
 
 **修法**：把规则存成 JSON 列表 `[[id1, id2, new_id], ...]`。这样既不会执行代码，也保留了顺序（[E27](#e27)）。
@@ -892,39 +893,39 @@ assert sum(empty) == 0 and calculate_reward(5, template.format(0, 5)) == 1.0
 
 这一组都是小问题，修法也都只有一两行。它们由同一个本地测试逐条核对源码，那个测试的源码可以在本节末尾展开。
 
-<div id="e29"></div><div id="e30"></div><div id="e31"></div><div id="e32"></div><div id="e33"></div><div id="e34"></div><div id="e35"></div><div id="e36"></div><div id="e37"></div><div id="e38"></div><div id="e39"></div><div id="e40"></div><div id="e41"></div><div id="e42"></div><div id="e48"></div>
+<div id="e34"></div><div id="e35"></div><div id="e36"></div><div id="e37"></div><div id="e38"></div><div id="e39"></div><div id="e40"></div><div id="e41"></div><div id="e42"></div><div id="e43"></div><div id="e44"></div><div id="e45"></div><div id="e46"></div><div id="e47"></div><div id="e48"></div>
 
 | 编号 | 位置 | 问题 | 修法 |
 |---|---|---|---|
-| E29 | ch03/03_alpaca.py 第 32 行 | 注释里的第 30 个 id 写的是 930（`'alize'`），实际输出是 932（`' you'`）。这行注释来自 2025-12-18 的首次提交，`merge_rules.pkl` 则是 2026-01-07 才提交的（[验证 Z.2-a](#v-Z.2-a)） | 改成 932 |
-| E30 | ch05/05_kvcache.py 第 116、301 行 | 注释“KVキャッシュ使用時は不要”说用缓存时不需要掩码，但 prefill 需要，代码也加了；“固定シード”只固定了起始 token，文件里没有设置随机种子，模型权重每次运行都不同；文件末尾被注释掉的一致性检查用到了已经删除的变量 `max_new_tokens`，取消注释就会报 `NameError` | 注释改成“decode 時は不要”；加 `torch.manual_seed`；补上 `max_new_tokens` |
-| E31 | README.md | 运行示例写的是 `python ch02/10_gpt.py`，实际文件名是 `10_gpt2.py` | 改文件名 |
-| E32 | README.md | 正误表链接 `…/wiki/errata` 不存在，2026-10-11 访问时被重定向到仓库首页 | 本页 |
-| E33 | ch05/03_rmsnorm.py 第 6 行 | `__init__(self, x)` 的参数其实是维数，PR #6 建议改名为 `embed_dim` | 改名 |
-| E34 | ch02/08_multi_head.py 第 66 行 | 注释把 H（头数）叫作“ヘッドサイズ”，而 nanoGPT 的 `head_size` 指每个头的维数 D（见[术语对照](glossary.html)） | 改成“ヘッド数” |
-| E35 | ch03/09_grpo.py 第 215 行 | 文件名 `loss_grpo.png`，画的却是准确率 | 改成 `acc_grpo.png` |
-| E36 | ch06/lr_graph.py 第 5 行 | 字体写死成 macOS 的 `'Hiragino Sans'`。没有这款字体的系统（比如本机的 Windows）会退回 DejaVu Sans，它没有日文字形，图上的日文显示成方块 | 按平台选择，或用注释里的 `'Yu Gothic'` |
-| E37 | ch03/01、03_sft、09；ch06/05、08 | 训练脚本都没有设随机种子，结果不可复现（只有 ch09/01 设了） | 开头加 `torch.manual_seed(0)` |
-| E38 | ch09/01_pretrain.py 第 86、177 行 | `autocast(device_type='cuda')` 写死，在没有 CUDA 的机器上不会生效，只留下一条警告，计算悄悄地回到 float32 | 用 `device.type` |
-| E39 | ch09/01_pretrain.py 第 31、123、194 行 | `is_main` 用的是 `LOCAL_RANK`，多机时每台机器都有一个“主进程”，wandb、评估、保存会重复；记录的 `effective_batch_size` 没有乘卡数；`train_loss` 只是 rank 0 最后一个 micro-batch 的值 | 用全局 `RANK`；乘 `world_size`；对 micro-batch 求平均再 all-reduce |
-| E40 | storybot/tokenizer.py 第 79–97 行 | `process_single_chunk` 与 `pretoken_chunk` 的函数体完全相同，前者从未被调用 | 删除 |
-| E41 | ch01/08_eval.py 第 24、38–49 行 | 压缩率只在前 10,000 个字符上测（2.12），全语料是 2.42；与 tiktoken 比较的代码写在字符串里，永远不会执行 | 用全语料，或注明样本 |
-| E48 | README.md 第 26 行 | 写的是“PyTorch 2.x”，但 `webbot/model.py` 用了 `enable_gqa`，需要 2.5 以上；commit `f85907f`（2026-04-10）只改了 requirements.txt 与 pyproject.toml | README 写明 2.5 以上 |
-| E42 | storybot/download.sh；HF | `download.sh` 列出了 `storybot/model_dpo.pt`，WebBot 也没有发布权重：2026-10-11 访问 HF，这两个文件都返回 404。`ch06/09_llm_judge.py` 因此必须先跑 `08_dpo.py` | 先训练再评估 |
+| E34 | ch03/03_alpaca.py 第 32 行 | 注释里的第 30 个 id 写的是 930（`'alize'`），实际输出是 932（`' you'`）。这行注释来自 2025-12-18 的首次提交，`merge_rules.pkl` 则是 2026-01-07 才提交的（[验证 Z.2-a](#v-Z.2-a)） | 改成 932 |
+| E35 | ch05/05_kvcache.py 第 116、301 行 | 注释“KVキャッシュ使用時は不要”说用缓存时不需要掩码，但 prefill 需要，代码也加了；“固定シード”只固定了起始 token，文件里没有设置随机种子，模型权重每次运行都不同；文件末尾被注释掉的一致性检查用到了已经删除的变量 `max_new_tokens`，取消注释就会报 `NameError` | 注释改成“decode 時は不要”；加 `torch.manual_seed`；补上 `max_new_tokens` |
+| E36 | README.md | 运行示例写的是 `python ch02/10_gpt.py`，实际文件名是 `10_gpt2.py` | 改文件名 |
+| E37 | README.md | 正误表链接 `…/wiki/errata` 不存在，2026-10-11 访问时被重定向到仓库首页 | 本页 |
+| E38 | README.md 第 26 行 | 写的是“PyTorch 2.x”，但 `webbot/model.py` 用了 `enable_gqa`，需要 2.5 以上；commit `f85907f`（2026-04-10）只改了 requirements.txt 与 pyproject.toml | README 写明 2.5 以上 |
+| E39 | ch05/03_rmsnorm.py 第 6 行 | `__init__(self, x)` 的参数其实是维数，PR #6 建议改名为 `embed_dim` | 改名 |
+| E40 | ch02/08_multi_head.py 第 66 行 | 注释把 H（头数）叫作“ヘッドサイズ”，而 nanoGPT 的 `head_size` 指每个头的维数 D（见[术语对照](glossary.html)） | 改成“ヘッド数” |
+| E41 | ch03/09_grpo.py 第 215 行 | 文件名 `loss_grpo.png`，画的却是准确率 | 改成 `acc_grpo.png` |
+| E42 | ch06/lr_graph.py 第 5 行 | 字体写死成 macOS 的 `'Hiragino Sans'`。没有这款字体的系统（比如本机的 Windows）会退回 DejaVu Sans，它没有日文字形，图上的日文显示成方块 | 按平台选择，或用注释里的 `'Yu Gothic'` |
+| E43 | ch03/01、03_sft、09；ch06/05、08 | 训练脚本都没有设随机种子，结果不可复现（只有 ch09/01 设了） | 开头加 `torch.manual_seed(0)` |
+| E44 | ch09/01_pretrain.py 第 86、177 行 | `autocast(device_type='cuda')` 写死，在没有 CUDA 的机器上不会生效，只留下一条警告，计算悄悄地回到 float32 | 用 `device.type` |
+| E45 | ch09/01_pretrain.py 第 31、123、194 行 | `is_main` 用的是 `LOCAL_RANK`，多机时每台机器都有一个“主进程”，wandb、评估、保存会重复；记录的 `effective_batch_size` 没有乘卡数；`train_loss` 只是 rank 0 最后一个 micro-batch 的值 | 用全局 `RANK`；乘 `world_size`；对 micro-batch 求平均再 all-reduce |
+| E46 | storybot/tokenizer.py 第 79–97 行 | `process_single_chunk` 与 `pretoken_chunk` 的函数体完全相同，前者从未被调用 | 删除 |
+| E47 | ch01/08_eval.py 第 24、38–49 行 | 压缩率只在前 10,000 个字符上测（2.12），全语料是 2.42；与 tiktoken 比较的代码写在字符串里，永远不会执行 | 用全语料，或注明样本 |
+| E48 | storybot/download.sh；HF | `download.sh` 列出了 `storybot/model_dpo.pt`，WebBot 也没有发布权重：2026-10-11 访问 HF，这两个文件都返回 404。`ch06/09_llm_judge.py` 因此必须先跑 `08_dpo.py` | 先训练再评估 |
 
 ```localcheck verify/test_reference.py::test_z6_comment_doc_and_portability_facts title="逐条核对源码中的这些写法"
 ```
 
-```localcheck verify/test_reference.py::test_e36_hiragino_falls_back_to_a_font_without_japanese title="E36：找不到 Hiragino Sans 时，matplotlib 退回的字体里没有日文字形"
+```localcheck verify/test_reference.py::test_e42_hiragino_falls_back_to_a_font_without_japanese title="E42：找不到 Hiragino Sans 时，matplotlib 退回的字体里没有日文字形"
 ```
 
-```localcheck verify/test_reference.py::test_e38_cuda_autocast_does_nothing_on_cpu title="E38：在 CPU 上，autocast('cuda') 里的矩阵乘法仍是 float32，并给出警告"
+```localcheck verify/test_reference.py::test_e44_cuda_autocast_does_nothing_on_cpu title="E44：在 CPU 上，autocast('cuda') 里的矩阵乘法仍是 float32，并给出警告"
 ```
 
-```localcheck verify/test_reference.py::test_e41_compression_on_the_first_10k_chars_vs_whole_corpus title="E41：前 10,000 个字符 2.1236，全语料 2.4229"
+```localcheck verify/test_reference.py::test_e47_compression_on_the_first_10k_chars_vs_whole_corpus title="E47：前 10,000 个字符 2.1236，全语料 2.4229"
 ```
 
-```localcheck verify/test_reference.py::test_e42_download_script_lists_unpublished_dpo_model title="E42：download.sh 与 09_llm_judge.py 都引用了 model_dpo.pt"
+```localcheck verify/test_reference.py::test_e48_download_script_lists_unpublished_dpo_model title="E48：download.sh 与 09_llm_judge.py 都引用了 model_dpo.pt"
 ```
 
 ## Z.7 已经修好的问题
@@ -936,7 +937,7 @@ assert sum(empty) == 0 and calculate_reward(5, template.format(0, 5)) == 1.0
 | `8b3911f` | KV cache 的 prefill 阶段没有加因果掩码。这个错误用只有 1 个 token 的提示测不出来，因为 1 个 token 不需要掩码 |
 | `1760066` | 第 6 章评估时的 token 计数（`y.numel()`）与 autocast 的 dtype |
 | `6855e70` | RoPE 改为在 float32 下计算 |
-| `c240183` | 简化了因果掩码的注释和条件式（E30 的注释就是这次留下的） |
+| `c240183` | 简化了因果掩码的注释和条件式（E35 的注释就是这次留下的） |
 
 issue #4 报告的 `ch06/07_llm_judge.py` 第 21 行的非法字符 `ß`，在现在的代码里也已经不存在了。
 
@@ -945,9 +946,9 @@ issue #4 报告的 `ch06/07_llm_judge.py` 第 21 行的非法字符 `ß`，在�
 
 ## 小结
 
-48 个问题里，真正影响书中结果的只有少数几个，影响最大的是 E01：GRPO 更新时开着 dropout，一行 `model.eval()` 就能在同样的迭代次数里把加法准确率从 70% 左右提到 95%。其次是两个会让脚本跑不起来的问题：HF 权重的键名（E02），以及 Windows 上的 CRLF（E03）。其余大多是在边界情况下静默出错的问题。它们的共同特点是“不报错”：位置被冻结（E04）、位置被广播（E05）、掩码缺失（E06）、洗牌失效（E07）、错误被吞掉（E09）。这也是我们坚持给每个结论配一个可以重跑的检查的原因：不报错的问题，只有去测才会发现。
+48 个问题里，真正影响书中结果的只有少数几个，影响最大的是 E01：GRPO 更新时开着 dropout，一行 `model.eval()` 就能在同样的迭代次数里把加法准确率从 70% 左右提到 95%。其次是两个只在特定条件下出现、后果却不小的问题：HF 权重的键名对不上，第 6 章的脚本一加载权重就报错（E02）；Windows 上的 CRLF 检出则会悄悄改变 BPE 学到的词表（E03）。其余大多是在边界情况下静默出错的问题。它们的共同特点是“不报错”：位置被冻结（E04）、位置被广播（E05）、掩码缺失（E06）、洗牌失效（E07）、错误被吞掉（E09）。这也是我们坚持给每个结论配一个可以重跑的检查的原因：不报错的问题，只有去测才会发现。
 
-这一页的问题，大多来自把代码放到书中没有设想过的场景里：更长的输入、不同的平台、拿去对接别的测试。下一页的 [CS336 对照总表](cs336.html) 就是这样一个场景：我们把 DLFS6 的实现接到斯坦福 CS336 的测试上，看看哪些能通过，哪些不能，以及为什么。
+这一页的问题，大多来自把代码放到书中没有设想过的场景里：更长的输入、不同的平台、拿去对接别的测试。[CS336 对照总表](cs336.html)记录的就是最后一种：我们把 DLFS6 的实现接到斯坦福 CS336 的测试上，看哪些能通过、哪些不能，以及为什么。
 
 本章所学的内容：
 
@@ -959,4 +960,4 @@ issue #4 报告的 `ch06/07_llm_judge.py` 第 21 行的非法字符 `ß`，在�
 - 裸 `except` 能把一个编程错误变成“所有回答都错”，训练却照常进行（[验证 Z.4-d](#v-Z.4-d)）。
 - 概率空间的 ratio 在 p = 1e-8 时只有 0.5；对数空间没有这个问题（[验证 Z.5-c](#v-Z.5-c)）。
 
-下一页，我们换一个角度：不再找问题，而是把 DLFS6 的每个部件与 CS336 一一对应起来。
+这是本书的最后一页。如果你在原书代码里发现了新的问题，不妨照这一页的格式记下来：一个最小复现、一个修法，再加一个谁都能重跑的检查。

@@ -63,7 +63,7 @@ export function mount(root, config = {}) {
   const presetSel = h('select', { 'aria-label': '预置的调度参数' },
     Object.entries(PRESETS).map(([k, p]) => h('option', { value: k }, p.label)));
   presetSel.value = PRESETS[config.preset] ? config.preset : 'storybot';
-  const warmIn = h('input', { type: 'range', min: 0, max: 20, step: 0.5, 'aria-label': '预热占全程的百分比' });
+  const warmIn = h('input', { type: 'range', min: 0, 'aria-label': '预热的步数' });
   const minIn = h('input', { type: 'range', min: 0, max: 50, step: 1, 'aria-label': '余弦退火的下限（占最大学习率的百分比）' });
   const atIn = h('input', { type: 'range', min: 0, max: 1000, step: 1, value: 500, 'aria-label': '查看某一步的学习率' });
   const warmLabel = h('b'), minLabel = h('b'), atLabel = h('b');
@@ -72,15 +72,18 @@ export function mount(root, config = {}) {
   root.append(
     h('div', { class: 'ctrl' },
       h('label', {}, '预置参数', presetSel),
-      h('label', {}, h('span', {}, '预热占全程 ', warmLabel), warmIn),
+      h('label', {}, h('span', {}, '预热 ', warmLabel), warmIn),
       h('label', {}, h('span', {}, '余弦的下限 ', minLabel), minIn),
       h('label', {}, h('span', {}, '查看第 ', atLabel, ' 步'), atIn)),
     chartBox, stats);
 
   let chart = null;
+  // 预热按步数调：最多到全程的一半；长训练每格 100 步（各预置的预热步数都是它的整数倍）
   const loadPreset = () => {
     const p = PRESETS[presetSel.value];
-    warmIn.value = ((p.warmup / p.total) * 100).toFixed(1);
+    warmIn.max = Math.floor(p.total / 2);
+    warmIn.step = p.total > 2000 ? 100 : 1;
+    warmIn.value = p.warmup;
     minIn.value = Math.round(p.minRatio * 100);
     atIn.max = p.total;
     atIn.value = Math.round(p.total / 2);
@@ -89,9 +92,9 @@ export function mount(root, config = {}) {
   function render() {
     const p = PRESETS[presetSel.value];
     const total = p.total;
-    const warmup = Math.round((+warmIn.value / 100) * total);
+    const warmup = Math.min(Math.round(+warmIn.value), total);
     const minRatio = +minIn.value / 100;
-    warmLabel.textContent = `${(+warmIn.value).toFixed(1)}%（${warmup} 步）`;
+    warmLabel.textContent = `${warmup.toLocaleString('en-US')} 步（全程的 ${((100 * warmup) / total).toFixed(1)}%）`;
     minLabel.textContent = `${minRatio * 100}%`;
     const d2z = (it) => getLr(it, p.maxLr, warmup, total);
     const cos = (it) => cosineLr(it, p.maxLr, warmup, total, minRatio);
@@ -103,9 +106,9 @@ export function mount(root, config = {}) {
       { name: '余弦', points: xs.map((x) => [x, cos(x)]) },
     ];
     const yFormat = p.maxLr < 0.01 ? (v) => (v === 0 ? '0' : v.toExponential(1)) : (v) => +v.toFixed(3);
-    const showLabel = warmup / total >= 0.08;     // 预热段太窄时，标签会压在曲线上
+    // 预热结束处只画一条竖线、不加文字：竖线顶端正是两条曲线的最高点，文字会压在曲线上（步数已写在滑块上）
     const opts = { series, xLabel: 'iteration', yLabel: '学习率', height: 240, yMin: 0, table: false, yFormat,
-      vLines: warmup > 0 ? [{ x: warmup, label: showLabel ? '预热结束' : '' }] : [] };
+      vLines: warmup > 0 ? [{ x: warmup, label: '' }] : [] };
     if (!chart) chart = lineChart(chartBox, opts); else chart.update(opts);
 
     const at = Math.min(+atIn.value, total);

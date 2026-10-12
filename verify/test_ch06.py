@@ -66,7 +66,8 @@ def test_book_adamw_matches_torch(dlfs6_path):
     diff = (cs336_optimize(book["AdamW"]) - cs336_optimize(torch.optim.AdamW)).abs().max().item()
     print(f"原书 AdamW 与 torch.optim.AdamW，1000 步后参数的最大差: {diff:.2e}")
     assert diff < 1e-4   # CS336 的容差
-    assert diff < 2e-5   # 实际只差在 float32 的舍入顺序上
+    # 正文写的 4.8e-6（测试机上是 4.77e-6）：两者只差在 float32 的舍入顺序上，不是逐位相同
+    assert 1e-6 < diff < 1e-5
 
 
 def test_numpy_adamw_matches_torch():
@@ -213,8 +214,12 @@ def test_cpu_bf16_benchmark_record(dlfs6_path):
     # 在你的机器上重测一次（batch 小一些）；只有与记录是同一型号的 CPU 时才断言快慢
     fp32 = bench.seconds_per_step(autocast=False, batch=2, steps=2)
     bf16 = bench.seconds_per_step(autocast=True, batch=2, steps=2)
-    print(f"本机: fp32 {fp32:.3f} s/step，bf16 autocast {bf16:.3f} s/step（{platform.processor()}）")
+    flags = {name: getattr(torch.cpu, f"_is_{name}_supported", lambda: None)()
+             for name in ("avx512", "avx512_bf16", "amx_tile")}
+    print(f"本机: fp32 {fp32:.3f} s/step，bf16 autocast {bf16:.3f} s/step（{platform.processor()}，{flags}）")
     if platform.processor() == rec["provenance"]["processor"]:
+        # 记录用的 CPU（i7-11700F）：有 AVX-512，但没有 AVX512-BF16 和 AMX，bf16 的矩阵乘只能模拟
+        assert flags == {"avx512": True, "avx512_bf16": False, "amx_tile": False}
         assert bf16 > fp32
 
 
@@ -309,6 +314,33 @@ def test_checkpoint_losses_match_record(dlfs6_path):
         assert abs(measured - c["val_loss_8192"]) < 1e-4
     loss = {c["iter"]: c["val_loss"] for c in rec["checkpoints"]}
     assert loss[5000] <= 2.00 and loss[40000] <= 1.45           # CS336 的两条及格线
+
+
+def test_val_sample_record(dlfs6_path):
+    # 记录（verify/_ch06_valsample.py 生成）：整个验证集的 21,351 个窗口里随机抽的 2048 个
+    import _ch06_valsample as vs
+
+    rec = read_record("val_sample.json")
+    data = vs.validation_data()
+    n_windows = (len(data) - 1) // 256
+    assert rec["validation"]["n_windows"] == n_windows == 21_351
+
+    # 原书 evaluate() 的循环（get_batch(random=False)）取的也正好是这 21,351 个窗口
+    get_batch = load_defs("ch06/05_pretrain.py", ["get_batch"])["get_batch"]
+    n_book = 0
+    for b in range((len(data) - 256 - 1) // 256 // 32 + 1):
+        x, _ = get_batch(data, 256, 32, torch.device("cpu"), random=False, offset=b * 32 * 256)
+        if x is None:
+            break
+        n_book += len(x)
+    assert n_book == n_windows
+
+    # 抽样只由种子决定；重算其中 8 个窗口，与记录一致
+    windows = vs.sampled_windows(n_windows, rec["sample"]["n"], rec["sample"]["seed"])
+    final = next(c for c in rec["checkpoints"] if c["iter"] == 40000)
+    assert len(final["window_losses"]) == len(windows) == 2048
+    again = vs.window_losses(load_storybot(STORYBOT / "model_pretrain.pt"), data, windows[:8])
+    assert np.allclose(again, final["window_losses"][:8], atol=1e-4)
 
 
 def test_storybot_size_and_optimizer(dlfs6_path):
@@ -494,6 +526,8 @@ def test_dpo_masks_on_real_model(dlfs6_path):
               f"{np.mean([a for a, _ in first]):.2f} 对 {np.mean([b for _, b in first]):.2f}")
         assert (round(first[0][0], 1), round(first[0][1], 1)) == (-12.2, -1.8)
         assert (round(np.mean([a for a, _ in first]), 1), round(np.mean([b for _, b in first]), 1)) == (-14.4, -3.3)
+        # 96 条的两个回答以同一个 token 开头：这个 token 的对数概率在两者之差里正好抵消
+        assert sum(tok.encode(d["chosen"])[0] == tok.encode(d["rejected"])[0] for d in everything) == 96
 
         # 长度：按对数概率之和，参考模型只在 9/144 条上“偏好” chosen；按每个 token 的平均，是 91/144
         C, CM, R, RM = _dpo_batch(ns, tok, everything, 96)

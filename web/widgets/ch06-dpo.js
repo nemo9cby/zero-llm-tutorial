@@ -23,7 +23,7 @@ function injectStyle() {
 .w-ch06-dpo input[type=range] { width: 100%; margin: 0; accent-color: var(--ai); }
 .w-ch06-dpo .presets { display: flex; flex-wrap: wrap; gap: .3rem; margin: .5rem 0; }
 .w-ch06-dpo .presets button { font-size: .8rem; padding: .1rem .5rem; }
-.w-ch06-dpo .read { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: .1rem 1rem; font-size: .88rem; color: var(--ink-2); margin: .5rem 0; }
+.w-ch06-dpo .read { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr)); gap: .1rem 1.2rem; font-size: .88rem; color: var(--ink-2); margin: .5rem 0; }
 .w-ch06-dpo .read b { color: var(--ink); font-variant-numeric: tabular-nums; }
 `));
 }

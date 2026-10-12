@@ -3,7 +3,7 @@
    每个回答一行：奖励滑块、π_ref 与 π* 的条形、隐式奖励（β 乘以 π* 与 π_ref 之比的对数）；下方是 Z、KL 与一对回答的偏好概率。
    计算与验证 E-c 到 E-f 相同。 */
 import { h } from './_lib.js';
-import { nextId } from './appendix-common.js';
+import { nextId, appendixRoot } from './appendix-common.js';
 
 /** π*(y) = π_ref(y)·e^(r(y)/β) / Z，用对数域计算以免 β 很小时溢出；同时返回 log Z。 */
 export function optimalPolicy(piRef, r, beta) {
@@ -54,6 +54,7 @@ function makeBar(label, color) {
 
 export function mount(root, config = {}) {
   injectStyle();
+  appendixRoot(root);
   const piRef = config.pi_ref ?? [0.4, 0.3, 0.2, 0.1];
   const r = [...(config.r ?? [0, 1, 2, 0.5])];
   let logBeta = Math.log10(config.beta ?? 0.5);
