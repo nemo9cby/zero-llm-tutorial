@@ -10,5 +10,11 @@
   "steps": [
    "01_pretrain"
   ]
+ },
+ "storybot-h100": {
+  "steps": [
+   "05_pretrain",
+   "08_dpo"
+  ]
  }
 }
