@@ -74,6 +74,11 @@ async function checkPage(browser, base, slug) {
   })));
   for (const w of widgets) if (!w.mounted) problems.push(`widget ${w.name} did not mount`);
 
+  // KaTeX renders a formula it cannot parse as red source text (throwOnError: false): count those.
+  const badMath = await page.$$eval('.katex-error, .math-error', (els) =>
+    els.map((e) => `${(e.getAttribute('title') || 'parse error').slice(0, 120)} :: ${e.textContent.slice(0, 60)}`));
+  for (const m of badMath) problems.push(`math: ${m}`);
+
   const overflow = async (label) => {
     const wide = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     if (wide > 1) problems.push(`horizontal overflow ${wide}px at ${label}`);

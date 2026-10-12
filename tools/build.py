@@ -293,6 +293,22 @@ CUSTOM_FENCE_RE = re.compile(r"^(`{3,}|~{3,})(listing|verify|localcheck|widget)\
 VERIFY_RE = re.compile(r"^```verify[ \t]+(.*?)\n(.*?)^```[ \t]*$", re.S | re.M)
 
 
+CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def check_control_chars() -> None:
+    """A collapsed escape (e.g. \\a -> BEL, \\b -> backspace) corrupts formulas and code invisibly."""
+    bad = []
+    for path in [*CONTENT.glob("*.md"), *(WEB / "widgets").glob("*.js"), *(WEB / "js").glob("*.js")]:
+        for i, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+            m = CONTROL_RE.search(line)
+            if m:
+                bad.append(f"{path.relative_to(ROOT)}:{i}: control character U+{ord(m.group()):04X}")
+    if bad:
+        raise BuildError("control characters in sources (an escape sequence was probably collapsed):\n  "
+                         + "\n  ".join(bad))
+
+
 def check_fences(slug: str, body: str) -> None:
     """A backtick inside a ```-fence info string makes CommonMark treat the line as text; the next
     ``` then opens a stray block that swallows the following content. Refuse such sources."""
@@ -431,6 +447,7 @@ def toc_html(chapters: list[Chapter]) -> str:
 
 
 def build(only: str | None, run: bool, out: Path) -> None:
+    check_control_chars()
     chapters = load_chapters(only)
     commit = dlfs6_commit()
     template = (WEB / "template.html").read_text(encoding="utf-8")
