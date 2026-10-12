@@ -305,7 +305,7 @@ def update_index(out_root: Path, entry: dict) -> None:
     index = json.loads(path.read_text(encoding="utf-8")) if path.is_file() else {"checkpoints": []}
     rest = [c for c in index["checkpoints"] if c["name"] != entry["name"]]
     index["checkpoints"] = sorted(rest + [entry], key=lambda c: (c.get("order", 99), c["name"]))
-    path.write_text(json.dumps(index, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(index, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
 
 
 def main() -> None:
@@ -341,10 +341,12 @@ def main() -> None:
         "total_bytes": len(blob), "sha256": hashlib.sha256(blob).hexdigest(),
         "shards": shards, "tensors": table,
     }
-    (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+    (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1) + "\n", encoding="utf-8",
+                                       newline="\n")
     ref = reference(cfg, sd, recon, args.threads)
     ref["name"] = args.name
-    (out / "ref.json").write_text(json.dumps(ref, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8")
+    (out / "ref.json").write_text(json.dumps(ref, ensure_ascii=False, separators=(",", ":")) + "\n", encoding="utf-8",
+                                  newline="\n")
     update_index(args.out, {
         "name": args.name, "label": args.label or args.name, "description": args.description,
         "template": None if args.template == "none" else args.template, "order": args.order,

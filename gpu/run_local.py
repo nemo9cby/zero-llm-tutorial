@@ -156,7 +156,7 @@ def update_index(runs_dir: Path, run: str, stem: str | None) -> None:
     if stem and stem not in steps:
         steps.append(stem)
     runs_dir.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8")
+    path.write_text(json.dumps(index, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
 
 
 def register(runs_dir: Path, run: str) -> list[str]:
@@ -179,7 +179,7 @@ def prepare_script(work: Path, script: str, patches: list, pristine: Path | None
     if not patches:
         shutil.copy2(src, dst)
         return []
-    dst.write_text(_jobs().apply_patches(src.read_text(encoding="utf-8"), patches), encoding="utf-8")
+    dst.write_text(_jobs().apply_patches(src.read_text(encoding="utf-8"), patches), encoding="utf-8", newline="\n")
     return [{"old": p.old, "new": p.new, "why": p.why} for p in patches]
 
 
@@ -236,7 +236,7 @@ def run_step(work: Path, out: Path, run_dir: Path, script: str, env: dict,
     out.mkdir(parents=True, exist_ok=True)  # the page's data dir may have been reset while we trained
     if points:
         (out / f"{stem}.metrics.jsonl").write_text(
-            "".join(json.dumps(p) + "\n" for p in points), encoding="utf-8")
+            "".join(json.dumps(p) + "\n" for p in points), encoding="utf-8", newline="\n")
     produced = [p for p in work.rglob("*") if p.is_file() and before.get(p) != p.stat().st_mtime]
     for p in produced:
         if p.suffix in (".png", ".json", ".jsonl") and p.stat().st_size < 5_000_000:
@@ -306,7 +306,7 @@ def main(argv: list[str] | None = None) -> None:
             step["job"] = plan.job
         report["steps"].append(step)
         out.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8")
+        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=1), encoding="utf-8", newline="\n")
         update_index(out.parent, args.run, Path(script).stem if points else None)
         print(f"[{args.run}] {script} exit={step['exit_code']} in {step['seconds']}s", flush=True)
         if step["exit_code"] != 0:
