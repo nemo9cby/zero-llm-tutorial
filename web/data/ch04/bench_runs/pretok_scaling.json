@@ -1,0 +1,145 @@
+{
+ "input": "storybot/tiny_stories_valid.txt",
+ "bytes": 22502601,
+ "serial_whole": {
+  "wall": 20.754,
+  "load": {
+   "mean": 100.0,
+   "min": 100.0,
+   "max": 100.0
+  }
+ },
+ "serial_chunked_03": {
+  "wall": 19.365,
+  "cpu": 11.016,
+  "load": {
+   "mean": 100.0,
+   "min": 100.0,
+   "max": 100.0
+  },
+  "phases": {
+   "Pretokenizing": {
+    "wall": 19.197,
+    "cpu": 10.875
+   },
+   "Training BPE": {
+    "wall": 0.0,
+    "cpu": 0.0
+   }
+  }
+ },
+ "pool": [
+  {
+   "startup": 0.063,
+   "work": 22.508,
+   "shutdown": 0.026,
+   "chunks": 64,
+   "wall": 22.738,
+   "n": 1,
+   "load": {
+    "mean": 100.0,
+    "min": 100.0,
+    "max": 100.0
+   },
+   "identical": true
+  },
+  {
+   "startup": 0.084,
+   "work": 11.267,
+   "shutdown": 0.021,
+   "chunks": 64,
+   "wall": 11.735,
+   "n": 2,
+   "load": {
+    "mean": 100.0,
+    "min": 100.0,
+    "max": 100.0
+   },
+   "identical": true
+  },
+  {
+   "startup": 0.139,
+   "work": 7.058,
+   "shutdown": 0.047,
+   "chunks": 64,
+   "wall": 7.447,
+   "n": 4,
+   "load": {
+    "mean": 100.0,
+    "min": 100.0,
+    "max": 100.0
+   },
+   "identical": true
+  },
+  {
+   "startup": 0.169,
+   "work": 5.82,
+   "shutdown": 0.1,
+   "chunks": 64,
+   "wall": 6.333,
+   "n": 8,
+   "load": {
+    "mean": 100.0,
+    "min": 100.0,
+    "max": 100.0
+   },
+   "identical": true
+  },
+  {
+   "startup": 0.314,
+   "work": 4.905,
+   "shutdown": 0.167,
+   "chunks": 64,
+   "wall": 5.535,
+   "n": 16,
+   "load": {
+    "mean": 100.0,
+    "min": 100.0,
+    "max": 100.0
+   },
+   "identical": true
+  },
+  {
+   "startup": 0.135,
+   "work": 5.251,
+   "shutdown": 0.083,
+   "chunks": 64,
+   "wall": 5.618,
+   "n": 8,
+   "load": {
+    "mean": 100.0,
+    "min": 100.0,
+    "max": 100.0
+   },
+   "identical": true
+  },
+  {
+   "startup": 0.146,
+   "work": 6.79,
+   "shutdown": 0.051,
+   "chunks": 64,
+   "wall": 7.149,
+   "n": 4,
+   "load": {
+    "mean": 100.0,
+    "min": 100.0,
+    "max": 100.0
+   },
+   "identical": true
+  }
+ ],
+ "occurrences": 5419001,
+ "unique": 13111,
+ "env": {
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "logical_cpus": 16,
+  "physical_cores": 8,
+  "ram_gb": 47.7,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "numpy": "2.5.4",
+  "regex": "2026.9.29",
+  "note": "RTX 3060 Ti busy with the tutorial's training run during all measurements (CPU only here)",
+  "date": "2026-10-11 20:12"
+ }
+}

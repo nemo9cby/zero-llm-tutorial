@@ -1,15 +1,15 @@
-/* 图：训练好的 CodeBot 的注意力（2.8.1 节）。数据 data/ch02/attn_maps.json 由 model_pretrain.pt 导出，
-   verify/test_ch02.py 会从 checkpoint 重新计算并核对；正文的结论由验证 2.8-a 断言。 */
+/* 图：训练好的 CodeBot 的注意力（2.8.1 节）。数据 data/ch02/attn_maps.json 由原书作者公开的 model_pretrain.pt
+   导出，verify/test_ch02.py 会从 checkpoint 重新计算并核对；正文的结论由验证 2.8-a 断言。层和头从 0 开始编号。 */
 import { h, visible } from './_lib.js';
 import { seqColor } from './_plot.js';
-import { injectStyle, range } from './ch02-util.js';
+import { injectStyle, range, seqLegend } from './ch02-util.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 export const PRESETS = [
   { label: '上一个 token（L4H3）', snippet: 0, layer: 4, head: 3, q: 11 },
   { label: '函数名（L5H2）', snippet: 0, layer: 5, head: 2, q: 9 },
   { label: '开头的 token（L1H2）', snippet: 0, layer: 1, head: 2, q: 8 },
-  { label: '抄前文（L4H0）', snippet: 1, layer: 4, head: 0, q: 17 },
+  { label: '像在抄前文（L4H0）', snippet: 1, layer: 4, head: 0, q: 17 },   // 只是注意力的样子，见 2.8.1 节的消融
 ];
 
 /** Mean weight each head puts on the previous token, as [layer][head]. */
@@ -57,6 +57,7 @@ export async function mount(root, config) {
     return b;
   });
   const mapBox = h('div', { style: { overflowX: 'auto' } });
+  const legend = h('div');
   const readout = h('p', { class: 'w-label', 'aria-live': 'polite', style: { minHeight: '3.2em' } });
   const thumbs = h('div', { class: 'w-ch02-grid', style: { gridTemplateColumns: '2em repeat(6, minmax(0, 2.8rem))', maxWidth: '20rem' } });
   const meta = data.meta;
@@ -64,10 +65,11 @@ export async function mount(root, config) {
     h('div', { class: 'w-ch02-controls' }, snipSel, h('label', {}, '层', layerSel), h('label', {}, '头', headSel)),
     h('div', { class: 'w-ch02-controls' }, h('span', { class: 'w-ch02-seg', role: 'group', 'aria-label': '典型的头' }, presets)),
     h('div', { class: 'w-ch02-two', style: { gridTemplateColumns: 'repeat(auto-fit, minmax(17rem, 1fr))', alignItems: 'start' } },
-      h('div', {}, mapBox, readout),
+      h('div', {}, mapBox, legend, readout),
       h('div', {}, h('div', { class: 'w-label' }, '全部 36 个头（点击选择）'), thumbs)),
     h('p', { class: 'w-ch02-note' },
-      `数据：${meta.checkpoint}（${meta.bytes.toLocaleString('en-US')} 字节，sha256 ${meta.sha256}…），eval 模式，保留 4 位小数。`),
+      `数据：原书作者在 Hugging Face 公开的 ${meta.checkpoint}（${meta.bytes.toLocaleString('en-US')} 字节，sha256 ${meta.sha256}…），`
+      + 'eval 模式，保留 4 位小数。层和头都从 0 开始编号；换一个 checkpoint，头的分工会不同。'),
   );
 
   const cur = () => data.snippets[st.snippet];
@@ -150,7 +152,7 @@ export async function mount(root, config) {
         const A = sn.attn[l][k];
         for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) { ctx.fillStyle = c > r ? masked : seqColor(A[r][c]); ctx.fillRect(c, r, 1, 1); }
         const sel = l === st.layer && k === st.head;
-        const b = h('button', { type: 'button', 'aria-label': `第 ${l} 层第 ${k} 个头`, 'aria-pressed': String(sel),
+        const b = h('button', { type: 'button', 'aria-label': `L${l}H${k}（层和头从 0 数）`, 'aria-pressed': String(sel),
           style: { padding: '1px', border: sel ? '2px solid var(--ink)' : '1px solid var(--rule)', lineHeight: 0 } }, cv);
         b.addEventListener('click', () => { st.layer = l; st.head = k; resetCursor(); render(); });
         cells.push(b);
@@ -163,6 +165,7 @@ export async function mount(root, config) {
     snipSel.value = st.snippet; layerSel.value = st.layer; headSel.value = st.head;
     renderMapAndReadout();
     renderThumbs();
+    legend.replaceChildren(seqLegend());          // seqColor flips in the dark theme: the key says which end is large
   }
 
   st.k = argmaxKey();

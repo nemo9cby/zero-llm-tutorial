@@ -22,7 +22,7 @@ export async function mount(root, config = {}) {
   const tpl = h('input', { type: 'checkbox', checked: cfg.template });
   const chips = h('div', { class: 'tokens' });
   const summary = h('div', { class: 'w-label', 'aria-live': 'polite' });
-  const legend = h('div', { class: 'w-pg-note' }, '颜色较淡的是模板本身的 token，颜色较深的是指令的 token；小字是 token id。');
+  const legend = h('div', { class: 'w-pg-note' }, '虚线框的是模板本身的 token，实心的是指令的 token；小字是 token id。');
 
   function render() {
     const instr = input.value;
@@ -36,7 +36,8 @@ export async function mount(root, config = {}) {
       const inInstr = a < hi && b > lo;            // a pre-token overlapping the instruction counts as instruction
       for (const id of piece.ids) {
         const c = chip(tok.decode([id]), id, inInstr ? k++ : 0, `id ${id}${inInstr ? '' : '（模板）'}`);
-        if (!inInstr) c.style.opacity = '0.55';
+        // Template tokens: a dashed outline instead of a fill, with the text at full contrast.
+        if (!inInstr) Object.assign(c.style, { background: 'transparent', border: '1px dashed var(--ink-3)', padding: '1px 4px 0' });
         nodes.push(c);
         nAll += 1;
         if (inInstr) nInstr += 1;

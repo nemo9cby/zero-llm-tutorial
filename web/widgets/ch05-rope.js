@@ -18,6 +18,15 @@ export function ropeDot2D(m, n, thetaDeg, q = [1, 0], k = [1, 0]) {
 
 const norm360 = (d) => ((d % 360) + 360) % 360;
 
+/** q·k to 3 decimals; a rounding residue such as −1.8e-16 is shown as 0.000, never as −0.000. */
+export const fmtDot = (v) => (Math.abs(v) < 5e-4 ? 0 : v).toFixed(3);
+
+/** The same rotation as an angle in (−180°, 180°], e.g. 720° → 0°, 270° → −90°. */
+export function equivalentAngle(deg) {
+  const a = ((deg % 360) + 540) % 360 - 180;
+  return a === -180 ? 180 : a;
+}
+
 export function mount(root, config = {}) {
   injectStyle();
   const state = { m: config.m ?? 1, n: config.n ?? 3, theta: config.theta ?? 30 };
@@ -96,13 +105,16 @@ export function mount(root, config = {}) {
   let raf = 0;
   function update() {
     const qa = state.m * state.theta, ka = state.n * state.theta;
-    const dot = ropeDot2D(state.m, state.n, state.theta);
+    const dot = fmtDot(ropeDot2D(state.m, state.n, state.theta));
+    const diff = (state.n - state.m) * state.theta;
+    const wrapped = equivalentAngle(diff);
     readout.replaceChildren(
       h('div', {}, 'q 转了 m·θ = ', h('b', {}, `${qa}°`), '，k 转了 n·θ = ', h('b', {}, `${ka}°`)),
-      h('div', {}, '夹角 (n − m)·θ = ', h('b', {}, `${(state.n - state.m) * state.theta}°`),
-        '，q·k = cos(夹角) = ', h('b', {}, dot.toFixed(3))),
+      h('div', {}, '转角之差 (n − m)·θ = ', h('b', {}, `${diff}°`),
+        wrapped === diff ? '' : `（相当于 ${wrapped}°）`,
+        '，q·k = cos(转角之差) = ', h('b', {}, dot)),
     );
-    history.push(`(${state.m},${state.n})→${dot.toFixed(3)}`);
+    history.push(`(${state.m},${state.n})→${dot}`);
     if (history.length > 6) history.shift();
     hist.textContent = `最近几次 (m,n)→q·k：${history.join('  ')}`;
     cancelAnimationFrame(raf);

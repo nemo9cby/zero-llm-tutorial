@@ -1,7 +1,7 @@
 /* 图：四种优化器在《深度学习入门》的碗 f(x, y) = (x-cx)²/20 + (y-cy)² 上的轨迹（6.1 节）。
    SGD、Momentum（《深度学习入门》的写法）、Adam、AdamW（解耦的权重衰减），可选“Adam + L2”。
    下方的小图：一个没有数据梯度、只有权重衰减的参数（验证 6.1-e）。
-   纯函数都导出，供 tests/js/ch06-optim.test.mjs 与页面上的验证单元对拍。 */
+   纯函数都导出，供 tests/js/ch06-math.test.mjs 与页面上的验证单元对拍。 */
 import { h } from './_lib.js';
 import { lineChart, seriesColor } from './_plot.js';
 

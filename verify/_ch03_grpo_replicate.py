@@ -5,10 +5,15 @@ GRPODataset / calculate_reward / compute_probs / grpo_loss 都是原书的函数
 不需要 padding），统计上等价于逐条调用 256 次 generate()。超参数与脚本相同：lr 7e-6、G=8、batch 32、
 eps 0.2、每批数据更新 2 次、clip_grad_norm 1.0、AdamW。每轮写一行 JSON 指标，每 10 轮加一次 greedy 准确率。
 
+批量采样每条回答最多生成 max_new_tokens = 40 个 token（原书的 generate() 默认 1000）。只要没有回答写满 40 个
+token 还没停下，两者就完全等价，所以每轮都记下写满上限、被截断的回答条数（truncated、greedy_truncated），
+test_ch03.py::test_recorded_grpo_runs 断言它们全是 0。
+
     CUDA_VISIBLE_DEVICES=-1 uv run python verify/_ch03_grpo_replicate.py --iters 60 --seed 2 --tag base
     CUDA_VISIBLE_DEVICES=-1 uv run python verify/_ch03_grpo_replicate.py --iters 60 --seed 2 --tag nodrop --dropout-off
 
-页面上的 web/data/ch03/grpo_dropout/seed2_*.jsonl 就是这两条命令的输出（CPU，约 35 分钟一条）。
+页面上的 web/data/ch03/grpo_dropout/seed{0,1,2}_{base,nodrop}.jsonl 就是这类命令的输出（--seed 0、1、2，
+CPU，约 35 分钟一条）。
 """
 import argparse, json, sys, time
 from itertools import cycle
@@ -62,13 +67,15 @@ def sample(m, prompts, G, temperature, max_new_tokens=40):
 
 
 def greedy_acc(m):
-    resp, _ = sample(m, [p for p, _ in ds.data], 1, 0)
-    return sum(calculate_reward(gt, r) > 0 for r, (_, gt) in zip(resp, ds.data)) / len(ds.data) * 100
+    """Greedy accuracy (%) on the 81 prompts, and how many greedy answers hit max_new_tokens without EOS."""
+    resp, done = sample(m, [p for p, _ in ds.data], 1, 0)
+    acc = sum(calculate_reward(gt, r) > 0 for r, (_, gt) in zip(resp, ds.data)) / len(ds.data) * 100
+    return acc, int((~done).sum())
 
 
-log = open(out_dir / f"grpo_{args.tag}_seed{args.seed}.jsonl", "w")
+log = open(out_dir / f"grpo_{args.tag}_seed{args.seed}.jsonl", "w", encoding="utf-8", newline="\n")
 t0 = time.time()
-print(f"[{args.tag}] start greedy acc {greedy_acc(model):.1f}%", flush=True)
+print(f"[{args.tag}] start greedy acc {greedy_acc(model)[0]:.1f}%", flush=True)
 for i in range(args.iters):
     prompts, gts = next(data_iter)
     old_model.load_state_dict(model.state_dict())
@@ -100,9 +107,10 @@ for i in range(args.iters):
                    clipfrac=(((ratio > 1.2) & (A_tok > 0)) | ((ratio < 0.8) & (A_tok < 0))).float().mean().item(),
                    kl_k3=(ratio - 1 - (lp_new - lp_old)).mean().item(),
                    entropy=-(lp_all.exp() * lp_all).sum(-1)[m].mean().item(),
-                   resp_len=m.sum(1).float().mean().item(), n_prompts=len(prompts))
+                   resp_len=m.sum(1).float().mean().item(), n_prompts=len(prompts),
+                   truncated=int((~done).sum()))       # 写满 40 个 token 仍未停下的回答（应为 0）
     if i % 10 == 0 or i == args.iters - 1:
-        rec["greedy_acc"] = greedy_acc(model)
+        rec["greedy_acc"], rec["greedy_truncated"] = greedy_acc(model)
         print(f"[{args.tag}] it {i:3d} acc {rec['greedy_acc']:5.1f}% r {rec['reward_mean']:.3f} zv {rec['zero_var_frac']:.2f} "
               f"loss {rec['loss1']:+.4f} gn {rec['grad_norm0']:.2f} H {rec['entropy']:.3f} t={time.time()-t0:.0f}s", flush=True)
     log.write(json.dumps(rec) + "\n"); log.flush()

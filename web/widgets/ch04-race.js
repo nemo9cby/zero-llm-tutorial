@@ -1,5 +1,6 @@
 /* 图：优化赛跑。读取 data/ch04/bench.json 里的实测耗时（同一台机器、同一份输入、输出逐项相同），
    条形长度与耗时成正比（可切换对数刻度）；“开跑”按真实耗时的比例压缩成几秒钟的动画。
+   每组有一个参照（reference: 原书版本或官方文件），其余各行的 identical 是运行时与它比较的结果。
    config: { data: "data/ch04/bench.json" } */
 import { h, fmt } from './_lib.js';
 import { seriesColor } from './_plot.js';
@@ -87,17 +88,25 @@ export async function mount(root, config) {
         h('div', { class: 'track' }, bar), val));
       return { bar, row, val };
     });
-    const allSame = race.rows.every((r) => r.identical);
+    // reference rows are what the others were compared with; every other row carries the recorded comparison
+    const allSame = race.rows.filter((r) => !r.reference).every((r) => r.identical === true);
+    const prov = bench.provenance || {};
     note.replaceChildren(
       h('div', {}, `输入：${race.input}。指标：${race.metric}。`),
-      h('div', {}, allSame ? h('span', { class: 'ok' }, '各版本的输出逐项相同 ✓') : '注意：有版本的输出不同', '　', race.extra || ''),
+      h('div', {}, allSame ? h('span', { class: 'ok' }, '各版本的输出逐项相同 ✓') : '注意：有版本的输出不同',
+        race.reference ? `（参照：${race.reference}）` : '', race.extra || ''),
       h('div', {}, `机器：${bench.env.cpu}（${bench.env.physical_cores} 核 ${bench.env.logical_cpus} 线程），${bench.env.os.split('-').slice(0, 2).join(' ')}，Python ${bench.env.python}。`
-        + `测量时整机 CPU 占用平均约 ${Math.round(race.load)}%（同机还有其他任务），绝对时间偏慢，比值更可信。`),
+        + `测量时整机 CPU 占用平均约 ${Math.round(race.load)}%（同机还有其他任务），绝对时间偏慢，倍数也只看数量级。`),
+      prov.script ? h('div', {}, `这些数字由 ${prov.script} 生成，每次运行的原始记录（命令、版本、负载）在 data/ch04/bench_runs/ 里。`) : '',
     );
+    const hasWall = race.rows.some((r) => r.wall != null);
     table.replaceChildren(h('summary', {}, '查看数据表'),
-      h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, '版本'), h('th', {}, race.metric), h('th', {}, '加速比'), h('th', {}, '输出相同'))),
+      h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, '版本'), h('th', {}, race.metric), h('th', {}, '运行次数'),
+        hasWall ? h('th', {}, '墙钟秒') : null, h('th', {}, '加速比'), h('th', {}, '输出'))),
         h('tbody', {}, race.rows.map((r) => h('tr', {}, h('td', {}, r.name), h('td', {}, r.seconds.toFixed(3)),
-          h('td', {}, (base / r.seconds).toFixed(1)), h('td', {}, r.identical ? '是' : '否'))))));
+          h('td', {}, String(r.runs ?? 1)), hasWall ? h('td', {}, r.wall != null ? r.wall.toFixed(1) : '') : null,
+          h('td', {}, (base / r.seconds).toFixed(1)),
+          h('td', {}, r.reference ? '参照' : (r.identical ? '相同' : '不同')))))));
     clock.textContent = '';
   }
 

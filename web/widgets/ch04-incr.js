@@ -1,9 +1,10 @@
 /* 图：增量更新的单步演示（ch04/02 的循环体）。每点一次“下一步”：
    挑出次数最多的 pair（平票比 id），从倒排索引里取出含有它的词，只更新这几个词；
-   计数表里显示本步的“−旧 / +新”，右上角的指示灯把增量结果与全量重算比一次。
+   计数表里分两栏列出本步减去的旧计数（−旧）和加上的新计数（+新），减了又加回的行也照样列出；
+   最右一栏是倒排索引：现在含有这个 pair 的词。右上角的指示灯把增量结果与全量重算比一次。
    config: { corpus: "toy" } */
 import { h, chip, visible, fmt } from './_lib.js';
-import { IncrementalBPE, unpair, pretokenizeCorpus, countWords } from './ch04-bpe.js';
+import { IncrementalBPE, unpair, pairKey, pretokenizeCorpus, countWords } from './ch04-bpe.js';
 
 const STYLE = `
 /* token chips: theme-aware colours (the shared dark-mode .tok filter also darkens the text) */
@@ -30,6 +31,8 @@ const STYLE = `
 .w-ch04-incr table { display: table; width: 100%; margin: 0; font-size: .82rem; }
 .w-ch04-incr td, .w-ch04-incr th { padding: .15rem .35rem .15rem 0; border-bottom: 1px solid var(--rule); white-space: nowrap; }
 .w-ch04-incr td.num { font: 12px var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.w-ch04-incr td.idx { white-space: normal; font-size: .76rem; color: var(--ink-2); min-width: 5.5rem; }
+.w-ch04-incr td.idx em { font-style: normal; color: var(--ink-3); }
 .w-ch04-incr tr.next td { background: color-mix(in srgb, var(--ai-2) 55%, transparent); }
 .w-ch04-incr tr.gone td { color: var(--ink-3); text-decoration: line-through; }
 .w-ch04-incr .minus { color: var(--shu); } .w-ch04-incr .plus { color: var(--moss); }
@@ -62,7 +65,7 @@ export function mount(root, config) {
     h('div', { class: 'bar' }, select, nextBtn, resetBtn, stepLabel, lamp),
     h('div', { class: 'cols' },
       h('div', {}, h('h4', {}, '不同的词（当前的 token 序列 × 出现次数）'), wordsBox),
-      h('div', {}, h('h4', {}, 'pair 计数表'), table)),
+      h('div', {}, h('h4', {}, 'pair 计数表与倒排索引'), table)),
     foot,
   );
 
@@ -99,23 +102,35 @@ export function mount(root, config) {
     if (many) wordsBox.append(h('div', { class: 'w-label' }, last ? `只显示本步受影响的词；其余 ${fmt(order.length - hit.size)} 个词原封不动。`
       : `共 ${fmt(order.length)} 个不同的词。点“下一步”后，这里只显示受影响的那几个。`));
 
-    const delta = last ? last.delta : new Map();
+    const minus = last ? last.minus : new Map(), plus = last ? last.plus : new Map();
+    const mergedKey = last ? pairKey(last.pair[0], last.pair[1]) : null;
     const rows = new Map([...bpe.pairCounts].sort((x, y) => y[1] - x[1] || y[0] - x[0]).slice(0, 9));
-    for (const k of delta.keys()) if (!rows.has(k)) rows.set(k, bpe.pairCounts.get(k) || 0);
+    for (const k of [...minus.keys(), ...plus.keys()]) if (!rows.has(k)) rows.set(k, bpe.pairCounts.get(k) || 0);
+    const amount = (m, k, sign, cls) => (m.has(k) ? h('span', { class: cls }, `${sign}${fmt(m.get(k))}`) : '');
+    const index = (k) => {
+      if (k === mergedKey) return h('em', {}, '本步合并，条目已删除');
+      const words = bpe.wordsWith(k);
+      if (!words.length) return h('em', {}, '（空）');
+      const shown = words.slice(0, 3).map((w) => visible(w)).join('，');
+      return words.length > 3 ? `${shown} 等 ${fmt(words.length)} 个` : shown;
+    };
     table.replaceChildren(
-      h('thead', {}, h('tr', {}, h('th', {}, 'pair'), h('th', {}, '次数'), h('th', {}, '本步变化'))),
-      h('tbody', {}, [...rows].map(([k, c]) => {
-        const d = delta.get(k);
-        return h('tr', { class: k === nextKey ? 'next' : (c === 0 ? 'gone' : '') },
-          h('td', {}, h('code', {}, pairLabel(k)), k === nextKey ? ' ← 下一步合并' : ''),
-          h('td', { class: 'num' }, fmt(c)),
-          h('td', { class: 'num' }, d ? h('span', { class: d < 0 ? 'minus' : 'plus' }, `${d > 0 ? '+' : '−'}${fmt(Math.abs(d))}`) : ''));
-      })));
+      h('thead', {}, h('tr', {}, h('th', {}, 'pair'), h('th', {}, '次数'), h('th', {}, '−旧'), h('th', {}, '+新'),
+        h('th', {}, '倒排索引：含有它的词'))),
+      h('tbody', {}, [...rows].map(([k, c]) => h('tr', { class: k === nextKey ? 'next' : (c === 0 ? 'gone' : '') },
+        h('td', {}, h('code', {}, pairLabel(k)), k === nextKey ? ' ← 下一步' : ''),
+        h('td', { class: 'num' }, fmt(c)),
+        h('td', { class: 'num' }, amount(minus, k, '−', 'minus')),
+        h('td', { class: 'num' }, amount(plus, k, '+', 'plus')),
+        h('td', { class: 'idx' }, index(k))))));
 
     const totalBytes = bpe.seqs.reduce((s, q) => s + new TextEncoder().encode(q.word).length * q.count, 0);
+    const touched = new Set([...minus.keys(), ...plus.keys()]);
+    const backAgain = [...touched].filter((k) => minus.get(k) === plus.get(k)).length;
     foot.replaceChildren(last
       ? h('div', {}, '刚才合并了 ', h('code', {}, `${visible(bpe.text(last.pair[0]))} + ${visible(bpe.text(last.pair[1]))} → ${visible(bpe.text(last.newId))}`),
-        `（id ${last.newId}，出现 ${fmt(last.count)} 次）。倒排索引里含有它的词只有 ${last.affected.length} 个，所以只需要更新这 ${last.affected.length} 个词的 pair（计数表里净变化的有 ${fmt(last.delta.size)} 行）；`,
+        `（id ${last.newId}，出现 ${fmt(last.count)} 次）。倒排索引里含有它的词只有 ${last.affected.length} 个，所以只需要更新这 ${last.affected.length} 个词：`,
+        `先减去它们的全部旧 pair，再加上全部新 pair，计数表里动过的有 ${fmt(touched.size)} 行，其中 ${fmt(backAgain)} 行减了又加回同样的数。`,
         `朴素版这一步要把全部 ${fmt(totalBytes)} 个字节重新数一遍。`)
       : h('div', {}, `pair 次数相同时，原书比较 id：(count, id0, id1) 最大的那个先合并。`),
     );

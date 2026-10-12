@@ -167,22 +167,30 @@ def test_tie_breaks_on_the_cs336_fixture(dlfs6_path):
     reference = [(bytes.fromhex(a), bytes.fromhex(b)) for a, b in cs["merges_hex"]]
     assert len(text) == 132_878 and len(reference) == 243
 
-    # the book's own trainer (ch04, the (count, id0, id1) rule), on a file, like CS336's run_train_bpe
+    def against_reference(merges):
+        """(first differing merge, 1-based; positions equal; our pair; the reference pair), compared as bytes."""
+        v = vocab_of(merges)
+        as_bytes = [(v[a], v[b]) for a, b in merges]
+        k = first_difference(as_bytes, reference)
+        return k + 1, sum(x == y for x, y in zip(as_bytes, reference)), as_bytes[k], reference[k]
+
+    # codebot's rule (count, id0, id1), with the book's own trainer of ch04, on a file, like CS336's run_train_bpe
     with tempfile.TemporaryDirectory() as d:
         path = Path(d) / "corpus.en"
         path.write_bytes(text.encode("utf-8"))
         book = list(quiet(sb.train_bpe, str(path), 500, num_processes=2, num_chunks=4))
-    v = vocab_of(book)
-    book_bytes = [(v[a], v[b]) for a, b in book]
-    k = first_difference(book_bytes, reference)
-    same = sum(x == y for x, y in zip(book_bytes, reference))
-    print(f"book rule: first difference at merge #{k + 1}: {book_bytes[k]} vs reference {reference[k]}; "
-          f"{same}/243 positions equal")
-    assert (k + 1, same) == (93, 170)
+    # ch01/03-06's rule (first wins, the line CS336's lecture 1 also uses), with the book's own trainer of ch01/06
+    first_wins = list(quiet(load_script("ch01/06_pretokenize.py").train_bpe, text, 500))
+    for name, merges in [("ids (codebot)", book), ("first wins (ch01/06)", first_wins)]:
+        k, same, ours, theirs = against_reference(merges)
+        print(f"{name}: first difference at merge #{k}: {ours} vs reference {theirs}; {same}/243 positions equal")
+    assert against_reference(book)[:2] == (93, 170)
+    assert against_reference(first_wins)[:2] == (65, 159)
 
     # the same loop with only the tie-break key changed to compare bytes: all 243 merges equal the reference
     pieces, counts, n_end = pretoken_table(text, cb.pretokenize)
     assert train_dedup(pieces, counts, 243, "ids", n_end).merges == book
+    assert train_dedup(pieces, counts, 243, "first", n_end).merges == first_wins
     by_bytes = train_dedup(pieces, counts, 243, "bytes", n_end)
     assert [(by_bytes.vocab[a], by_bytes.vocab[b]) for a, b in by_bytes.merges] == reference
 
@@ -191,7 +199,9 @@ def test_tie_breaks_on_tiny_codes(book, tie_runs):
     official = book["merges"]
     runs = tie_runs
     assert runs["ids"].merges == official                          # the book's rule reproduces merge_rules.pkl
-    print("steps with a tie in the official run:", sum(t > 1 for t in runs["ids"].tied), "of 743")
+    ties = sum(t > 1 for t in runs["ids"].tied)
+    print("steps with a tie in the official run:", ties, "of 743")
+    assert ties == 88                                              # the column: 88 of the 743 steps had a tie
 
     expected = {"first": (123, b"))", b"ve"), "bytes": (290, b"pre", b"ctor")}
     sets = {rule: {r.vocab[256 + i] for i in range(743)} for rule, r in runs.items()}
@@ -268,6 +278,12 @@ def test_codebot_tokenizer_is_ch01_06_plus_one_line():
     m06, mcb = methods(book06["BPETokenizer"]), methods(codebot["BPETokenizer"])
     assert set(mcb) - set(m06) == {"load_from"} and all(mcb[k] == m06[k] for k in m06)
 
+    # ch03: 5 of the 6 scripts import the tokenizer from here; 01_pretrain.py reads the encoded tiny_codes.bin instead
+    sources = {p.name: p.read_text(encoding="utf-8") for p in (DLFS6 / "ch03").glob("*.py")}
+    importers = {name for name, src in sources.items() if "from codebot.tokenizer import BPETokenizer" in src}
+    assert len(sources) == 6 and set(sources) - importers == {"01_pretrain.py"}
+    assert "codebot.tokenizer" not in sources["01_pretrain.py"] and "tiny_codes.bin" in sources["01_pretrain.py"]
+
 
 def test_first_wins_breaks_in_the_ch04_trainer(tie_runs):
     """1.7.2: ch04's trainer deletes and re-inserts pairs, so with ch01/06's first-wins line it learns other merges."""
@@ -289,6 +305,41 @@ def test_first_wins_breaks_in_the_ch04_trainer(tie_runs):
           f"{sum(a == b for a, b in zip(fast_first, naive_first))}/743 positions equal")
     assert k + 1 == 302 and set(fast_first) != set(naive_first)
     # with the (count, id0, id1) rule the same trainer reproduces merge_rules.pkl (see test_training_cost_naive_vs_fast)
+
+
+NAIVE_RUN_MINUTES, NAIVE_RUN_SECONDS_PER_MERGE = 0, "0"   # quoted in 1.7.3  @@FILL@@
+
+
+def test_naive_run_record():
+    """1.7.3: the recorded full run of ch01/07 (verify/_ch01_naive_run.py) matches the repository it ran on."""
+    import hashlib
+    import pickle
+    if not shutil.which("git"):
+        pytest.skip("git not found")
+    record = json.loads((ROOT / "web" / "data" / "ch01" / "naive_run.json").read_text(encoding="utf-8"))
+    sha = lambda data: hashlib.sha256(data).hexdigest()
+    repo_pkl = (DLFS6 / "codebot" / "merge_rules.pkl").read_bytes()
+    head = subprocess.run(["git", "-C", str(DLFS6), "rev-parse", "HEAD"], capture_output=True, text=True,
+                          check=True).stdout.strip()
+    assert record["dlfs6_commit"] == head
+    assert record["script_sha256"] == sha((DLFS6 / record["script"]).read_bytes())
+    assert record["output_sha256"] == record["repo_sha256"] == sha(repo_pkl)
+    assert record["byte_identical"] and record["same_rules_same_order"] and record["merges"] == 743
+    assert "743/743" in record["tqdm_last_line"]
+    python = tuple(int(x) for x in record["host"]["python"].split(".")[:2])
+    assert record["pickle_default_protocol"] == 4 and python < (3, 14)
+    minutes, per_merge = record["seconds"] / 60, record["seconds"] / 743
+    print(f"{record['seconds']:,.0f} s = {minutes:.1f} min, {per_merge:.2f} s per merge on {record['host']['cpu']}")
+    assert (round(minutes), f"{per_merge:.1f}") == (NAIVE_RUN_MINUTES, NAIVE_RUN_SECONDS_PER_MERGE), \
+        "1.7.3 quotes the recorded run: update the numbers in content/ch01.md if it was re-recorded"
+
+    # "byte identical" needs pickle protocol 4, the default up to Python 3.13; 3.14's default, protocol 5,
+    # writes the same rules with a different second byte (the protocol number)
+    rules = pickle.loads(repo_pkl)
+    assert pickle.dumps(rules, protocol=4) == repo_pkl
+    p5 = pickle.dumps(rules, protocol=5)
+    assert len(p5) == len(repo_pkl) and [i for i, (a, b) in enumerate(zip(p5, repo_pkl)) if a != b] == [1]
+    assert list(pickle.loads(p5).items()) == list(rules.items())
 
 
 def test_training_cost_naive_vs_fast(book):
@@ -313,15 +364,28 @@ def test_training_cost_naive_vs_fast(book):
     fast_seconds = time.perf_counter() - t0
     assert list(fast.items()) == list(book["rules"].items())
     print(f"naive: {naive_step:.1f} s for one merge -> about {naive_step * 743 / 60:.0f} min for 743; "
-          f"ch04's trainer: {fast_seconds:.1f} s for all 743 merges")
-    assert naive_step * 743 > 20 * fast_seconds
+          f"ch04's trainer: {fast_seconds:.1f} s for all 743 merges ({naive_step * 743 / fast_seconds:.0f}x faster)")
+    # 1.7.3: one naive step takes seconds; ch04's trainer learns all 743 merges in under a minute, 100x+ faster
+    # (wall clock: 6 s on an idle machine, 17-23 s while other jobs ran; the 60 s bound leaves room for load)
+    assert naive_step > 1 and fast_seconds < 60 and naive_step * 743 > 100 * fast_seconds
 
 
 def test_crlf_checkout_changes_the_second_merge(book):
     from storybot import tokenizer as sb
+    if not shutil.which("git"):
+        pytest.skip("git not found")
+    # the repository stores tiny_codes.txt with LF; only core.autocrlf=true turns it into CRLF on checkout.
+    # `git cat-file --filters` applies the same conversion as a checkout, so no clone is needed.
+    git = lambda *args: subprocess.run(["git", "-C", str(DLFS6), *args], capture_output=True, check=True).stdout
+    assert git("ls-files", "--eol", "codebot/tiny_codes.txt").decode().startswith("i/lf")
+    checkout = {v: git("-c", f"core.autocrlf={v}", "cat-file", "--filters", "HEAD:codebot/tiny_codes.txt")
+                for v in ("true", "input", "false")}
+    lf = book["text"].encode("utf-8")
+    assert checkout["input"] == checkout["false"] == lf and b"\r" not in lf
+    assert checkout["true"] == book["text"].replace("\n", "\r\n").encode("utf-8")
     with tempfile.TemporaryDirectory() as d:
         crlf = Path(d) / "tiny_codes.txt"
-        crlf.write_bytes(book["text"].replace("\n", "\r\n").encode("utf-8"))   # what core.autocrlf=true checks out
+        crlf.write_bytes(checkout["true"])                                      # what core.autocrlf=true checks out
         assert crlf.stat().st_size == 6_743_534
         rules = quiet(sb.train_bpe, str(crlf), 260, num_processes=8, num_chunks=64)   # ch04 reads bytes
         assert list(rules) == [(32, 32), (13, 10), (256, 256)]
@@ -351,6 +415,42 @@ def test_the_first_10k_chars_are_not_a_fair_sample(book):
     assert (len(lines), deep) == (256_502, 31_200)
     assert round(text.count("input(") / (len(text) / 1000), 2) == 0.16
     assert text[:10000].count("input(") == 53
+
+
+def test_the_head_is_an_unlucky_sample(book):
+    """1.8.2: 300 random 10k-character windows put the head near the bottom; dedenting closes only about half the gap."""
+    from statistics import median
+    from storybot.tokenizer import BPETokenizer as RankTokenizer   # == codebot's encoder, id for id (1.9's test)
+    from _ch01_bpe import pretoken_table
+    rank = RankTokenizer(book["rules"])
+    cache = {}
+
+    def ratio(sample):
+        """bytes/token of CodeBot's encode(sample): <|endoftext|> is one token, every pre-token is encoded alone"""
+        pieces, counts, n_end = pretoken_table(sample, book["pretokenize"])
+        n = n_end
+        for p, c in zip(pieces, counts):
+            if p not in cache:
+                cache[p] = len(rank._encode_text(p))
+            n += cache[p] * c
+        return len(sample.encode("utf-8")) / n
+
+    text = book["text"]
+    head, full = ratio(text[:10000]), ratio(text)
+    assert (f"{head:.2f}", f"{full:.2f}") == ("2.12", "2.42")
+    rng = random.Random(0)
+    windows = [ratio(text[s:s + 10000]) for s in (rng.randrange(0, len(text) - 10000) for _ in range(300))]
+    higher = sum(r > head for r in windows)
+    print(f"300 random windows: min {min(windows):.3f}, median {median(windows):.3f}, max {max(windows):.3f}; "
+          f"{higher} of them compress better than the head ({head:.3f})")
+    assert f"{median(windows):.2f}" == "2.45" and higher == 290
+
+    dedent = lambda t: "\n".join(line.lstrip(" \t") for line in t.split("\n"))
+    flat_head, flat_full = ratio(dedent(text[:10000])), ratio(dedent(text))
+    print(f"without indentation: head {flat_head:.4f}, full {flat_full:.4f}; gap {flat_full - flat_head:.4f} "
+          f"(was {full - head:.4f})")
+    assert (f"{flat_head:.2f}", f"{flat_full:.2f}", f"{flat_full - flat_head:.2f}") == ("2.08", "2.21", "0.13")
+    assert 0.4 < (flat_full - flat_head) / (full - head) < 0.6        # indentation explains about half of the gap
 
 
 def test_other_tokenizers_on_tiny_codes(book, page_files):
@@ -388,6 +488,23 @@ def test_indentation_gpt2_vs_cl100k_vs_codebot(book):
     assert pieces["gpt2"].count(" ") == 7
     # GPT-2's vocabulary has no token made of two or more spaces only
     assert not [t for t in gpt2._mergeable_ranks if len(t) >= 2 and set(t) <= {32}]
+
+    # 1.8.3, third point: without the whitespace-only pre-tokens (indentation, newlines) GPT-2 still leads by much more
+    # on the head than on the whole corpus, so indentation is only part of why its lead shrinks from 0.97 to 0.21.
+    # Both tokenizers split text with the same regex and merge inside pre-tokens only, so each pre-token is encoded alone.
+    from storybot.tokenizer import BPETokenizer as RankTokenizer
+    from _ch01_bpe import pretoken_table
+    rank = RankTokenizer(book["rules"])
+
+    def lead(pieces, counts):
+        words = [(p, c) for p, c in zip(pieces, counts) if not p.isspace()]
+        nbytes = sum(len(p.encode("utf-8")) * c for p, c in words)
+        return (nbytes / sum(len(gpt2.encode_ordinary(p)) * c for p, c in words)
+                - nbytes / sum(len(rank._encode_text(p)) * c for p, c in words))
+    head_pieces, head_counts, _ = pretoken_table(book["text"][:10000], book["pretokenize"])
+    leads = lead(head_pieces, head_counts), lead(book["pieces"], book["counts"])
+    print(f"GPT-2's lead over CodeBot on pre-tokens that are not whitespace: head {leads[0]:.3f}, full {leads[1]:.3f}")
+    assert [f"{x:.2f}" for x in leads] == ["1.23", "0.82"]
 
 
 # ------------------------------------------------------------------------------------------ 1.9

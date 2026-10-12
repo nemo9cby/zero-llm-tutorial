@@ -81,8 +81,11 @@ export async function mount(root, config) {
       bar('单进程', [[COLORS.pre, Tp, '预分词'], [COLORS.loop, Ts, '合并循环']]),
       bar(`${n} 个进程`, [[COLORS.pre, Tp / n, '预分词'], [COLORS.over, over(n), '开销'], [COLORS.loop, Ts, '合并循环']]),
     );
-    sum.replaceChildren('总时间 ', h('b', {}, `${total1.toFixed(1)} s → ${totalN.toFixed(1)} s`), '，整个训练快 ',
-      h('b', {}, `${(total1 / totalN).toFixed(2)} 倍`), '；只看预分词快 ', h('b', {}, `${(Tp / (Tp / n + over(n))).toFixed(1)} 倍`),
+    // a ratio below 1 is a slowdown: say so instead of "faster by 0.9x"
+    const gain = (r, digits) => (r < 1 ? ['反而慢了 ', h('b', {}, `${Math.round((1 / r - 1) * 100)}%`)]
+      : ['快 ', h('b', {}, `${r.toFixed(digits)} 倍`)]);
+    sum.replaceChildren('总时间 ', h('b', {}, `${total1.toFixed(1)} s → ${totalN.toFixed(1)} s`), '，整个训练',
+      ...gain(total1 / totalN, 2), '；只看预分词', ...gain(Tp / (Tp / n + over(n)), 1),
       `。进程再多，上限也只有 ${(total1 / Ts).toFixed(2)} 倍。`);
     const measured = p.pool.map(({ n: k, wall }) => [k, Tp / wall]);
     const series = [

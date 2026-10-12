@@ -14,6 +14,12 @@ and, with --web, also to web/data/cs336/a1_results.json for the cs336 page.
 On Windows the tokenizer tests `import resource` (Unix only) at module level; the runner provides an
 empty stand-in module so the file can be collected. The two tests that actually use it are skipped by
 the test file itself on non-Linux platforms.
+
+A1's `test_train_bpe_speed` is a wall-clock gate (1.5 s), so its outcome depends on how busy the machine
+is. Besides the pytest runs, the runner therefore times both BPE trainers (as shipped and with the bytes
+tie-break) interleaved in one process, records wall and CPU time and the system CPU load, and appends
+the speed numbers of every recording to `speed_history` (carried over from the previous results file).
+Describe the machine state with --note, e.g. --note "idle" or --note "another training job running".
 """
 from __future__ import annotations
 
@@ -48,6 +54,14 @@ TEST_ADAPTER = {
     "test_get_lr_cosine_schedule": "run_get_lr_cosine_schedule", "test_checkpointing": "run_save_checkpoint",
     "test_train_bpe_speed": "run_train_bpe", "test_train_bpe": "run_train_bpe",
     "test_train_bpe_special_tokens": "run_train_bpe",
+}
+
+# Tokenizer tests whose feature DLFS6 does not have at all (the adapter-level CATALOG would call them "dlfs6").
+TEST_KIND = {
+    "test_encode_iterable_tinystories_matches_tiktoken": ("none", "没有 encode_iterable（大文件用 encode_file 分块编码）"),
+    "test_encode_iterable_tinystories_sample_roundtrip": ("none", "没有 encode_iterable（大文件用 encode_file 分块编码）"),
+    "test_encode_iterable_memory_usage": ("none", "没有 encode_iterable（大文件用 encode_file 分块编码）"),
+    "test_overlapping_special_tokens": ("none", "BPETokenizer 只支持一个结束 token"),
 }
 
 SHIM = '''import sys
@@ -227,6 +241,53 @@ def git(*args, cwd) -> str:
     return subprocess.check_output(["git", *args], cwd=cwd, text=True).strip()
 
 
+def cpu_meter():
+    """psutil.cpu_percent between two calls (system-wide average, this process included); None without psutil."""
+    try:
+        import psutil
+    except ImportError:
+        return lambda: None
+    psutil.cpu_percent(None)
+    return lambda: psutil.cpu_percent(None)
+
+
+def bpe_speed(a1: Path, rounds: int = 5) -> dict:
+    """Time ch04/02 train_bpe on corpus.en (vocab 500) as shipped and with the bytes tie-break, interleaved in
+    one process so both see the same load. Wall time is what A1's 1.5 s gate measures (the file read is
+    included, as in the adapter); CPU time (time.process_time) is what the code itself costs."""
+    import time
+
+    from adapters_dlfs6 import bpe_trainer
+
+    path = a1 / "tests" / "fixtures" / "corpus.en"
+    trainers = {"as_shipped": bpe_trainer(False), "one_line_fixes": bpe_trainer(True)}
+    runs = {v: {"wall": [], "cpu": []} for v in trainers}
+    load = cpu_meter()
+    for _ in range(rounds):
+        for v, train in trainers.items():
+            w0, c0 = time.perf_counter(), time.process_time()
+            train(path.read_text(encoding="utf-8"), 500, "<|endoftext|>")
+            runs[v]["wall"].append(round(time.perf_counter() - w0, 3))
+            runs[v]["cpu"].append(round(time.process_time() - c0, 3))
+    return {"corpus": "corpus.en", "vocab_size": 500, "rounds": rounds, "gate_seconds": 1.5,
+            "system_cpu_percent": load(), "runs": runs}
+
+
+def speed_entry(result: dict) -> dict:
+    """The speed-related numbers of one recording (kept across re-recordings in `speed_history`)."""
+    speed = next(t for t in result["tests"] if t["test"] == "test_train_bpe_speed")
+    entry = {"generated": result["generated"], "note": result["env"].get("note", ""),
+             "bpe_tiebreak_after": result["fixes"]["bpe_tiebreak"]["after"],
+             "speed_test": {v: speed[v].get("outcome") for v in VARIANTS},
+             "speed_test_seconds": {v: speed[v].get("duration") for v in VARIANTS},
+             "train_seconds_runs": {v: result["diagnostics"][v]["train_bpe"][0]["train_seconds_runs"] for v in VARIANTS}}
+    if result["env"].get("system_cpu_percent"):
+        entry["system_cpu_percent"] = result["env"]["system_cpu_percent"]
+    if result.get("bpe_speed"):
+        entry["bpe_speed"] = result["bpe_speed"]
+    return entry
+
+
 def run_variant(a1: Path, variant: str) -> dict:
     with tempfile.TemporaryDirectory(prefix=f"a1-{variant}-") as tmp:
         tmp = Path(tmp)
@@ -257,6 +318,7 @@ def main() -> None:
                     help="clone of stanford-cs336/assignment1-basics (or set CS336_A1_DIR)")
     ap.add_argument("--out", type=Path, default=HERE / "results.json")
     ap.add_argument("--web", action="store_true", help="also write web/data/cs336/a1_results.json")
+    ap.add_argument("--note", default="", help="machine state during this recording (kept in speed_history)")
     args = ap.parse_args()
     if not args.a1 or not (Path(args.a1) / "tests" / "adapters.py").is_file():
         sys.exit("need --a1 <clone of assignment1-basics> (see the module docstring)")
@@ -270,14 +332,19 @@ def main() -> None:
     import numpy
     import torch
 
-    raw = {v: run_variant(a1, v) for v in VARIANTS}
+    raw, load = {}, {}
+    for v in VARIANTS:
+        meter = cpu_meter()
+        raw[v] = run_variant(a1, v)
+        load[v] = meter()
+    speed = bpe_speed(a1)
     tests = []
     nodeids = sorted({n for v in VARIANTS for n in raw[v]["tests"]},
                      key=lambda n: (n.split("::")[0], n))
     for nid in nodeids:
         file, _, name = nid.partition("::")
         adapter = TEST_ADAPTER.get(name, "get_tokenizer" if "test_tokenizer" in file else "?")
-        kind, source = A.CATALOG.get(adapter, ("?", "?"))
+        kind, source = TEST_KIND.get(name) or A.CATALOG.get(adapter, ("?", "?"))
         row = {"test": name, "file": Path(file).name, "adapter": adapter, "kind": kind, "dlfs6": source}
         for v in VARIANTS:
             r = raw[v]["tests"].get(nid, {})
@@ -298,20 +365,28 @@ def main() -> None:
         "dlfs6_commit": git("rev-parse", "HEAD", cwd=ROOT / "third_party" / "dlfs6"),
         "env": {"python": platform.python_version(), "torch": torch.__version__, "numpy": numpy.__version__,
                 "platform": platform.platform(terse=True), "device": "cpu", "cpu_count": os.cpu_count(),
-                "note": "timings were taken while another training job was running on the same machine"},
-        "command": "CUDA_VISIBLE_DEVICES=-1 uv run --with einops --with psutil python verify/cs336/run_a1.py --a1 <A1 clone> --web",
+                "note": args.note, "system_cpu_percent": load},
+        "command": "CUDA_VISIBLE_DEVICES=-1 uv run --with einops --with psutil python verify/cs336/run_a1.py "
+                   "--a1 <A1 clone> --web --note <machine state>",
         "fixes": {
             "rmsnorm_eps": {"file": "storybot/model.py", "before": "nn.RMSNorm(embed_dim)",
                             "after": "nn.RMSNorm(embed_dim, eps=1e-5)"},
-            "bpe_tiebreak": {"file": "ch04/02_bpe_cache.py", "before": A.TIEBREAK_FIX[0], "after": A.TIEBREAK_FIX[1]},
+            "bpe_tiebreak": {"file": "ch04/02_bpe_cache.py", "before": [old for old, _ in A.TIEBREAK_FIX],
+                             "after": [new for _, new in A.TIEBREAK_FIX]},
             "get_batch": {"file": "ch06/05_pretrain.py", "before": A.GET_BATCH_FIX[0], "after": A.GET_BATCH_FIX[1]},
         },
         "summary": {v: summary(v) for v in VARIANTS},
         "pytest_tail": {v: raw[v]["pytest_tail"] for v in VARIANTS},
         "diagnostics": {v: raw[v]["diagnostics"] for v in VARIANTS},
+        "bpe_speed": speed,
         "catalog": {k: {"kind": kind, "dlfs6": src} for k, (kind, src) in A.CATALOG.items()},
         "tests": tests,
     }
+    history = []
+    if args.out.is_file():                     # keep the speed numbers of earlier recordings
+        previous = json.loads(args.out.read_text(encoding="utf-8"))
+        history = previous.get("speed_history") or [speed_entry(previous)]
+    result["speed_history"] = history + [speed_entry(result)]
     text = json.dumps(result, ensure_ascii=False, indent=1)
     args.out.write_text(text + "\n", encoding="utf-8", newline="\n")
     print(f"wrote {args.out}")
@@ -321,7 +396,9 @@ def main() -> None:
         web.write_text(text + "\n", encoding="utf-8", newline="\n")
         print(f"wrote {web}")
     for v in VARIANTS:
-        print(v, result["summary"][v], "|", result["pytest_tail"][v])
+        print(v, result["summary"][v], "|", result["pytest_tail"][v], "| system CPU %", load[v])
+        print("   bpe wall", speed["runs"][v]["wall"], "cpu", speed["runs"][v]["cpu"])
+    print("system CPU % during the interleaved timing:", speed["system_cpu_percent"])
 
 
 if __name__ == "__main__":

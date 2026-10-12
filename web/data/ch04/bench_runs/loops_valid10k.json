@@ -1,0 +1,35 @@
+{
+ "input": "storybot/tiny_stories_valid.txt",
+ "vocab": 10000,
+ "book_loop": {
+  "wall": 92.134,
+  "cpu": 66.781
+ },
+ "book_load": {
+  "mean": 100.0,
+  "min": 98.3,
+  "max": 100.0
+ },
+ "heap_loop": {
+  "wall": 3.632,
+  "cpu": 2.766,
+  "load": {
+   "mean": 100.0,
+   "min": 99.8,
+   "max": 100.0
+  }
+ },
+ "identical": true,
+ "env": {
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "logical_cpus": 16,
+  "physical_cores": 8,
+  "ram_gb": 47.7,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "numpy": "2.5.4",
+  "regex": "2026.9.29",
+  "note": "RTX 3060 Ti busy with the tutorial's training run during all measurements (CPU only here)",
+  "date": "2026-10-11 20:29"
+ }
+}

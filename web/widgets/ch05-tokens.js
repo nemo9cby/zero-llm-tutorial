@@ -1,16 +1,26 @@
-/* 图：智能体的 token 计量表。第 t 轮的请求 = 开头 B + t × Δ（每轮把全部历史重新发送）。
-   单次请求受上下文窗口限制；累计输入随轮数平方增长；复用前缀的 KV cache 后，需要 prefill 的总量只随轮数线性增长。 */
+/* 图：智能体的 token 计量表。第 t 轮要发送的完整历史 = 开头 B + t × Δ（每轮把全部历史重新发送）。
+   单次请求不能超过上下文窗口 W：历史超出之后，每次只能发送最近的 W 个 token，更早的必须截掉或压缩。
+   累计输入在超出之前随轮数平方增长，超出之后每轮正好多 W 个（线性）；复用前缀的 KV cache 后，
+   需要 prefill 的总量只随轮数线性增长，但只在历史还装得下的时候成立。 */
 import { h } from './_lib.js';
 import { lineChart } from './_plot.js';
 import { injectStyle, slider, fmtInt } from './ch05-common.js';
 
-export const requestSize = (B, d, t) => B + d * t;                         // t = 1, 2, …
-export const cumulative = (B, d, n) => n * B + d * n * (n + 1) / 2;
+/** Length of the request sent at turn t (t = 1, 2, …): the whole history, capped at the window W. */
+export const requestSize = (B, d, t, W = Infinity) => Math.min(B + d * t, W);
+/** Sum of the first n requests. Without a window: n·B + d·n(n+1)/2 (quadratic); past the window, +W per turn. */
+export function cumulative(B, d, n, W = Infinity) {
+  const t0 = Math.min(n, firstOverflow(B, d, W, n) - 1);           // turns whose full history still fits
+  const head = t0 * B + d * t0 * (t0 + 1) / 2;
+  return n > t0 ? head + (n - t0) * W : head;
+}
+/** Tokens that need prefill when the server keeps the previous turn's KV cache (prefix caching). */
 export const prefillWithPrefixCache = (B, d, n) => B + d * n;
-/** First turn whose request no longer fits in the window W (Infinity if none within n). */
+/** First turn whose history no longer fits in the window W (Infinity if none within n). */
 export function firstOverflow(B, d, W, n) {
+  if (!isFinite(W)) return Infinity;
   const t = Math.floor((W - B) / d) + 1;
-  return t >= 1 && t <= n ? t : Infinity;
+  return t <= n ? Math.max(t, 1) : Infinity;
 }
 
 const WINDOWS = [[32_000, '32K'], [128_000, '128K'], [256_000, '256K'], [1_000_000, '1M']];
@@ -36,27 +46,37 @@ export function mount(root, config = {}) {
 
   function update() {
     const { B, d, n, W } = st;
-    const turns = Array.from({ length: n }, (_, i) => i + 1);
-    const step = Math.max(1, Math.ceil(n / 150));                          // ≤ ~150 points per series
-    const ts = turns.filter((t) => (t - 1) % step === 0 || t === n);
-    const last = requestSize(B, d, n), total = cumulative(B, d, n), fresh = prefillWithPrefixCache(B, d, n);
     const over = firstOverflow(B, d, W, n);
+    const step = Math.max(1, Math.ceil(n / 150));                          // ≤ ~150 points per series
+    const ts = Array.from({ length: n }, (_, i) => i + 1).filter((t) => (t - 1) % step === 0 || t === n || t === over - 1 || t === over);
+    const last = requestSize(B, d, n, W), total = cumulative(B, d, n, W);
+    const fits = over === Infinity;
+    const fresh = prefillWithPrefixCache(B, d, fits ? n : over - 1);
     read.replaceChildren(
-      h('div', {}, '最后一次请求 ', h('b', {}, fmtInt(last)), ` 个 token，`,
-        over === Infinity ? `在 ${fmtInt(W)} 的窗口之内` : h('b', {}, `从第 ${over} 轮起超出 ${fmtInt(W)} 的窗口`)),
-      h('div', {}, `${n} 轮累计输入 `, h('b', {}, fmtInt(total)), ` 个 token，是窗口的 `, h('b', {}, (total / W).toFixed(total / W < 10 ? 1 : 0)), ' 倍'),
-      h('div', {}, '复用前缀的 KV cache 后，需要 prefill 的一共 ', h('b', {}, fmtInt(fresh)), ' 个'));
+      fits
+        ? h('div', {}, '最后一次请求 ', h('b', {}, fmtInt(last)), ` 个 token，在 ${fmtInt(W)} 的窗口之内`)
+        : h('div', {}, h('b', {}, `从第 ${over} 轮起，完整历史已装不进 ${fmtInt(W)} 的窗口`),
+          '：每次只能发送最近的 ', h('b', {}, fmtInt(W)), ' 个 token，更早的历史必须截掉或压缩'),
+      h('div', {}, `${n} 轮累计输入 `, h('b', {}, fmtInt(total)), ` 个 token，是窗口的 `, h('b', {}, (total / W).toFixed(total / W < 10 ? 1 : 0)), ' 倍'
+        + (fits ? '' : `（第 ${over} 轮起每轮正好多 ${fmtInt(W)} 个，改成线性增长）`)),
+      fits
+        ? h('div', {}, '复用前缀的 KV cache 后，需要 prefill 的一共 ', h('b', {}, fmtInt(fresh)), ' 个')
+        : h('div', {}, `复用前缀的 KV cache：前 ${over - 1} 轮需要 prefill 的一共 `, h('b', {}, fmtInt(fresh)),
+          ` 个；从第 ${over} 轮起，截断处后面的 token 位置全都变了，它们的 K、V 只能重算，图中不再画这条线`));
+    const xTicks = [...new Set([1, Math.round(n / 2), n])];
     const o1 = {
-      series: [{ name: '单次请求', points: ts.map((t) => [t, requestSize(B, d, t)]) }],
-      xLabel: '轮数 t', yLabel: 'token', height: 200, yMin: 0, refLines: [{ y: W, label: `窗口 ${fmtInt(W)}` }],
-      yFormat: short, ariaLabel: '每一轮请求的长度与上下文窗口',
+      series: [{ name: '单次请求', points: ts.map((t) => [t, requestSize(B, d, t, W)]) }],
+      xLabel: '轮数 t', yLabel: 'token', height: 200, yMin: 0, refLines: [{ y: W, label: `窗口 ${fmtInt(W)}`, labelAt: 'left' }],
+      yFormat: short, xTicks, ariaLabel: '每一轮请求的长度：随轮数增长，涨到上下文窗口为止',
     };
+    const prefix = ts.filter((t) => t < over).map((t) => [t, prefillWithPrefixCache(B, d, t)]);
     const o2 = {
       series: [
-        { name: '累计输入', points: ts.map((t) => [t, cumulative(B, d, t)]) },
-        { name: '前缀缓存', points: ts.map((t) => [t, prefillWithPrefixCache(B, d, t)]) },
+        { name: '累计输入', points: ts.map((t) => [t, cumulative(B, d, t, W)]) },
+        ...(prefix.length ? [{ name: '复用前缀缓存时需要 prefill 的累计', points: prefix }] : []),
       ],
-      xLabel: '轮数 t', yLabel: 'token', height: 220, yMin: 0, yFormat: short, ariaLabel: '累计输入与前缀缓存后的计算量',
+      xLabel: '轮数 t', yLabel: 'token', height: 220, yMin: 0, yFormat: short, xTicks,
+      ariaLabel: '累计输入与复用前缀缓存时需要 prefill 的累计',
     };
     if (ch1) { ch1.update(o1); ch2.update(o2); } else { ch1 = lineChart(c1, o1); ch2 = lineChart(c2, o2); }
   }

@@ -4,6 +4,7 @@
    config: { run: "webbot-cpu-shrunk", samples: true } */
 import { h } from './_lib.js';
 import { lineChart, fmtNum } from './_plot.js';
+import { bookLr } from './ch09-util.js';
 
 async function get(url, as = 'json') {
   const r = await fetch(url);
@@ -46,15 +47,23 @@ export async function mount(root, config) {
     refLines: [{ y: Math.log(cfg.vocab_size || 50000), label: `ln ${(cfg.vocab_size || 50000).toLocaleString('en-US')}` }],
   });
   if (config.lr !== false) {
+    // 两条线重合：记录下来的 train/lr 就是原书 get_lr 的值。两张图都是两条序列，右边距相同，横轴上下对齐。
     root.append(lrBox);
     lineChart(lrBox, {
-      series: [{ name: 'train/lr', points: train.map((c) => [c.step, c.data['train/lr']]) }],
+      series: [
+        { name: 'train/lr（记录）', points: train.map((c) => [c.step, c.data['train/lr']]) },
+        { name: '原书 get_lr（公式）', dash: '4 3',
+          points: train.map((c) => [c.step, bookLr(c.step, cfg.learning_rate, cfg.warmup_iters, cfg.max_iters)]) },
+      ],
       xLabel: 'step', yLabel: '学习率 train/lr', height: 150, yMin: 0, table: false,
     });
   }
 
   const last = val[val.length - 1];
   const host = report.host || {};
+  // Windows 上 platform.processor() 只给出 “Intel64 Family 6 Model …” 这样的编号，不如直接写架构
+  const cpu = /Family \d+ Model \d+/.test(host.processor || '') ? 'x86-64' : (host.processor || '');
+  const os = String(host.platform || '').split('-').slice(0, 2).join(' ');
   const minutes = (report.seconds?.pretrain ?? 0) / 60;
   const tokensPerStep = cfg.micro_batch_size * cfg.accumulation_steps * cfg.context_len * (report.world_size || 1);
   root.append(
@@ -66,7 +75,7 @@ export async function mount(root, config) {
           + `记下的 effective_batch_size = ${cfg.effective_batch_size}，实际全局 batch = ${cfg.effective_batch_size * report.world_size} 条序列。`
         : '')),
     h('div', { class: 'w-label', style: 'margin-top:.3rem' },
-      [`CPU：${host.processor || host.platform}（${host.cpu_count} 个逻辑核）`, `PyTorch ${host.torch}`,
+      [`CPU：${[cpu, os].filter(Boolean).join('，')}，${host.cpu_count} 个逻辑核`, `PyTorch ${host.torch}`,
         `用时 ${minutes.toFixed(1)} 分钟（机器同时在跑别的任务）`, '费用 0 美元',
         `原书代码 ${String(report.dlfs6_commit).slice(0, 7)}`, `运行于 ${String(report.started).slice(0, 10)}`].join('；')),
     h('details', {}, h('summary', { class: 'w-label' }, `相对原书改动的 ${report.patches.length} 行（其余一字未改）`),

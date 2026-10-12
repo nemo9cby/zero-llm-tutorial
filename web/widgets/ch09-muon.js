@@ -4,20 +4,12 @@
    下图：标量多项式迭代 k 次后的形状。两者的数字相同。 */
 import { h } from './_lib.js';
 import { lineChart, fmtNum } from './_plot.js';
+import { mulberry32 } from './ch09-util.js';
 
 export const COEFFS = {
   quintic: { label: '五次多项式（Muon 的系数）', abc: [3.4445, -4.7750, 2.0315] },
   cubic: { label: '三次多项式（经典的 1.5, −0.5）', abc: [1.5, -0.5, 0] },
 };
-
-function mulberry32(a) {
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 const matmul = (A, B) => A.map((row) => B[0].map((_, j) => row.reduce((s, v, k) => s + v * B[k][j], 0)));
 const transpose = (A) => A[0].map((_, j) => A.map((row) => row[j]));
@@ -134,7 +126,7 @@ export function mount(root, config = {}) {
     yLabel: '奇异值（G 先除以 Frobenius 范数）', refLines: [{ y: 1, label: 'UVᵀ 的奇异值都是 1' }], height: 220, yMin: 0,
   });
   const mapChart = lineChart(mapBox, {
-    series: [{ name: 'y = x', points: xs.map((v) => [v, 10 ** v]) }], xLabel: '输入的奇异值 x（对数刻度）',
+    series: [{ name: '不迭代（y = x）', points: xs.map((v) => [v, 10 ** v]) }], xLabel: '输入的奇异值 x（对数刻度）',
     yLabel: 'k 步之后的值', xFormat: (v) => fmtNum(+(10 ** v).toPrecision(2)), refLines: [{ y: 1 }],
     height: 220, yMin: 0,
   });
@@ -160,7 +152,7 @@ export function mount(root, config = {}) {
     });
     mapChart.update({
       series: [
-        { name: 'y = x', points: xs.map((v) => [v, 10 ** v]) },
+        { name: '不迭代（y = x）', points: xs.map((v) => [v, 10 ** v]) },
         { name: `${state.steps} 步之后`, points: xs.map((v) => [v, nsScalar(10 ** v, abc, state.steps)]) },
       ],
     });

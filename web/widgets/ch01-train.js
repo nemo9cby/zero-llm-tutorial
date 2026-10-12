@@ -2,15 +2,16 @@
    数据是 TinyCodes 的预分词表（data/ch01/tinycodes_pretokens.json：30,535 种词及其次数，
    verify/test_ch01.py 核对过它与 tiny_codes.txt 一致），算法是 _bpe.js 的 BPETrainer：
    与原书相同的合并规则，只是像第 4 章那样按“种类 × 次数”计数、只更新受影响的词。
-   训练完与原书的 merge_rules.pkl（data/tokenizers/codebot.json）逐条对照。 */
+   训练完与原书的 merge_rules.pkl（data/tokenizers/codebot.json）逐条对照。
+   平票规则的叫法与正文一致：先出现者胜（ch01/03–06）、比 id（codebot）、比字节串（CS336）。 */
 import { h, fmt } from './_lib.js';
 import { BPETrainer, Tokenizer } from './_bpe.js';
 import { injectStyle, bytesRepr, tokenLabel } from './ch01-util.js';
 
 export const RULES = [
-  { value: 'ids', label: 'id 最大者胜（原书 codebot）' },
+  { value: 'ids', label: '比 id（codebot）' },
   { value: 'first', label: '先出现者胜（ch01/03–06）' },
-  { value: 'bytes', label: '字节串最大者胜（CS336）' },
+  { value: 'bytes', label: '比字节串（CS336）' },
 ];
 export const NUM_MERGES = 743;
 
@@ -102,13 +103,13 @@ export function mount(root) {
       parts.push(h('span', { class: 'w-ch01-ok' }, `✓ ${NUM_MERGES} 条规则与原书的 merge_rules.pkl 逐条相同，顺序也相同。`));
     } else {
       const rec = c.firstRecord;
-      parts.push(h('span', { class: 'w-ch01-bad' }, `前 ${c.first} 条与原书相同，第 ${c.first + 1} 条开始不同：`),
-        '这里学的是 ', h('code', {}, bytesRepr(trainer.vocab[256 + c.first])), '，原书是 ', h('code', {}, bytesRepr(c.officialAtFirst)),
+      parts.push(h('span', { class: 'w-ch01-bad' }, `前 ${c.first} 条与 merge_rules.pkl 相同，第 ${c.first + 1} 条开始不同：`),
+        '这里学的是 ', h('code', {}, bytesRepr(trainer.vocab[256 + c.first])), '，merge_rules.pkl 里是 ', h('code', {}, bytesRepr(c.officialAtFirst)),
         `（那一步有 ${rec.tied} 个 pair 并列，都出现了 ${fmt(rec.count)} 次）。${NUM_MERGES} 条里位置相同的有 ${c.same} 条。`);
-      parts.push(h('br'), c.onlyMine.length === 0 ? '不过，最终学到的 743 个 token 与原书完全是同一批，只是顺序（也就是 id）不同。'
-        : `最终学到的 743 个 token 里，与原书不同的只有 ${c.onlyMine.length} 个：这里多了 ${c.onlyMine.map(bytesRepr).join('、')}，原书是 ${c.onlyTheirs.map(bytesRepr).join('、')}。`);
+      parts.push(h('br'), c.onlyMine.length === 0 ? '不过，最终学到的 743 个 token 与 merge_rules.pkl 完全是同一批，只是顺序（也就是 id）不同。'
+        : `最终学到的 743 个 token 里，与 merge_rules.pkl 不同的只有 ${c.onlyMine.length} 个：这里多了 ${c.onlyMine.map(bytesRepr).join('、')}，merge_rules.pkl 里是 ${c.onlyTheirs.map(bytesRepr).join('、')}。`);
     }
-    parts.push(h('br'), `全语料压缩率 ${r}（原书 2.42）；${RULES.find((x) => x.value === rule).label}，浏览器里用时 ${(run.elapsed / 1000).toFixed(1)} 秒。`);
+    parts.push(h('br'), `全语料压缩率 ${r}（merge_rules.pkl 是 2.42）；${RULES.find((x) => x.value === rule).label}，浏览器里用时 ${(run.elapsed / 1000).toFixed(1)} 秒。`);
     verdict.replaceChildren(...parts);
     go.textContent = '重新训练';
   }

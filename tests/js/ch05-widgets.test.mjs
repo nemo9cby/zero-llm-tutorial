@@ -2,14 +2,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { ropeDot2D } from '../../web/widgets/ch05-rope.js';
+import { ropeDot2D, fmtDot, equivalentAngle } from '../../web/widgets/ch05-rope.js';
 import { ropeVec, scoreMatrix, invFreq } from '../../web/widgets/ch05-ropeclock.js';
 import { swish, gelu, argmin } from '../../web/widgets/ch05-act.js';
-import { layerNorm, rmsNorm, rms, mean, FINFO_EPS } from '../../web/widgets/ch05-norm.js';
+import { layerNorm, rmsNorm, rms, mean, FINFO_EPS, fmt as normFmt } from '../../web/widgets/ch05-norm.js';
 import { stepCells, stepCounts } from '../../web/widgets/ch05-kv.js';
 import { kvBytesPerToken, PRESETS } from '../../web/widgets/ch05-kvmem.js';
 import { requestSize, cumulative, prefillWithPrefixCache, firstOverflow } from '../../web/widgets/ch05-tokens.js';
-import { ratios } from '../../web/widgets/ch05-speed.js';
+import { ratios, speedupText } from '../../web/widgets/ch05-speed.js';
 import { rng, formatBytes } from '../../web/widgets/ch05-common.js';
 
 const close = (a, b, tol = 1e-9) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
@@ -19,6 +19,15 @@ test('2D RoPE: q·k depends only on n − m (验证 5.1-a)', () => {
   close(ropeDot2D(6, 8, 30), 0.5);
   close(ropeDot2D(10, 12, 30), 0.5);
   close(ropeDot2D(1, 4, 30), 0);                  // 夹角 90°
+});
+
+test('2D RoPE readout: no negative zero; the angle difference also shown in (−180°, 180°]', () => {
+  assert.equal(fmtDot(ropeDot2D(4, 7, 30)), '0.000');           // cos 90° 的舍入残差不显示成 -0.000
+  assert.equal(fmtDot(ropeDot2D(1, 3, 30)), '0.500');
+  assert.equal(equivalentAngle(720), 0);                         // θ = 90°、n − m = 8：转了两整圈
+  assert.equal(equivalentAngle(270), -90);
+  assert.equal(equivalentAngle(-180), 180);
+  assert.equal(equivalentAngle(60), 60);
 });
 
 test('RoPE score matrix is Toeplitz; additive absolute positions are not (验证 5.1-c)', () => {
@@ -59,6 +68,15 @@ test('LayerNorm vs RMSNorm hand example and invariances (验证 5.3-a, 5.3-b, 5.
   close(rms(rmsNorm(tiny, 1e-5)), 0.3015, 1e-4);
   close(rms(rmsNorm(tiny, FINFO_EPS)), 0.9452, 1e-4);
   close(mean(layerNorm(y)), 0, 1e-12);
+  // 图 5-4 的向量缩小 1000 倍：均值与 RMS 都用指数写法，不会出现“均值 6.50e-4，RMS 0.001”
+  const small = y.map((v) => v * 1e-3);
+  assert.equal(normFmt(mean(small)), '6.50e-4');
+  assert.equal(normFmt(rms(small)), '1.16e-3');
+  // 图注：eps = 1e-5 时输出的 RMS 掉到 0.3 左右；eps = 1.19e-7 时只缩小 4%～6%（验证 5.3-c）
+  close(rms(layerNorm(small, 1e-5)), 0.291, 1e-3);
+  close(rms(rmsNorm(small, 1e-5)), 0.344, 1e-3);
+  close(rms(layerNorm(small, FINFO_EPS)), 0.941, 1e-3);
+  close(rms(rmsNorm(small, FINFO_EPS)), 0.958, 1e-3);
 });
 
 test('KV cache animation counts (验证 5.5-a)', () => {
@@ -74,7 +92,7 @@ test('KV cache animation counts (验证 5.5-a)', () => {
   assert.equal(cache, 200);
 });
 
-test('KV cache bytes per token and presets (验证 5.5-h)', () => {
+test('KV cache bytes per token and presets (验证 5.5-j)', () => {
   assert.equal(kvBytesPerToken(6, 6, 64, 4), 18432);
   assert.equal(kvBytesPerToken(4, 16, 32, 4), 16384);
   assert.equal(kvBytesPerToken(12, 4, 64, 2), 12288);
@@ -90,17 +108,39 @@ test('KV cache bytes per token and presets (验证 5.5-h)', () => {
   assert.equal(PRESETS.webbotMHA.params, webbot(50000, 768, 12, 2048, 12, 64));
 });
 
-test('agent token meter (验证 5.5-k)', () => {
+test('agent token meter (验证 5.5-n)', () => {
   assert.equal(requestSize(3000, 800, 300), 243000);
   assert.equal(cumulative(3000, 800, 300), 37020000);
+  assert.equal(cumulative(3000, 800, 300, 256000), 37020000);                 // 300 轮还装得下：窗口不起作用
   assert.equal(prefillWithPrefixCache(3000, 800, 300), 243000);
   assert.equal(firstOverflow(3000, 800, 256000, 300), Infinity);
   const t = firstOverflow(3000, 800, 256000, 600);
-  assert.ok(requestSize(3000, 800, t - 1) <= 256000 && requestSize(3000, 800, t) > 256000);
+  assert.equal(t, 317);
+  assert.ok(requestSize(3000, 800, t - 1) <= 256000 && 3000 + 800 * t > 256000);
   close(cumulative(3000, 800, 300) / cumulative(3000, 800, 150), 3.89, 0.01);
+  close(cumulative(3000, 800, 300) / requestSize(3000, 800, 300), 152.35, 0.01);   // ≈ 轮数的一半
+  // 走到 400 轮：单次请求封顶在窗口，累计从平方增长变成每轮 +W 的线性增长
+  assert.equal(requestSize(3000, 800, 400, 256000), 256000);
+  assert.equal(cumulative(3000, 800, 400, 256000), 62520800);
+  for (const n of [317, 350, 400]) {
+    assert.equal(cumulative(3000, 800, n, 256000) - cumulative(3000, 800, n - 1, 256000), 256000);
+  }
+  assert.equal(cumulative(3000, 800, 316, 256000) - cumulative(3000, 800, 315, 256000), 3000 + 800 * 316);
+  assert.equal(firstOverflow(3000, 800, 32000, 600), 37);                      // 32K 的窗口：第 37 轮就装不下了
 });
 
 test('recorded CPU timing: measured per-step speedup stays far below t (验证 5.5-g)', () => {
   const rec = JSON.parse(fs.readFileSync(new URL('../../web/data/ch05/kv_timing_cpu.json', import.meta.url), 'utf8'));
   for (const r of ratios(rec.per_step)) if (r.t >= 25) assert.ok(r.measured < r.flops / 2, `t=${r.t}`);
+});
+
+test('recorded GPU timing: at batch 1 the cache is about as fast as recomputing (验证 5.5-i)', () => {
+  const rec = JSON.parse(fs.readFileSync(new URL('../../web/data/ch05/kv_timing_cuda.json', import.meta.url), 'utf8'));
+  for (const r of ratios(rec.per_step)) assert.ok(r.measured > 0.6 && r.measured < 1.5, `t=${r.t}`);
+  const last = ratios(rec.per_step).at(-1);
+  assert.equal(speedupText(last.measured), '反而慢（0.84 倍）');               // t = 800：21.1 ms ÷ 25.2 ms
+  assert.equal(speedupText(4.926), '快 4.9 倍');
+  const g200 = rec.generate.find((g) => g.n === 200);
+  assert.equal(speedupText(g200.no_cache_s / g200.cache_s), '只快 3%');            // 3.52 秒 ÷ 3.41 秒
+  assert.equal(speedupText(1.002), '几乎一样快');
 });

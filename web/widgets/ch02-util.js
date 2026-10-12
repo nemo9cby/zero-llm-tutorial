@@ -2,6 +2,25 @@
    Pure math is exported so tests/js/ch02-widgets.test.mjs can check it in Node against the
    numbers the page's verify cells assert. */
 import { h } from './_lib.js';
+import { seqColor } from './_plot.js';
+
+/** Run fn whenever the theme changes. seqColor flips its ramp in the dark theme, so inline colors must be redrawn. */
+export function onThemeChange(fn) {
+  if (typeof document === 'undefined') return;
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', fn);
+  new MutationObserver(fn).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+
+/** Color key for seqColor: the ramp runs light→dark in the light theme and dark→light in the dark theme, so every
+    heat map on this page carries one. ticks: [[t, label], ...], t = the seqColor input in [0, 1]. */
+export function seqLegend(ticks = [[0, '0'], [0.5, '0.5'], [1, '1']], name = '权重') {
+  const stops = range(13).map((i) => `${seqColor(i / 12)} ${((100 * i) / 12).toFixed(1)}%`);
+  return h('div', { class: 'w-ch02-ramp', role: 'img', 'aria-label': `色标：${name}从 ${ticks[0][1]} 到 ${ticks[ticks.length - 1][1]}` },
+    h('span', {}, name),
+    h('span', { class: 'w-ch02-ramp-box' },
+      h('span', { class: 'w-ch02-ramp-bar', style: { background: `linear-gradient(to right, ${stops.join(', ')})` } }),
+      ticks.map(([t, label]) => h('span', { class: 'w-ch02-ramp-tick', style: { left: `${100 * t}%` } }, label))));
+}
 
 /** Seeded uniform RNG in [0, 1) (mulberry32). */
 export function mulberry32(seed) {
@@ -74,8 +93,6 @@ export function injectStyle() {
 .w-ch02-bars .fill { height: 100%; background: var(--ai); border-radius: 2px; }
 .w-ch02-bars .fill.top { background: var(--plum); }
 .w-ch02-bars .pct { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
-.w-ch02-strip { display: grid; gap: 1px; margin: .2rem 0 .5rem; }
-.w-ch02-strip span { height: 1.1rem; border-radius: 1px; }
 .w-ch02-grid { display: grid; gap: 2px; font: 11px/1 var(--mono); margin: .4rem 0; }
 .w-ch02-grid .cell { display: grid; place-items: center; min-height: 1.9rem; border-radius: 2px; font-variant-numeric: tabular-nums; }
 .w-ch02-grid .head { color: var(--ink-3); white-space: nowrap; overflow: hidden; }
@@ -94,6 +111,12 @@ export function injectStyle() {
 .w-ch02-stack { display: flex; height: 1rem; border-radius: 2px; overflow: hidden; margin: .4rem 0 .2rem; }
 .w-ch02-legend { display: flex; flex-wrap: wrap; gap: .2rem .9rem; font-size: .78rem; color: var(--ink-2); }
 .w-ch02-legend i { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .3rem; vertical-align: -1px; }
+.w-ch02-ramp { display: flex; align-items: flex-start; gap: .6rem; font-size: .75rem; color: var(--ink-3); margin: .3rem 0 .5rem; }
+.w-ch02-ramp-box { position: relative; flex: 0 1 9rem; height: 1.6rem; margin: 0 .4rem; }
+.w-ch02-ramp-bar { display: block; height: .6rem; margin-top: .25rem; border-radius: 2px; border: 1px solid var(--rule); }
+.w-ch02-ramp-tick { position: absolute; top: .9rem; transform: translateX(-50%); font-variant-numeric: tabular-nums; line-height: 1; }
+.w-ch02-grid .head .tok { display: block; margin-top: 2px; font-size: 10px; }
+.w-ch02-strip-canvas { display: block; width: 100%; height: 1.1rem; image-rendering: pixelated; border-radius: 1px; margin: .2rem 0 .5rem; }
 @media (prefers-reduced-motion: no-preference) { .w-ch02-bars .fill { transition: width .15s ease-out; } }
 `));
 }

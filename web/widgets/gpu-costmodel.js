@@ -1,4 +1,5 @@
-/* The GPU handbook's cost model in plain JS: a line-by-line mirror of gpu/costs.py.
+/* The GPU handbook's cost model in plain JS: a line-by-line mirror of gpu/costs.py, plus the rows of the
+   calculator's multi-GPU comparison (multiGpuVariants, which mirrors gpu/jobs.py's webbot_settings).
    tests/js/gpu-costmodel.test.mjs runs it on tests/js/fixtures/gpu/cases.json, which
    verify/test_gpu.py regenerates from the Python version, so the widget, the page's verify cells
    and the Modal launcher all compute the same numbers. No DOM here. */
@@ -82,4 +83,23 @@ export function estimateMeasured({ steps, sPerIt, evals, evalS, world, usdPerGpu
   const wallS = steps * sPerIt + evals * evalS;
   const gpuHours = (wallS * world) / 3600;
   return { wall_hours: wallS / 3600, gpu_hours: gpuHours, usd: gpuHours * usdPerGpuHour };
+}
+
+/** Ways to run a single-GPU job of `baseIters` steps on n GPUs (runShape arguments, WebBot only):
+ *  the job itself, the script started unchanged on n GPUs, and gpu/jobs.py's two ways to keep the
+ *  single-GPU token budget: scale "iters" (max_iters ÷ n) and scale "batch" (per-GPU batch ÷ n).
+ *  Always derived from the single-GPU job, never from a preset that already divided something. */
+export function multiGpuVariants(b, n, baseIters = b.max_iters) {
+  const rows = [
+    { key: 'single', label: '单卡，脚本原样', args: { world: 1, maxIters: baseIters } },
+    { key: 'trap', label: `${n} 卡，脚本原样（陷阱）`, args: { world: n, maxIters: baseIters } },
+    { key: 'iters', label: `${n} 卡，max_iters ÷ ${n}`, args: { world: n, maxIters: Math.round(baseIters / n) } },
+  ];
+  const seqs = (b.batch * b.accum) / n;            // sequences per GPU per optimizer step
+  if (Number.isInteger(seqs)) {
+    const micro = seqs >= b.batch ? b.batch : seqs;
+    rows.push({ key: 'batch', label: `${n} 卡，每卡 batch ÷ ${n}`,
+      args: { world: n, maxIters: baseIters, batch: micro, accum: seqs / micro } });
+  }
+  return rows;
 }

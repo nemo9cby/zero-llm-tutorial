@@ -1,4 +1,5 @@
 /* 图 8-4：MoE 路由玩具。16 个 token、4 个专家，router 选 top-k，专家有容量上限，超出的 token 被丢弃。
+   容量 = 每批 token 数 × k ÷ 专家数 × capacity factor：一批要分派 T·k 次，所以乘 k；k = 1 时就是 Switch 式 (3)。
    辅助 loss 按 Switch Transformer 式 (4)：E·Σ f_i·P_i（以 α 为单位），f_i 按 router 的最大值计数。
    同一组结论由验证 8.4-a 到 8.4-d 钉住；纯函数由 tests/js/ch08-widgets.test.mjs 对拍。 */
 import { h } from './_lib.js';
@@ -89,7 +90,8 @@ function injectStyle() {
 .w-ch08-moe .track { position: relative; height: .9rem; background: var(--paper-2); border-radius: 3px; }
 .w-ch08-moe .track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; }
 .w-ch08-moe .track b { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); }
-.w-ch08-moe .nums { font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; }
+.w-ch08-moe .nums { font-variant-numeric: tabular-nums; color: var(--ink-2); white-space: nowrap; line-height: 1.3; }
+.w-ch08-moe .nums small { display: block; color: var(--ink-3); font-size: .78rem; }
 .w-ch08-moe .stats { font-size: .9rem; margin-top: .7rem; }
 .w-ch08-moe .stats b { font-variant-numeric: tabular-nums; }
 `));
@@ -121,7 +123,7 @@ export function mount(root, config = {}) {
       h('label', {}, 'capacity factor', cfRange, cfOut),
       h('label', {}, '偏向专家 0', biasRange, biasOut)),
     toks, experts, stats,
-    h('p', { class: 'w-label' }, '色块的底色是第一选择的专家，底边是第二选择的专家；虚线框表示第一选择超出了容量，删除线表示所有选择都被丢弃、只走残差连接。容量 = 每批 token 数 × k ÷ 专家数 × capacity factor（向下取整），先满足所有 token 的第一选择。'),
+    h('p', { class: 'w-label' }, '色块的底色是第一选择的专家，底边是第二选择的专家；虚线框表示第一选择超出了容量（可能仍由第二选择处理），删除线表示所有选择都被丢弃、只走残差连接。容量 = 每批 token 数 × k ÷ 专家数 × capacity factor（向下取整；k = 1 时就是 Switch Transformer 的定义），先满足所有 token 的第一选择。'),
   ));
 
   function draw() {
@@ -146,10 +148,12 @@ export function mount(root, config = {}) {
       h('span', { class: 'track', role: 'img', 'aria-label': `专家 ${e}：收到 ${r.assigned[e]}，容量 ${r.capacity}` },
         h('i', { style: { width: `${(100 * r.assigned[e]) / T}%`, background: seriesColor(e) } }),
         h('b', { style: { left: `calc(${(100 * Math.min(r.capacity, T)) / T}% - 1px)` } })),
-      h('span', { class: 'nums' }, `收到 ${r.assigned[e]}，容量 ${r.capacity}${r.assigned[e] > r.capacity ? `，丢弃 ${r.assigned[e] - r.capacity}` : ''}`),
+      h('span', { class: 'nums' }, `收到 ${r.assigned[e]}，容量 ${r.capacity}${r.assigned[e] > r.capacity ? `，丢弃 ${r.assigned[e] - r.capacity}` : ''}`,
+        h('small', {}, `f = ${aux.f[e].toFixed(2)}，P = ${aux.P[e].toFixed(2)}`)),
     ]).flat());
     stats.replaceChildren(
-      h('div', {}, '辅助 loss：', h('b', {}, `${aux.value.toFixed(2)} α`), '（完全均匀时为 1α，全部挤到一个专家时为 4α）'),
+      h('div', {}, '辅助 loss：', h('b', {}, `${aux.value.toFixed(2)} α`), '（全部挤到一个专家时为 4α）'),
+      h('div', { class: 'w-label' }, '辅助 loss 里的 f 只数第一选择，P 是 router 给出的平均概率。P 接近均匀时它总在 1α 附近，不管 f 怎样；只有 f 和 P 一起偏向同一个专家，它才会升高。'),
       h('div', {}, `丢弃 ${r.dropped} / ${T * k} 次分派；${r.fullyDropped} 个 token 一个专家也没分到。每个 token 只激活 ${k}/${E} 的专家参数。`),
     );
   }

@@ -117,6 +117,48 @@ def test_e01_grpo_policy_updates_in_train_mode(dlfs6_path):
     assert outside(r_eval) == 0 and (r_eval - 1).abs().max() < 1e-5
 
 
+RUNS = ROOT / "runs"   # local outputs of gpu/run_local.py (not in git); web/data/runs holds their reports
+
+
+def test_e01_recorded_grpo_checkpoints_on_cpu(dlfs6_path):
+    """The two recorded 3060 Ti GRPO runs, re-measured on CPU: their shared SFT start (sha256 as recorded) answers
+    44/81 greedily; the final model_grpo.pt files reproduce the logged 86.4% and 100%; no greedy answer of the
+    trained models contains two or more integers (E09: they did not learn to game the last-integer rule)."""
+    import hashlib
+
+    from codebot.model import GPT
+    from codebot.tokenizer import BPETokenizer
+    from codebot.utils import generate
+
+    sft = RUNS / "codebot-3060ti" / "work" / "codebot" / "model_sft.pt"
+    grpo = {"codebot-3060ti": RUNS / "codebot-3060ti" / "work" / "codebot" / "model_grpo.pt",
+            "codebot-grpo-evalfix-3060ti": RUNS / "codebot-grpo-evalfix-3060ti" / "work" / "codebot" / "model_grpo.pt"}
+    if not all(p.is_file() for p in (sft, *grpo.values())):
+        pytest.skip("runs/ 里没有这两次运行的检查点：先运行 gpu/run_local.py --run codebot-3060ti 等")
+    seeded = json.loads((WEB / "runs" / "codebot-grpo-evalfix-3060ti" / "report.json").read_text(encoding="utf-8"))["seeded"][0]
+    assert hashlib.sha256(sft.read_bytes()).hexdigest() == seeded["sha256"]
+    g = load_defs("ch03/09_grpo.py", names={"GRPODataset", "calculate_reward"})
+    tok = BPETokenizer.load_from(str(DLFS6 / "codebot" / "merge_rules.pkl"))
+    data = g["GRPODataset"](tok).data
+
+    def greedy(path):
+        model = GPT.load_from(str(path)).eval()
+        with torch.no_grad():
+            answers = [generate(model, tok, p, temperature=0)[len(p):] for p, _ in data]
+        return sum(g["calculate_reward"](gt, a) > 0 for (_, gt), a in zip(data, answers)), answers
+
+    assert greedy(sft)[0] == 44
+    n_ints = {}
+    for run, path in grpo.items():
+        correct, answers = greedy(path)
+        final = json.loads((WEB / "runs" / run / "report.json").read_text(encoding="utf-8"))
+        logged = next(s for s in final["steps"] if s["script"] == "ch03/09_grpo.py")["final"]["acc"]
+        assert round(100 * correct / 81, 1) == logged, run                   # 86.4 and 100.0
+        n_ints[run] = sorted(len(re.findall(r"-?\d+", a)) for a in answers)
+    assert n_ints["codebot-grpo-evalfix-3060ti"] == [1] * 81
+    assert n_ints["codebot-3060ti"] == [0] + [1] * 80                       # one empty answer, never two numbers
+
+
 def test_e15_sft_greedy_baseline_is_44_of_81(dlfs6_path):
     """The SFT starting point is 44/81; the script's first logged accuracy is taken after 2 updates."""
     from codebot.model import GPT
@@ -141,10 +183,20 @@ def test_e02_hf_storybot_checkpoints_use_mlp_keys(dlfs6_path):
         ck = torch.load(DLFS6 / "storybot" / name, map_location=CPU, mmap=True)
         keys = ck["model_state_dict"].keys()
         assert any(".mlp." in k for k in keys) and not any(".ffn." in k for k in keys), name
-    # the fix: rename on load (strict loading then succeeds)
-    ck = torch.load(DLFS6 / "storybot" / "model_pretrain.pt", map_location=CPU)
-    model = GPT(*(ck[k] for k in ("vocab_size", "max_context_len", "embed_dim", "n_head", "n_layer", "ff_dim", "theta")))
-    model.load_state_dict({k.replace(".mlp.", ".ffn."): v for k, v in ck["model_state_dict"].items()})
+    # only the optional download path meets them: those wget lines are commented out, and ch06/05 writes its own
+    sh = src("storybot/download.sh").splitlines()
+    for name in ("model_pretrain.pt", "model_iter_500.pt", "model_iter_5000.pt"):
+        line = next(l for l in sh if l.rstrip().endswith(f"storybot/{name}"))
+        assert line.startswith("# wget -nc https://huggingface.co/datasets/koki0702/zero-llm-data/"), line
+    assert "save_iters = [500, 5000]" in src("ch06/05_pretrain.py") and "model.save(model_save_path)" in src("ch06/05_pretrain.py")
+    # the fix shown on the page: replace one line of GPT.load_from (line 246); strict loading then succeeds
+    old = "model.load_state_dict(checkpoint['model_state_dict'])"
+    new = "model.load_state_dict({k.replace('.mlp.', '.ffn.'): v for k, v in checkpoint['model_state_dict'].items()})"
+    assert src("storybot/model.py").splitlines()[245].strip() == old
+    assert f"\n        {new}\n" in (ROOT / "content" / "errata.md").read_text(encoding="utf-8")
+    fixed = load_defs("storybot/model.py", replace={old: new})["GPT"]
+    for name in ("model_pretrain.pt", "model_iter_500.pt", "model_iter_5000.pt"):
+        assert fixed.load_from(str(DLFS6 / "storybot" / name)).blocks[0].ffn.W.weight.shape == (1344, 512)
     assert "self.mlp" in src("webbot/model.py") and "self.ffn" in src("storybot/model.py")
     # the rename happened in 234a9c6 (the checkpoints were not re-uploaded)
     show = git("show", "234a9c6", "--format=%ad %s", "--date=short", "--", "storybot/model.py")
@@ -158,7 +210,8 @@ def test_e12_ch04_05_eval_is_missing():
 
 
 def test_e48_download_script_lists_unpublished_dpo_model():
-    assert "storybot/model_dpo.pt" in src("storybot/download.sh")
+    line = next(l for l in src("storybot/download.sh").splitlines() if "storybot/model_dpo.pt" in l)
+    assert line.startswith("# wget")                                    # a commented-out line
     assert "model" not in src("webbot/download.sh").split("# === tokenizer files ===")[1].replace("merge_rules", "")
     assert "'dpo': 'storybot/model_dpo.pt'" in src("ch06/09_llm_judge.py")
 
@@ -178,6 +231,48 @@ def test_e03_crlf_checkout_changes_binary_mode_merges(dlfs6_path, tmp_path):
     full = (DLFS6 / "codebot" / "tiny_codes.txt").read_bytes()                  # LF checkout of this repo
     assert (len(full), full.count(b"\n")) == (6_487_033, 256_501)               # CRLF: 6,743,534 bytes
     assert not (DLFS6 / ".gitattributes").exists()
+
+
+def open_calls() -> list[tuple[str, int, str, str | None]]:
+    """(script, line, path expression, mode) of every open() call in the pinned DLFS6 sources."""
+    out = []
+    for path in sorted(DLFS6.rglob("*.py")):
+        rel = path.relative_to(DLFS6).as_posix()
+        if rel.startswith(".git"):
+            continue
+        for n in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "open":
+                mode = ast.literal_eval(n.args[1]) if len(n.args) > 1 else next(
+                    (ast.literal_eval(k.value) for k in n.keywords if k.arg == "mode"), None)
+                if "encoding" not in {k.arg for k in n.keywords}:
+                    out.append((rel, n.lineno, ast.unparse(n.args[0]), mode))
+    return out
+
+
+def test_e03_binary_mode_readers_only_read_downloaded_corpora():
+    """No book script hands a git checkout to a binary-mode reader: tiny_codes.txt (the only tracked corpus) is
+    read in text mode; the 'rb' corpus readers are fed TinyStories / OWT, which download.sh fetches with wget."""
+    tracked = git("ls-files").split()
+    assert [f for f in tracked if f.endswith((".txt", ".json"))] == [
+        "codebot/tiny_codes.txt", "codebot/tiny_codes_sft.json", "requirements.txt", "storybot/tiny_stories_dpo.json"]
+    users = {rel for rel in (p.relative_to(DLFS6).as_posix() for p in DLFS6.rglob("*.py"))
+             if "codebot/tiny_codes.txt" in src(rel)}
+    assert users == {"ch01/07_tiny_codes.py", "ch01/08_eval.py", "ch01/09_bpe_encode.py",
+                     "ch04/01_bpe_optimize.py", "ch04/02_bpe_cache.py", "ch04/06_encode_optimize.py"}
+    binary_readers = {rel for rel, _, _, mode in open_calls() if mode == "rb"}
+    assert users.isdisjoint(binary_readers - {"ch04/06_encode_optimize.py"})   # 06 opens 'rb' only for the pickle
+    assert 'with open(filepath, "rb") as f:\n            merge_rules = pickle.load(f)' in src("ch04/06_encode_optimize.py")
+    assert "text = open(file_path).read()" in src("ch04/06_encode_optimize.py")
+    feeds = {"ch04/03_bpe_chunk.py": 'file_path = "storybot/tiny_stories_train.txt"',
+             "ch04/04_bpe_parallel.py": 'file_path = "storybot/tiny_stories_train.txt"',
+             "ch04/07_encode_parallel.py": '"storybot/tiny_stories_valid.txt"',
+             "ch07/01_bpe_train.py": 'file_path = "webbot/owt_train.txt"',
+             "ch07/02_bpe_encode.py": '"webbot/owt_valid.txt"'}
+    for rel, needle in feeds.items():
+        assert needle in src(rel), rel
+    for bot in ("storybot", "webbot"):
+        fetched = [l for l in src(f"{bot}/download.sh").splitlines() if l.startswith("wget")]
+        assert fetched and all(l.startswith("wget -nc https://huggingface.co/") and l.endswith(".txt") for l in fetched)
 
 
 # ====================================================================== errata: medium
@@ -213,17 +308,21 @@ def test_e04_storybot_cache_grows_and_rope_position_freezes(dlfs6_path):
 
 def test_e05_rope_length_max_plus_one_is_silently_wrong(dlfs6_path):
     from storybot.model import GPT, RoPE
+    from webbot.model import GPT as WebGPT
+    from webbot.model import RoPE as WebRoPE
 
-    rope = RoPE(10000, 8, max_context_len=8)
-    x = torch.randn(1, 1, 9, 8)
-    y = rope(x)                                                         # offset becomes -1: one cos/sin row
-    same_angle = torch.cat([rope(x[:, :, i:i + 1], offset=7) for i in range(9)], dim=2)
-    assert torch.allclose(y, same_angle)                                # every position rotated as position 7
-    with pytest.raises(RuntimeError):
-        rope(torch.randn(1, 1, 10, 8))                                  # max+2 fails loudly
-    m = GPT(50, 8, 16, 2, 1, 32).eval()
+    for Rope in (RoPE, WebRoPE):                                        # the same two clamping lines in both bots
+        rope = Rope(10000, 8, max_context_len=8)
+        x = torch.randn(1, 1, 9, 8)
+        y = rope(x)                                                     # offset becomes -1: one cos/sin row
+        same_angle = torch.cat([rope(x[:, :, i:i + 1], offset=7) for i in range(9)], dim=2)
+        assert torch.allclose(y, same_angle)                            # every position rotated as position 7
+        with pytest.raises(RuntimeError):
+            rope(torch.randn(1, 1, 10, 8))                              # max+2 fails loudly
     with torch.no_grad():
-        assert m(torch.zeros(1, 9, dtype=torch.long)).shape == (1, 9, 50)   # no error at max+1
+        assert GPT(50, 8, 16, 2, 1, 32).eval()(torch.zeros(1, 9, dtype=torch.long)).shape == (1, 9, 50)
+        assert WebGPT(50, 8, 16, 2, 1, 1, 32).eval()(torch.zeros(1, 9, dtype=torch.long)).shape == (1, 9, 50)
+    assert consts("ch09/01_pretrain.py")["context_len"] == 1024                 # WebBot: 1,025 tokens is max+1
 
 
 def test_e06_multi_token_call_after_prefill_is_unmasked(dlfs6_path):
@@ -244,6 +343,26 @@ def test_e06_multi_token_call_after_prefill_is_unmasked(dlfs6_path):
     # the proposed fix: C new queries over K cached keys see a bottom-right aligned triangle
     C, K = 2, 5
     assert torch.equal(torch.ones(C, K).tril(diagonal=K - C), torch.ones(K, K).tril()[K - C:])
+
+    # WebBot: `is_causal = is_first_call` in F.scaled_dot_product_attention, so the same thing happens
+    from webbot.model import GPT as WebGPT
+    assert "is_causal = is_first_call" in src("webbot/model.py")
+    torch.manual_seed(0)
+    w = WebGPT(50, 32, 32, 4, 2, 1, 64).eval()
+    with torch.no_grad():
+        full = w(seq)
+        w.clear_cache(); w(seq[:, :3], use_cache=True)
+        chunk = w(seq[:, 3:5], use_cache=True)
+        w.clear_cache(); w(seq[:, :3], use_cache=True)
+        one = w(seq[:, 3:4], use_cache=True)
+    assert (chunk[:, 0] - full[:, 3]).abs().max() > 1e-3 and torch.allclose(one[:, 0], full[:, 3], atol=1e-5)
+    # the SDPA form of the fix: is_causal=True aligns top-left when C != K; the bottom-right mask is needed
+    q, k, v = torch.randn(1, 1, C, 8), torch.randn(1, 1, K, 8), torch.randn(1, 1, K, 8)
+    sdpa = torch.nn.functional.scaled_dot_product_attention
+    bottom_right = torch.ones(C, K, dtype=torch.bool).tril(diagonal=K - C)
+    top_left = torch.ones(C, K, dtype=torch.bool).tril()
+    assert torch.allclose(sdpa(q, k, v, is_causal=True), sdpa(q, k, v, attn_mask=top_left), atol=1e-6)
+    assert not torch.allclose(sdpa(q, k, v, is_causal=True), sdpa(q, k, v, attn_mask=bottom_right), atol=1e-3)
 
 
 def test_e07_cycle_dataloader_replays_first_epoch_and_keeps_batches():
@@ -295,10 +414,18 @@ def test_e15_grpo_logs_accuracy_after_the_updates():
     upd = next(k for k, s in enumerate(kinds) if s.startswith("for _ in range(n_update_per_generation)"))
     ev = next(k for k, s in enumerate(kinds) if s.startswith("if i % eval_interval == 0"))
     assert upd < ev
+    # the plot puts accuracies[k] (measured after iteration 10k+1) at x = 10k
+    assert "steps = list(range(0, len(accuracies) * eval_interval, eval_interval))" in src("ch03/09_grpo.py")
     # the recorded research run (seed 0, as shipped) logged "iteration 0" at 55.56%, not the SFT start 44/81
     base = json.loads((WEB / "errata" / "grpo_dropout_runs.json").read_text(encoding="utf-8"))["runs"]["base"]
     assert (base["seed"], base["acc_it"][0], base["greedy_acc"][0]) == (0, 0, 55.56)
     assert round(100 * 44 / 81, 1) == 54.3
+    # the two GPU runs share one SFT start (same sha256) yet logged different "iteration 0" accuracies
+    first = {}
+    for run in ("codebot-3060ti", "codebot-grpo-evalfix-3060ti"):
+        with (WEB / "runs" / run / "09_grpo.metrics.jsonl").open(encoding="utf-8") as f:
+            first[run] = json.loads(f.readline())["acc"]
+    assert first == {"codebot-3060ti": 53.1, "codebot-grpo-evalfix-3060ti": 56.8}
 
 
 def test_e09_calculate_reward_swallows_every_error():
@@ -310,7 +437,7 @@ def test_e09_calculate_reward_swallows_every_error():
     ns: dict = {}
     exec(code, ns)                                                      # same function, `re` never imported
     assert ns["calculate_reward"](7, "7") == 0.0                        # NameError became "wrong answer"
-    assert function_ast(page_cell("errata", "Z.4-d"), "calculate_reward") == function_ast(code, "calculate_reward")
+    assert function_ast(page_cell("errata", "Z.4-f"), "calculate_reward") == function_ast(code, "calculate_reward")
 
 
 def test_e10_dpo_prompt_and_answer_are_tokenized_apart(dlfs6_path):
@@ -396,6 +523,19 @@ def test_e11_special_token_text_is_injected(dlfs6_path):
         enc.encode("<|endoftext|>")                                     # tiktoken refuses by default
 
 
+def test_e50_max_iters_ignores_the_world_size():
+    """ch09/01: the step count is a literal; nothing reads WORLD_SIZE, and every rank draws its own full batch."""
+    c = consts("ch09/01_pretrain.py")
+    assert (c["max_iters"], c["micro_batch_size"], c["accumulation_steps"], c["context_len"]) == (100_000, 32, 4, 1024)
+    text = src("ch09/01_pretrain.py")
+    assert "WORLD_SIZE" not in text and "world_size" not in text and "get_world_size" not in text
+    assert "pbar = tqdm(range(max_iters), disable=not is_main)" in text
+    assert "batch_x, batch_y = get_batch(train_data, context_len,\n                                     micro_batch_size, device)" in text
+    assert "lr = get_lr(step, learning_rate, warmup_iters, max_iters)" in text      # the schedule follows max_iters
+    timing = json.loads((WEB / "runs" / "webbot-probe" / "timing.json").read_text(encoding="utf-8"))
+    assert timing["tokens_per_step"] == 32 * 4 * 1024
+
+
 # ====================================================================== errata: low (numbers & interfaces)
 
 def test_e13_get_batch_never_samples_the_last_window():
@@ -410,6 +550,8 @@ def test_e13_get_batch_never_samples_the_last_window():
         starts.update(x[:, 0].tolist())
     assert min(starts) == 0 and max(starts) == 91 and len(starts) == 92  # start 92 is valid but never drawn
     assert list(data[92:99] + 1) == list(data[93:100])
+    hf = {f["path"]: f["size"] for f in json.loads(EXTERNAL.read_text(encoding="utf-8"))["hf"]["files"]}
+    assert hf["storybot/tiny_stories_train.bin"] // 2 == 541_229_223      # "5.4 亿个 token" (uint16 per token)
 
 
 def test_e14_evaluate_drops_the_last_full_window():
@@ -419,6 +561,7 @@ def test_e14_evaluate_drops_the_last_full_window():
     x, _ = get_batch(np.arange(514), 256, 2, CPU, random=False, offset=0)
     assert x.shape[0] == 2
     assert "ix = ix[ix + context_len + 1 < len(data)]" in src("ch09/01_pretrain.py")
+    assert (DLFS6 / "storybot" / "tiny_stories_valid.bin").stat().st_size // 2 == 5_465_873   # "546 万个 token"
 
 
 def test_e16_ratio_is_taken_in_probability_space():
@@ -430,9 +573,10 @@ def test_e16_ratio_is_taken_in_probability_space():
 def test_e17_storybot_rmsnorm_uses_float32_machine_eps(dlfs6_path):
     from storybot.model import GPT
 
-    m = GPT(50, 8, 16, 2, 1, 32)
+    c = consts("ch06/05_pretrain.py")                                   # the book's StoryBot configuration
+    m = GPT(c["vocab_size"], c["context_len"], c["embed_dim"], c["n_head"], c["n_layer"], c["ff_dim"], c["theta"])
     norms = [mod for mod in m.modules() if isinstance(mod, nn.RMSNorm)]
-    assert len(norms) == 3 and all(n.eps is None for n in norms)
+    assert len(norms) == 2 * c["n_layer"] + 1 == 9 and all(n.eps is None for n in norms)
     assert "self.eps = 1e-5" in src("ch05/03_rmsnorm.py")
     x = torch.full((1, 8), 1e-3)                                        # a tiny activation: rms = 1e-3
     a, b = nn.RMSNorm(8)(x), nn.RMSNorm(8, eps=1e-5)(x)
@@ -478,6 +622,15 @@ def test_e20_eos_is_not_part_of_the_grpo_objective(dlfs6_path):
     ids, mask = ds.get_batch([p, p], ["7", "12"], CPU)
     assert tok.end_token_id not in ids.tolist()[0] + ids.tolist()[1]
     assert mask.sum().item() == 3                                       # '7' and '1','2': digits only
+    # but tokens written after the answer are inside the mask: '7 8' (reward 0 for 7) can be pushed down
+    assert "mask = [0] * len(prompt_ids) + [1] * len(response_ids)" in src("ch03/09_grpo.py")
+    ids, mask = ds.get_batch([p], ["7 8"], CPU)
+    n_prompt = len(tok.encode(p))
+    tail = tok.encode("7 8")
+    assert mask[0, n_prompt:].tolist() == [1.0] * len(tail) and tok.decode(tail[1:]) == " 8"
+    reward = load_defs("ch03/09_grpo.py", names={"calculate_reward"})["calculate_reward"]
+    rewards = torch.tensor([reward(7, r) for r in ("7", "7 8")])
+    assert (rewards - rewards.mean()).tolist() == [0.5, -0.5]          # '7 8' gets a negative advantage
 
 
 def test_e22_generate_leaves_the_model_in_eval_mode(dlfs6_path):
@@ -491,12 +644,18 @@ def test_e22_generate_leaves_the_model_in_eval_mode(dlfs6_path):
     torch.manual_seed(0)
     generate(m, tok, "def", max_new_tokens=2)
     assert not m.training
+    lines = src("ch03/09_grpo.py").splitlines()                          # GRPO's evaluation switches back by hand
+    assert lines[193].strip() == "response = generate(model, tokenizer, prompt, temperature=0)"
+    assert lines[197].strip() == "model.train()"
 
 
 def test_e23_tiny_temperature_gives_nan():
     logits = torch.tensor([[2.0, 1.0, 0.5]])
+    for T in (1e-3, 1e-10, 1e-30, 1e-38):                               # small temperatures: a clean argmax
+        assert torch.equal(torch.softmax(logits / T, dim=-1), torch.tensor([[1.0, 0.0, 0.0]])), T
+    for T in (1e-39, 1e-45):                                            # logits / T overflows float32: NaN
+        assert torch.isnan(torch.softmax(logits / T, dim=-1)).all(), T
     probs = torch.softmax(logits / 1e-45, dim=-1)
-    assert torch.isnan(probs).all()
     with pytest.raises(RuntimeError):
         torch.multinomial(probs, 1)
 
@@ -511,13 +670,21 @@ def test_e24_single_token_decode_and_webbot_partial_utf8(dlfs6_path):
     ids = code.encode("世")
     assert ids == [228, 184, 150] and [code.decode([i]) for i in ids] == ["�"] * 3
     web = StoryTok(pickle.loads((DLFS6 / "webbot" / "merge_rules.pkl").read_bytes()))
-    bad = 0
-    for b in web.id_to_bytes.values():
+
+    def strict_ok(b: bytes) -> bool:
         try:
             b.decode("utf-8")
+            return True
         except UnicodeDecodeError:
-            bad += 1
-    assert web.vocab_size == 50_000 and bad - 128 == 157               # 157 merged tokens (+ bytes 0x80-0xff)
+            return False
+
+    bad = sorted(i for i, b in web.id_to_bytes.items() if not strict_ok(b))
+    merged_bad = [i for i in bad if i >= 256]
+    assert web.vocab_size == 50_000 and len(bad) - 128 == len(merged_bad) == 157   # + bytes 0x80-0xff
+    assert merged_bad[0] == 290 and web.id_to_bytes[290] == b"\xe2\x80"
+    # ch01/08 strictly decodes CodeBot ids 256-265 and 990-999; all of them happen to be valid UTF-8
+    assert "for token_id in range(256, 266):" in src("ch01/08_eval.py") and "for token_id in range(990, 1000):" in src("ch01/08_eval.py")
+    assert all(strict_ok(code.id_to_bytes[i]) for i in [*range(256, 266), *range(990, 1000)])
 
 
 def test_e25_uint16_cannot_hold_ids_above_65535():
@@ -548,6 +715,13 @@ def test_e27_merge_rules_order_is_part_of_the_data(dlfs6_path):
     shuffled = dict(sorted(rules.items(), key=lambda kv: -kv[1]))      # same pairs, reversed order
     with pytest.raises(KeyError):
         BPETokenizer(shuffled)
+    # a JSON object keeps the insertion order both ways (keys must become strings); sort_keys=True does not
+    as_json = {f"{a},{b}": new for (a, b), new in rules.items()}
+    back = lambda text: {tuple(map(int, k.split(","))): v for k, v in json.loads(text).items()}  # noqa: E731
+    assert list(back(json.dumps(as_json)).items()) == list(rules.items())
+    BPETokenizer(back(json.dumps(as_json)))
+    with pytest.raises(KeyError):
+        BPETokenizer(back(json.dumps(as_json, sort_keys=True)))
 
 
 # ====================================================================== errata: comments, docs, portability
@@ -632,14 +806,12 @@ def test_e47_compression_on_the_first_10k_chars_vs_whole_corpus(dlfs6_path):
 
 
 def test_e29_text_files_are_opened_with_the_locale_encoding():
-    no_encoding = []
-    for rel in ("ch01/07_tiny_codes.py", "ch03/03_alpaca.py", "ch03/03_sft.py", "ch04/01_bpe_optimize.py",
-                "ch06/08_dpo.py"):
-        for n in ast.walk(ast.parse(src(rel))):
-            if (isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "open"
-                    and len(n.args) < 2 and "encoding" not in {k.arg for k in n.keywords}):
-                no_encoding.append(rel)
-    assert len(no_encoding) == 5                                        # text mode, locale encoding
+    locale_reads = [(rel, line) for rel, line, _, mode in open_calls() if mode is None or "b" not in mode]
+    assert locale_reads == [("ch01/07_tiny_codes.py", 9), ("ch01/08_eval.py", 24), ("ch01/09_bpe_encode.py", 13),
+                            ("ch03/03_alpaca.py", 12), ("ch03/03_sft.py", 35), ("ch04/01_bpe_optimize.py", 79),
+                            ("ch04/02_bpe_cache.py", 98), ("ch04/06_encode_optimize.py", 82), ("ch06/08_dpo.py", 38)]
+    assert src("ch03/03_sft.py").splitlines()[34].strip() == "with open(data_path) as f:"   # the line the fix changes
+    assert "codebot/tiny_codes_sft.json" in src("ch03/03_sft.py")
     raw = (DLFS6 / "codebot" / "tiny_codes_sft.json").read_bytes()
     as_utf8, as_gbk = json.loads(raw.decode("utf-8")), json.loads(raw.decode("gbk"))   # GBK raises no error
     changed = [(a["response"], b["response"]) for a, b in zip(as_utf8, as_gbk) if a != b]
@@ -661,9 +833,15 @@ def test_e30_soft_dictionary_softmax_overflows():
 
 def test_e31_rope_tables_are_saved_into_every_layer(dlfs6_path):
     from storybot.model import GPT
+    from webbot.model import GPT as WebGPT
 
+    tables = lambda m: sum("rope.cos_cache" in k or "rope.sin_cache" in k for k in m.state_dict())  # noqa: E731
+    story = GPT(10000, 256, 512, 16, 4, 1344, 10000)                    # the book's StoryBot: 4 blocks
+    assert tables(story) == 8
+    blocks = story.blocks
+    assert all(b.attn.rope is blocks[0].attn.rope for b in blocks)     # one shared module, saved once per layer
+    assert tables(WebGPT(50, 16, 32, 4, 2, 12, 64)) == 24               # WebBot has 12 blocks
     m = GPT(50, 16, 32, 2, 3, 64)
-    assert sum("rope.cos_cache" in k or "rope.sin_cache" in k for k in m.state_dict()) == 6
     with pytest.raises(RuntimeError, match="size mismatch"):
         GPT(50, 32, 32, 2, 3, 64).load_state_dict(m.state_dict())     # same weights, longer context
 
@@ -721,6 +899,84 @@ def grpo_dropout_runs() -> dict:
 
 def test_errata_data_files_are_current():
     assert json.loads((WEB / "errata" / "grpo_dropout_runs.json").read_text(encoding="utf-8")) == grpo_dropout_runs()
+
+
+HF_DATASET = "koki0702/zero-llm-data"
+GH_REPO = "oreilly-japan/deep-learning-from-scratch-6"
+EXTERNAL = WEB / "errata" / "external_facts.json"
+
+
+def fetch_external_facts() -> dict:
+    """Re-check the external facts behind E02, E12, E13, E37, E39, E48 and Z.7 (network; run by hand:
+    `uv run python verify/test_reference.py --fetch-external`). Redirects are recorded, not followed."""
+    import datetime as dt
+    import urllib.error
+    import urllib.request
+
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None
+
+    opener = urllib.request.build_opener(NoRedirect)
+    headers = {"User-Agent": "zero-llm-tutorial (verify/test_reference.py)"}
+
+    def status(url: str, location: bool = True) -> dict:
+        try:
+            with opener.open(urllib.request.Request(url, method="HEAD", headers=headers), timeout=30) as r:
+                return {"url": url, "status": r.status}
+        except urllib.error.HTTPError as e:
+            out = {"url": url, "status": e.code}
+            if location and e.headers.get("Location"):
+                out["location"] = e.headers["Location"]
+            return out
+
+    def get_json(url: str):
+        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as r:
+            return json.loads(r.read().decode("utf-8"))
+
+    files = [{"path": it["path"], "size": it["size"], "sha256": (it.get("lfs") or {}).get("oid")}
+             for folder in ("codebot", "storybot", "webbot")
+             for it in get_json(f"https://huggingface.co/api/datasets/{HF_DATASET}/tree/main/{folder}")]
+    resolve = f"https://huggingface.co/datasets/{HF_DATASET}/resolve/main/"
+    github = {}
+    for key, api in (("pull_6", "pulls/6"), ("issue_4", "issues/4"), ("issue_7", "issues/7")):
+        d = get_json(f"https://api.github.com/repos/{GH_REPO}/{api}")
+        github[key] = {"url": d["html_url"], "title": d["title"], "state": d["state"], "created_at": d["created_at"][:10]}
+    github["wiki_errata"] = [status(f"https://github.com/{GH_REPO}/wiki/errata"), status(f"https://github.com/{GH_REPO}/wiki")]
+    return {"fetched": dt.date.today().isoformat(),
+            "hf": {"dataset": f"https://huggingface.co/datasets/{HF_DATASET}", "files": files,
+                   "status": [status(resolve + p, location=False)          # (a signed, expiring CDN URL)
+                              for p in ("storybot/model_dpo.pt", "webbot/model_pretrain.pt", "storybot/model_pretrain.pt")]},
+            "github": github}
+
+
+def test_errata_external_facts_match_the_local_files():
+    """The recorded HF listing and GitHub facts (E02, E12, E13, E37, E39, E48, Z.7) agree with the pinned files."""
+    import hashlib
+
+    ext = json.loads(EXTERNAL.read_text(encoding="utf-8"))
+    assert ext["fetched"] == "2026-10-12"
+    hf = {f["path"]: f for f in ext["hf"]["files"]}
+    sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()  # noqa: E731
+    for rel in ("codebot/model_sft.pt", "storybot/model_pretrain.pt", "storybot/model_iter_500.pt",
+                "storybot/model_iter_5000.pt"):
+        assert sha(DLFS6 / rel) == hf[rel]["sha256"], rel        # the local copies are the author's published files
+    assert hf["storybot/tiny_stories_train.bin"]["size"] // 2 == 541_229_223               # E13: 5.4 亿个 token
+    assert (DLFS6 / "storybot" / "tiny_stories_valid.bin").stat().st_size == hf["storybot/tiny_stories_valid.bin"]["size"]
+    assert "storybot/model_dpo.pt" not in hf                                                # E48
+    assert not any(p.startswith("webbot/") and p.endswith(".pt") for p in hf)
+    status = {s["url"].rsplit("/main/", 1)[1]: s["status"] for s in ext["hf"]["status"]}
+    assert status == {"storybot/model_dpo.pt": 404, "webbot/model_pretrain.pt": 404, "storybot/model_pretrain.pt": 302}
+    gh = ext["github"]
+    wiki_errata, wiki = gh["wiki_errata"]                                                   # E37
+    assert wiki_errata["status"] == 302 and wiki_errata["location"].endswith(f"{GH_REPO}/wiki")
+    assert wiki["status"] == 302 and wiki["location"].rstrip("/").endswith(GH_REPO)
+    assert (gh["pull_6"]["title"], gh["pull_6"]["state"], gh["pull_6"]["created_at"]) == \
+        ("fix: RMSNorm初期化時の引数を修正", "open", "2026-06-12")                            # E39
+    assert (gh["issue_4"]["state"], gh["issue_4"]["created_at"]) == ("open", "2025-12-28")   # Z.7
+    assert "07_llm_judge" in gh["issue_4"]["title"]
+    assert (gh["issue_7"]["state"], gh["issue_7"]["created_at"]) == ("open", "2026-07-28")   # E12
+    assert "05_eval.py" in gh["issue_7"]["title"]
 
 
 # ====================================================================== cs336
@@ -888,6 +1144,9 @@ def test_glossary_epoch_two_ways():
 
 
 if __name__ == "__main__":
-    out = WEB / "errata" / "grpo_dropout_runs.json"
-    out.write_text(json.dumps(grpo_dropout_runs(), ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
+    if "--fetch-external" in sys.argv:          # network: HF listing + GitHub facts for the errata page
+        out, data = EXTERNAL, fetch_external_facts()
+    else:
+        out, data = WEB / "errata" / "grpo_dropout_runs.json", grpo_dropout_runs()
+    out.write_text(json.dumps(data, ensure_ascii=False, indent=1) + "\n", encoding="utf-8", newline="\n")
     print(f"wrote {out}")

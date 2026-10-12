@@ -1,0 +1,127 @@
+{
+ "input": "codebot/tiny_codes.txt (LF)",
+ "bytes": 6487033,
+ "vocab": 1000,
+ "runs": {
+  "dedup": [
+   {
+    "wall": 224.942,
+    "cpu": 163.719,
+    "load": {
+     "mean": 100.0,
+     "min": 99.5,
+     "max": 100.0
+    },
+    "phases": {
+     "Pretokenizing": {
+      "wall": 4.087,
+      "cpu": 3.109
+     },
+     "Training BPE": {
+      "wall": 220.775,
+      "cpu": 160.562
+     }
+    }
+   }
+  ],
+  "cache": [
+   {
+    "wall": 19.803,
+    "cpu": 13.984,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    },
+    "phases": {
+     "Pretokenizing": {
+      "wall": 4.981,
+      "cpu": 3.219
+     },
+     "Training BPE": {
+      "wall": 14.273,
+      "cpu": 10.328
+     }
+    }
+   },
+   {
+    "wall": 17.068,
+    "cpu": 13.797,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    },
+    "phases": {
+     "Pretokenizing": {
+      "wall": 4.082,
+      "cpu": 3.219
+     },
+     "Training BPE": {
+      "wall": 12.471,
+      "cpu": 10.156
+     }
+    }
+   }
+  ],
+  "chunk": [
+   {
+    "wall": 24.951,
+    "cpu": 14.594,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    },
+    "phases": {
+     "Pretokenizing": {
+      "wall": 7.41,
+      "cpu": 4.359
+     },
+     "Training BPE": {
+      "wall": 17.023,
+      "cpu": 9.812
+     }
+    }
+   }
+  ],
+  "heap": [
+   {
+    "wall": 14.075,
+    "cpu": 10.297,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    }
+   },
+   {
+    "wall": 13.132,
+    "cpu": 9.938,
+    "load": {
+     "mean": 99.9,
+     "min": 98.1,
+     "max": 100.0
+    }
+   }
+  ]
+ },
+ "equals_codebot_pkl": {
+  "dedup": true,
+  "cache": true,
+  "chunk": true,
+  "heap": true
+ },
+ "env": {
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "logical_cpus": 16,
+  "physical_cores": 8,
+  "ram_gb": 47.7,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "numpy": "2.5.4",
+  "regex": "2026.9.29",
+  "note": "RTX 3060 Ti busy with the tutorial's training run during all measurements (CPU only here)",
+  "date": "2026-10-11 20:39"
+ }
+}

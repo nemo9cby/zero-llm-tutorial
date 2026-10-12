@@ -494,8 +494,9 @@ export function attentionBackward(dout, q, k, v, P, dq, dk, dv, B, T, H, D) {
   }
 }
 
-/** Mean cross-entropy of logits [N, V] against integer targets. Turns the logits into probabilities in place. */
-export function crossEntropyForward(logits, targets, N, V) {
+/** Mean cross-entropy of logits [N, V] against integer targets. Turns the logits into probabilities in place.
+    rowLoss (optional, length >= N) receives the loss of every row. */
+export function crossEntropyForward(logits, targets, N, V, rowLoss = null) {
   let total = 0;
   for (let n = 0; n < N; n++) {
     const o = n * V;
@@ -505,7 +506,9 @@ export function crossEntropyForward(logits, targets, N, V) {
     let sum = 0;
     for (let c = 0; c < V; c++) { const w = Math.exp(logits[o + c] - max); logits[o + c] = w; sum += w; }
     for (let c = 0; c < V; c++) logits[o + c] /= sum;
-    total += Math.log(sum) + max - target; // -log softmax(target), without log(0)
+    const loss = Math.log(sum) + max - target; // -log softmax(target), without log(0)
+    if (rowLoss) rowLoss[n] = loss;
+    total += loss;
   }
   return total / N;
 }
@@ -580,14 +583,15 @@ export function makeWorkspace(m, B, T) {
     dx: new A(N * E), dh: new A(N * E), dtmp: new A(N * E), datt: new A(N * E),
     dq: new A(N * E), dk: new A(N * E), dv: new A(N * E), dg: new A(N * F), du: new A(N * F),
     ids: null, targets: null, bt: [B, T], // the last forward()'s batch, for backward()
+    capacity: N, maxT: T, // B * T rows, sequences of up to T tokens
   };
 }
 
 /** Forward pass for ids [B*T] (B and T may be smaller than the workspace's).
-    With targets: returns the mean cross-entropy and keeps what backward() needs.
-    Without targets: leaves logits in ws.logits. With onlyRow = r (generation), only row r's logits are
-    computed, into ws.logits[0 .. V-1]. */
-export function forward(m, ws, ids, targets, B, T, { onlyRow = -1 } = {}) {
+    With targets: returns the mean cross-entropy and keeps what backward() needs; rowLoss (optional)
+    receives the loss of every row. Without targets: leaves logits in ws.logits. With onlyRow = r
+    (generation), only row r's logits are computed, into ws.logits[0 .. V-1]. */
+export function forward(m, ws, ids, targets, B, T, { onlyRow = -1, rowLoss = null } = {}) {
   const { vocabSize: V, embed: E, heads: H, ff: F } = m.cfg;
   const N = B * T, D = E / H, x = ws.x;
   if (T > m.cfg.ctx) throw new Error(`序列长度 ${T} 超过了上下文长度 ${m.cfg.ctx}`);
@@ -616,7 +620,7 @@ export function forward(m, ws, ids, targets, B, T, { onlyRow = -1 } = {}) {
   layerNormForward(x, m.lnfg.data, m.lnfb.data, ws.hf, ws.xhatf, ws.rstdf, N, E);
   linearForward(ws.hf, m.tok.data, m.ubias.data, ws.logits, N, E, V); // unembed.weight is embed.weight
   ws.ids = ids; ws.targets = targets; ws.bt = [B, T];
-  return targets ? crossEntropyForward(ws.logits, targets, N, V) : null;
+  return targets ? crossEntropyForward(ws.logits, targets, N, V, rowLoss) : null;
 }
 
 /** Backward pass after forward(..., targets): accumulates every parameter's .grad. */
@@ -736,20 +740,32 @@ export function makeBatcher(tokens, B, T, rng) {
   };
 }
 
-/** B evenly spaced windows of a token array (a fixed held-out batch). */
-export function fixedWindows(tokens, B, T) {
-  const x = new Int32Array(B * T), y = new Int32Array(B * T);
-  const span = tokens.length - T - 1;
-  for (let b = 0; b < B; b++) {
-    const s = Math.floor((b * span) / Math.max(1, B - 1));
-    for (let t = 0; t < T; t++) { x[b * T + t] = tokens[s + t]; y[b * T + t] = tokens[s + t + 1]; }
-  }
-  return { x, y };
+/** Mean next-token cross-entropy over a whole token array: every target tokens[1], ..., tokens[n-1] is
+    scored exactly once, in consecutive windows of T tokens (the last window may be shorter), as many
+    windows per forward pass as the workspace holds. Position t of a window has seen t + 1 tokens, so
+    T = 1 scores the model when it may look at nothing but the previous token.
+    byPosition (optional, length >= T) receives the mean loss at each position of the window. */
+export function evaluateLoss(m, ws, tokens, T, { byPosition = null } = {}) {
+  if (T > ws.maxT) throw new Error(`窗口长度 ${T} 超过了工作区的 ${ws.maxT}`);
+  const n = tokens.length - 1, full = Math.floor(n / T), rows = Math.floor(ws.capacity / T);
+  const x = new Int32Array(rows * T), y = new Int32Array(rows * T), loss = new Float64Array(rows * T);
+  const sums = new Float64Array(T), counts = new Float64Array(T);
+  let total = 0;
+  const score = (start, b, t) => { // b consecutive windows of t tokens, starting at token `start`
+    for (let k = 0; k < b * t; k++) { x[k] = tokens[start + k]; y[k] = tokens[start + k + 1]; }
+    forward(m, ws, x.subarray(0, b * t), y.subarray(0, b * t), b, t, { rowLoss: loss });
+    for (let k = 0; k < b * t; k++) { total += loss[k]; sums[k % t] += loss[k]; counts[k % t] += 1; }
+  };
+  for (let w = 0; w < full; w += rows) score(w * T, Math.min(rows, full - w), T);
+  if (n > full * T) score(full * T, 1, n - full * T);
+  if (byPosition) for (let t = 0; t < T; t++) byPosition[t] = sums[t] / counts[t];
+  return total / n;
 }
 
 /** Count-based reference points for the loss curve: the cross-entropy (nats) on `heldOut` of a unigram
-    model and of a bigram model, both counted on `train` with add-k smoothing. A GPT whose held-out loss
-    is below the bigram line is using more than the previous character. */
+    model and of a bigram model, both counted on `train` with add-k smoothing. The bigram line is what
+    the previous token alone achieves with counting; T.2 of the page explains how far below it a model
+    must go before it has certainly used a longer context. */
 export function ngramBaselines(train, heldOut, V, k = 0.1) {
   const uni = new Float64Array(V).fill(k), big = new Float64Array(V * V).fill(k);
   for (let i = 0; i < train.length; i++) uni[train[i]] += 1;
@@ -771,8 +787,8 @@ export function trainStep(m, ws, opt, x, y, B, T) {
   return loss;
 }
 
-/** One training run, as in ch03/01_pretrain.py: model + AdamW + shuffled windows, plus a fixed held-out
-    batch and a sampler. The Web Worker, the recorded runs and the tests all drive this same object.
+/** One training run, as in ch03/01_pretrain.py: model + AdamW + shuffled windows, plus the held-out
+    evaluation and a sampler. The Web Worker, the recorded runs and the tests all drive this same object.
     mode 'overfit' keeps training on the first batch drawn (the "overfit one batch" check). */
 export function createSession({ trainIds, valIds, config, seed = 0, batch = 8, lr = 3e-3, evalBatch = 16 }) {
   const T = config.ctx, rng = makeRng(seed);
@@ -783,7 +799,6 @@ export function createSession({ trainIds, valIds, config, seed = 0, batch = 8, l
   const next = makeBatcher(trainIds, batch, T, rng);
   const first = next();
   const fixed = { x: Int32Array.from(first.x), y: Int32Array.from(first.y) };
-  const held = fixedWindows(valIds, evalBatch, T);
   const sampleRng = makeRng(seed + 1);
   const session = {
     model, opt, batch, fixed, step: 0, mode: 'normal',
@@ -794,7 +809,9 @@ export function createSession({ trainIds, valIds, config, seed = 0, batch = 8, l
       session.step += 1;
       return loss;
     },
-    heldOutLoss: () => forward(model, evalWs, held.x, held.y, evalBatch, T),
+    /** The loss on the whole held-out text, every character predicted once (see evaluateLoss);
+        context = 1 lets the model see only the previous character. */
+    heldOutLoss: (context = T, opts) => evaluateLoss(model, evalWs, valIds, context, opts),
     fixedBatchLoss: () => forward(model, ws, fixed.x, fixed.y, batch, T),
     sample: (promptIds, opts) => generate(model, genWs, promptIds, { ...opts, rng: sampleRng }),
   };

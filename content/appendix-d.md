@@ -42,15 +42,20 @@ for t in range(1, 6):
 
 ## D.2 推导：E[m_t] = (1 − βᵗ) E[g]
 
-梯度恒定只是特例。真实的梯度带着噪声，我们要的是期望意义下的结论。这里先假设每一步梯度的期望都相同，记作 $\mathbb E[g]$（梯度的分布不随时间变化）。推导如下，每一行右边写着理由：
+梯度恒定只是特例。真实的梯度带着噪声，我们要的是期望意义下的结论。这里先假设每一步梯度的期望都相同，记作 $\mathbb E[g]$（梯度的分布不随时间变化）。推导如下，每一行下面用小字写着理由：
 
 $$
 \begin{aligned}
-m_t &= \beta\, m_{t-1} + (1-\beta)\, g_t && \text{（定义）}\\
-&= (1-\beta)\sum_{i=1}^{t} \beta^{\,t-i}\, g_i && \text{（反复代入，}m_0 = 0\text{）}\\
-\mathbb E[m_t] &= (1-\beta)\sum_{i=1}^{t} \beta^{\,t-i}\,\mathbb E[g_i] && \text{（期望的线性）}\\
-&= \mathbb E[g]\cdot(1-\beta)\sum_{k=0}^{t-1}\beta^{k} && \text{（}\mathbb E[g_i] = \mathbb E[g]\text{，令 }k = t - i\text{）}\\
-&= \mathbb E[g]\cdot(1-\beta^t) && \text{（等比数列求和）}
+m_t &= \beta\, m_{t-1} + (1-\beta)\, g_t\\[-3pt]
+&\quad{\footnotesize\text{（定义）}}\\[2pt]
+&= (1-\beta)\sum_{i=1}^{t} \beta^{\,t-i}\, g_i\\[-3pt]
+&\quad{\footnotesize\text{（反复代入，}m_0 = 0\text{）}}\\[2pt]
+\mathbb E[m_t] &= (1-\beta)\sum_{i=1}^{t} \beta^{\,t-i}\,\mathbb E[g_i]\\[-3pt]
+&\quad{\footnotesize\text{（期望的线性）}}\\[2pt]
+&= \mathbb E[g]\cdot(1-\beta)\sum_{k=0}^{t-1}\beta^{k}\\[-3pt]
+&\quad{\footnotesize\text{（}\mathbb E[g_i] = \mathbb E[g]\text{，令 }k = t - i\text{）}}\\[2pt]
+&= \mathbb E[g]\cdot(1-\beta^t)\\[-3pt]
+&\quad{\footnotesize\text{（等比数列求和）}}
 \end{aligned}
 $$
 
@@ -143,8 +148,10 @@ Adam 的更新量是 $\mathrm{lr}\cdot\hat m_t/(\sqrt{\hat v_t}+\varepsilon)$。
 
 $$
 \begin{aligned}
-\frac{m_t}{\sqrt{v_t}} &= \frac{(1-\beta_1^t)\,\hat m_t}{\sqrt{(1-\beta_2^t)\,\hat v_t}} && \text{（代入 }m_t = (1-\beta_1^t)\hat m_t,\ v_t = (1-\beta_2^t)\hat v_t\text{）}\\
-&= \underbrace{\frac{1-\beta_1^t}{\sqrt{1-\beta_2^t}}}_{f(t)}\cdot\frac{\hat m_t}{\sqrt{\hat v_t}} && \text{（把与梯度无关的部分提出来）}
+\frac{m_t}{\sqrt{v_t}} &= \frac{(1-\beta_1^t)\,\hat m_t}{\sqrt{(1-\beta_2^t)\,\hat v_t}}\\[-3pt]
+&\quad{\footnotesize\text{（代入 }m_t = (1-\beta_1^t)\hat m_t,\ v_t = (1-\beta_2^t)\hat v_t\text{）}}\\[2pt]
+&= \underbrace{\frac{1-\beta_1^t}{\sqrt{1-\beta_2^t}}}_{f(t)}\cdot\frac{\hat m_t}{\sqrt{\hat v_t}}\\[-3pt]
+&\quad{\footnotesize\text{（把与梯度无关的部分提出来）}}
 \end{aligned}
 $$
 

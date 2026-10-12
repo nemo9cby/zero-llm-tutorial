@@ -4,7 +4,7 @@
   1. 加载 HF 上的权重时把 `.mlp.` 改名为 `.ffn.`，否则 load_state_dict 报错
      （test_hf_checkpoint_needs_key_rename）。
   2. context_len 256 -> 96：最长的样本只有 81 个 token，右侧 padding 全被 mask 掉，
-     每条序列的 log-prob 与 256 时相同（test_dpo_right_padding_is_harmless），只是省了 2/3 的计算。
+     每条序列的 log-prob 与 256 时相同（test_dpo_masks_on_real_model），只是省了 2/3 的计算。
   3. 开头加 torch.manual_seed(0) 与 torch.set_num_threads()：原脚本没有设种子，结果不可复现。
   4. 每步的 loss 写进 JSON；训练前后在 144 条训练 pair 与 8 条留出 pair 上计算隐式奖励，
      在留出的 TinyStories 文本上计算语言模型 loss，并用相同种子各生成几段样本。

@@ -3,11 +3,12 @@
    再做 W−1 步 all-gather（把已经求好和的块沿环传一圈）。最后每张卡都拿到总和，
    而每张卡只发送了 2(W−1)/W·N 个数。 */
 import { h } from './_lib.js';
+import { mulberry32 } from './ch09-util.js';
 
-/** GPU r 的梯度：W 块，每块一个小整数，方便心算。 */
-export function initialGrads(W) {
-  return Array.from({ length: W }, (_, r) =>
-    Array.from({ length: W }, (_, c) => ((r * 3 + c * 5 + 2) % 9) + 1));
+/** GPU r 的梯度：W 块，每块是 1–9 的一个整数，方便心算。种子固定；各张卡读的数据不同，梯度也互不相同。 */
+export function initialGrads(W, seed = 90) {
+  const rnd = mulberry32(seed + W);
+  return Array.from({ length: W }, () => Array.from({ length: W }, () => 1 + Math.floor(9 * rnd())));
 }
 
 const mod = (a, W) => ((a % W) + W) % W;
@@ -55,9 +56,9 @@ function injectStyle() {
   styled = true;
   document.head.append(h('style', {}, `
 .w-ch09-ar table { border-collapse: separate; border-spacing: 3px; margin: .4rem 0; display: table; font-variant-numeric: tabular-nums; }
-.w-ch09-ar th { font-weight: 600; font-size: .78rem; color: var(--ink-2); padding: 0 .3rem; border: 0; text-align: center; }
+.w-ch09-ar th { font-weight: 600; font-size: .78rem; color: var(--ink-2); padding: 0 .3rem; border: 0; text-align: center; min-width: 0; }
 .w-ch09-ar th[scope=row] { text-align: right; white-space: nowrap; }
-.w-ch09-ar td { width: 2.4rem; height: 2.3rem; text-align: center; border-radius: 4px; padding: 0; border: 1px solid var(--rule);
+.w-ch09-ar td { width: 2.4rem; min-width: 0; height: 2.3rem; text-align: center; border-radius: 4px; padding: 0; border: 1px solid var(--rule);
   font: 600 .95rem/1.1 var(--mono); position: relative; background: var(--paper); }
 .w-ch09-ar td small { display: block; font: 400 .62rem/1 var(--serif); color: var(--ink-3); }
 .w-ch09-ar td.full { border-color: var(--ai); box-shadow: inset 0 0 0 1px var(--ai); }
@@ -65,7 +66,12 @@ function injectStyle() {
 .w-ch09-ar td.sent { outline: 2px dashed var(--ink-3); outline-offset: 1px; }
 .w-ch09-ar .sum td { border-style: dashed; color: var(--ink-2); background: transparent; }
 .w-ch09-ar .moves { font-size: .82rem; color: var(--ink-2); min-height: 1.4em; }
-@media (max-width: 420px) { .w-ch09-ar td { width: 2rem; height: 2.1rem; font-size: .85rem; } }
+@media (max-width: 420px) {
+  .w-ch09-ar table { border-spacing: 2px; }
+  .w-ch09-ar th { padding: 0 .15rem; font-size: .7rem; }
+  .w-ch09-ar td { width: 1.75rem; height: 2rem; font-size: .8rem; }
+  .w-ch09-ar td small { font-size: .55rem; }
+}
 `));
 }
 
@@ -104,9 +110,11 @@ export function mount(root, config = {}) {
   }
 
   function describeMoves(st) {
-    if (!st.moves.length) return '每格下方的 n/W 表示这个值已经汇总了几张卡的梯度。';
-    if (W > 4) return `${W} 张卡同时各发出 1 块（虚线框发出，橙框接收）。`;
-    return st.moves.map((m) => `GPU ${m.from} → GPU ${m.to}：块 ${m.chunk}`).join('；');
+    const legend = `虚线框发出，橙框接收，蓝框表示已经汇总了全部 ${W} 张卡。`;
+    if (!st.moves.length) return `每格下方的 n/W 表示这个值已经汇总了几张卡的梯度。${legend}`;
+    const what = W > 4 ? `${W} 张卡同时各发出 1 块`
+      : st.moves.map((m) => `GPU ${m.from} → GPU ${m.to}：块 ${m.chunk}`).join('；');
+    return `${what}。${legend}`;
   }
 
   function render() {

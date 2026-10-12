@@ -6,6 +6,7 @@ chapter_cells() 原样执行，再与 PyTorch 的实现对拍。
 
   CUDA_VISIBLE_DEVICES=-1 uv run pytest verify/test_ch06.py
 """
+import ast
 import json
 import math
 
@@ -72,7 +73,15 @@ def test_book_adamw_matches_torch(dlfs6_path):
 
 def test_numpy_adamw_matches_torch():
     # 页面上 6.2-a 的 NumPy 版 AdamW（原样执行）与 torch.optim.AdamW 在 float64 下对拍
-    AdamW = chapter_cells("6.2-a")["AdamW"]
+    cells = chapter_cells("6.2-a")
+    AdamW = cells["AdamW"]
+
+    # 6.2-a 写死的 torch_value，确实是 torch.optim.AdamW 在 θ = 1、g = 0.5、lr = 0.1 时一步之后的值
+    p = torch.tensor([1.0], dtype=torch.float64, requires_grad=True)
+    opt = torch.optim.AdamW([p], lr=0.1)
+    p.grad = torch.tensor([0.5], dtype=torch.float64)
+    opt.step()
+    assert p.item() == cells["torch_value"] == cells["theta"][0]
     rng = np.random.default_rng(0)
     w0, b0 = rng.normal(size=(5, 3)), rng.normal(size=3)
     xs, ys = rng.normal(size=(100, 32, 5)), rng.normal(size=(100, 32, 3))
@@ -124,9 +133,20 @@ def test_lr_sweep_record(dlfs6_path):
 
 def test_get_lr_identical_and_lr_zero_step(dlfs6_path):
     # 03_lr_scheduler.py、05_pretrain.py、ch09/01_pretrain.py 里的 get_lr 去掉注释后逐字相同
-    sources = {rel: function_source(rel, "get_lr")
-               for rel in ("ch06/03_lr_scheduler.py", "ch06/05_pretrain.py", "ch09/01_pretrain.py")}
+    rels = ("ch06/03_lr_scheduler.py", "ch06/05_pretrain.py", "ch09/01_pretrain.py")
+    sources = {rel: function_source(rel, "get_lr") for rel in rels}
     assert len(set(sources.values())) == 1
+
+    # 连同注释比较原文：03 与 05 逐字相同；第 9 章的那份只是注释的措辞不同
+    def raw_text(rel):
+        src = (STORYBOT.parent / rel).read_text(encoding="utf-8")
+        node = next(n for n in ast.parse(src).body if isinstance(n, ast.FunctionDef) and n.name == "get_lr")
+        return "\n".join(src.splitlines()[node.lineno - 1:node.end_lineno])
+    raw = {rel: raw_text(rel) for rel in rels}
+    assert raw["ch06/03_lr_scheduler.py"] == raw["ch06/05_pretrain.py"]
+    assert raw["ch09/01_pretrain.py"] != raw["ch06/05_pretrain.py"]
+    strip = lambda t: [line.split("#")[0].rstrip() for line in t.splitlines()]
+    assert strip(raw["ch09/01_pretrain.py"]) == strip(raw["ch06/05_pretrain.py"])
 
     # 页面上 6.3-d 的 get_lr 与原书函数在整个训练区间上取值相同
     book = load_defs("ch06/03_lr_scheduler.py", ["get_lr"])["get_lr"]
@@ -143,6 +163,52 @@ def test_get_lr_identical_and_lr_zero_step(dlfs6_path):
     state = opt.state[p]
     assert torch.equal(p.detach(), before)
     assert int(state["step"]) == 1 and bool(torch.all(state["exp_avg"] != 0))
+
+
+def test_first_step_moves_most_params_by_lr(dlfs6_path):
+    # 6.3.1 节：不预热、第一步就用 lr = 1e-3 时，随机初始化的 StoryBot 的参数各移动多少
+    from storybot.model import GPT
+
+    get_batch = load_defs("ch06/05_pretrain.py", ["get_batch"])["get_batch"]
+    data = np.memmap(STORYBOT / "tiny_stories_valid.bin", dtype=np.uint16, mode="r")
+    distinct = []
+    for seed in range(5):                                    # 随机取的 batch（32 × 256）里只有一千多种 token
+        torch.manual_seed(seed)
+        x, _ = get_batch(data, 256, 32, torch.device("cpu"))
+        distinct.append(len(torch.unique(x)))
+    print("每个 batch 里不同 token 的种数:", distinct)
+    assert all(1000 < d < 1200 for d in distinct)
+
+    torch.manual_seed(0)
+    model = GPT(**STORYBOT_CONFIG)
+    before = {n: p.detach().clone() for n, p in model.named_parameters()}
+    opt = torch.optim.AdamW(model.parameters(), lr=1e-3)    # 05_pretrain.py 的优化器，只是第一步就用最大学习率
+    torch.manual_seed(0)
+    x, y = get_batch(data, 256, 32, torch.device("cpu"))
+    F.cross_entropy(model(x).view(-1, 10000), y.view(-1)).backward()
+    opt.step()
+    moved = {n: (p.detach() - before[n]).abs() for n, p in model.named_parameters()}
+
+    present = torch.zeros(10000, dtype=torch.bool)
+    present[torch.unique(x)] = True
+    absent_rows = moved["embed.weight"][~present]
+    # 没出现的 token：梯度为 0，Adam 的更新量为 0，只剩权重衰减 |θ|·lr·λ（float32 的舍入误差在 1e-8 以内）
+    decay_only = before["embed.weight"][~present].abs() * 1e-3 * 0.01
+    assert (absent_rows - decay_only).abs().max().item() < 1e-8
+    assert absent_rows.max().item() < 2e-6                   # 比一个学习率（1e-3）小三个数量级
+    n_absent = absent_rows.numel()
+
+    norm_names = [n for n in moved if "norm" in n]
+    n_norm = sum(moved[n].numel() for n in norm_names)
+    assert n_norm == 4608 and all(torch.allclose(before[n], torch.ones_like(before[n])) for n in norm_names)
+
+    rest = torch.cat([moved["embed.weight"][present].flatten()]
+                     + [m.flatten() for n, m in moved.items() if n != "embed.weight" and n not in norm_names])
+    near_lr = ((rest > 0.9e-3) & (rest < 1.1e-3)).float().mean().item()
+    print(f"embedding 中没动的参数 {n_absent:,}；RMSNorm {n_norm:,}；其余 {rest.numel():,} 个参数里，"
+          f"移动量在 1e-3 ± 10% 之内的占 {near_lr:.2%}")
+    assert 4.4e6 < n_absent < 4.7e6 and 1.78e7 < rest.numel() < 1.83e7
+    assert near_lr > 0.95                                    # 约等于一个学习率：相对 std 0.02 的权重是 5%
 
 
 # ---------------------------------------------------------------- 6.4 混合精度
@@ -184,6 +250,9 @@ def test_autocast_dtypes_in_storybot(dlfs6_path):
                          ("attention", block.attn), ("SwiGLU", block.ffn), ("block 输出（残差流）", block),
                          ("logits", model.unembed)]:
         module.register_forward_hook(record(name))
+    # 反向传播里，W_q 输出收到的梯度是什么类型（张量钩子在 backward 时触发）
+    block.attn.W_q.register_forward_hook(
+        lambda module, inputs, output: output.register_hook(lambda g: seen.__setitem__("W_q 输出的梯度", g.dtype)))
     x = torch.randint(0, 1000, (2, 32))
     with torch.autocast(device_type="cpu", dtype=torch.bfloat16):
         logits = model(x)
@@ -194,6 +263,8 @@ def test_autocast_dtypes_in_storybot(dlfs6_path):
     assert seen["embedding"] == seen["RMSNorm"] == seen["block 输出（残差流）"] == torch.float32
     assert seen["W_q"] == seen["attention"] == seen["SwiGLU"] == seen["logits"] == torch.bfloat16
     assert loss.dtype == torch.float32
+    # 反向的矩阵乘沿用前向选定的 bf16；只有写回参数的 .grad 是 fp32
+    assert seen["W_q 输出的梯度"] == torch.bfloat16
     assert all(p.dtype == torch.float32 and p.grad.dtype == torch.float32 for p in model.parameters())
 
     # CPU 的 autocast 不把 sum 提升为 fp32（CUDA 会）；a.sum() 是 fp32 只因为 a 本来就是 fp32
@@ -202,6 +273,43 @@ def test_autocast_dtypes_in_storybot(dlfs6_path):
         assert (a @ a).dtype == torch.bfloat16
         assert (a @ a).sum().dtype == torch.bfloat16
         assert a.sum().dtype == torch.float32
+
+
+def test_bf16_choice_in_the_column(monkeypatch):
+    # 6.4 节专栏“GPU 不支持 BF16 时怎么办”里选择精度的代码（从页面上原样取出）在三种机器上各选了什么
+    import inspect
+    import re
+    import types
+
+    text = (ROOT / "content" / "ch06.md").read_text(encoding="utf-8")
+    column = text[text.index("::: column GPU 不支持 BF16 时怎么办"):]
+    lines = re.search(r"```python\n(.*?)```", column, re.S).group(1).splitlines()
+    upto = lambda prefix: "\n".join(lines[:next(i for i, l in enumerate(lines) if l.startswith(prefix)) + 1])
+
+    # is_bf16_supported() 默认把“能模拟”也算作支持
+    assert inspect.signature(torch.cuda.is_bf16_supported).parameters["including_emulation"].default is True
+
+    # CPU：保持 bf16，GradScaler 关闭，不会出现“fp16 却不缩放”的组合
+    ns = {"torch": torch, "device": torch.device("cpu")}
+    exec(upto("scaler ="), ns)
+    assert ns["amp_dtype"] == torch.bfloat16 and not ns["scaler"].is_enabled()
+
+    # 模拟一块 T4（计算能力 7.5，能创建 bf16 张量）：默认参数返回 True，including_emulation=False 才返回 False
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
+    monkeypatch.setattr(torch.cuda, "get_device_properties", lambda device=None: types.SimpleNamespace(major=7, minor=5))
+    monkeypatch.setattr(torch.cuda, "_check_bf16_tensor_supported", lambda device: True)
+    assert torch.cuda.is_bf16_supported() is True
+    assert torch.cuda.is_bf16_supported(including_emulation=False) is False
+    ns = {"torch": torch, "device": torch.device("cuda")}
+    exec(upto("amp_dtype ="), ns)
+    assert ns["amp_dtype"] == torch.float16                  # 专栏的代码在 T4 上改用 fp16（再配 GradScaler）
+
+    # 模拟一块 Ampere 卡（计算能力 8.6）：bf16
+    monkeypatch.setattr(torch.cuda, "get_device_properties", lambda device=None: types.SimpleNamespace(major=8, minor=6))
+    ns = {"torch": torch, "device": torch.device("cuda")}
+    exec(upto("amp_dtype ="), ns)
+    assert ns["amp_dtype"] == torch.bfloat16
 
 
 def test_cpu_bf16_benchmark_record(dlfs6_path):
@@ -294,6 +402,53 @@ def test_get_batch_like_cs336(dlfs6_path):
         starts += x[:, 0].tolist()
     print(f"起点范围 {min(starts)}…{max(starts)}，共 {len(set(starts))} 种")
     assert min(starts) == 0 and max(starts) == 91 and len(set(starts)) == 92   # 永远抽不到 92
+
+
+def test_numpy_ports_of_eval_windows_and_logprobs(dlfs6_path):
+    # 6.5-c 的 eval_starts：与原书 evaluate() + get_batch(random=False) 取的窗口逐个相同，包括 256k + 1 的边界
+    ns = chapter_cells("6.8-a")
+    get_batch = load_defs("ch06/05_pretrain.py", ["get_batch"])["get_batch"]
+
+    def book_starts(n):
+        data, starts = np.arange(n), []
+        for b in range(((n - 256 - 1) // 256) // 32 + 1):  # evaluate() 的循环
+            x, _ = get_batch(data, 256, 32, torch.device("cpu"), random=False, offset=b * 32 * 256)
+            if x is None:
+                break
+            starts += x[:, 0].tolist()
+        return starts
+
+    for n in (513, 514, 10241, 10242, 300_001):
+        assert ns["eval_starts"](n) == book_starts(n), n
+    assert (len(book_starts(513)), (513 - 1) // 256) == (1, 2)          # 放得下 2 个窗口，原书只取 1 个
+    assert (len(book_starts(10241)), (10241 - 1) // 256) == (39, 40)
+
+    # 6.8-a 的 get_sequence_logprobs（NumPy 版）与原书 08_dpo.py 的同名函数相同（logits 由“模型”直接给出）
+    book_lp = load_defs("ch06/08_dpo.py", ["get_sequence_logprobs"])["get_sequence_logprobs"]
+    rng = np.random.default_rng(0)
+    logits = rng.normal(size=(4, 12, 7)) * 3
+    ids = rng.integers(0, 7, size=(4, 12))
+    mask = (rng.random((4, 12)) < 0.6).astype(np.int64)
+    ours = ns["get_sequence_logprobs"](logits, ids, mask)
+    theirs = book_lp(lambda _: torch.from_numpy(logits), torch.from_numpy(ids), torch.from_numpy(mask))
+    assert np.allclose(ours, theirs.numpy(), rtol=0, atol=1e-12)
+
+
+def test_fresh_init_loss_varies_with_seed(dlfs6_path):
+    # 6.5-d 的容差从哪来：初始 loss 与 ln V + σ²/2 之差随种子变化，约 ±0.02；种子 0 只是恰好差得少
+    from storybot.model import GPT
+
+    tokens = heldout_tokens(32768)
+    diffs = []
+    for seed in range(8):
+        torch.manual_seed(seed)
+        model = GPT(**STORYBOT_CONFIG)
+        with torch.no_grad():
+            sigma = model(torch.from_numpy(tokens[:256][None])).std().item()   # 与 checkpoints.json 的 logit_std 同一口径
+        diffs.append(lm_loss(model, tokens) - (math.log(10000) + sigma ** 2 / 2))
+    print("种子 0…7 的 loss − (ln V + σ²/2):", " ".join(f"{d:+.4f}" for d in diffs))
+    assert max(abs(d) for d in diffs) < 0.03                 # 页面上 6.5-d 用的容差
+    assert sum(abs(d) > 0.01 for d in diffs) >= 3            # 0.01 的容差只对部分种子成立
 
 
 def test_checkpoint_losses_match_record(dlfs6_path):
@@ -556,3 +711,40 @@ def test_dpo_record_reproduces(dlfs6_path):
     assert np.allclose(losses, rec["losses"][:3], atol=1e-5)
     assert rec["config"]["iters"] == 1000 and len(rec["losses"]) == 1000
     assert rec["evals"]["0"]["ref_prefers_chosen_by_sum"] * 144 == pytest.approx(9)   # 只按对数概率之和，9/144
+
+
+def test_h100_dpo_record_reproduces(dlfs6_path):
+    # 记录（verify/_ch06_h100_dpo.py 生成）：storybot-h100 运行自己的两个 checkpoint，DPO 前后在 CPU 上的对比
+    import _ch06_h100_dpo as h1
+    from storybot.tokenizer import BPETokenizer
+
+    if not all(p.is_file() for p in h1.CHECKPOINTS.values()):
+        pytest.skip("runs/storybot-h100 的 checkpoint 不在本机：先用 gpu/modal_app.py pull --run storybot-h100 取回")
+    rec = read_record("h100_dpo.json")
+    for name, path in h1.CHECKPOINTS.items():                # 正是这次运行产出的那两个文件
+        assert h1.sha256(path) == rec["source_run"]["checkpoints"][name]["sha256"]
+    torch.set_num_threads(rec["sampling"]["threads"])
+    tok = BPETokenizer.load_from(str(STORYBOT / "merge_rules.pkl"))
+    models = {name: load_storybot(path) for name, path in h1.CHECKPOINTS.items()}
+
+    # 同一个开头、同一个种子，用原书的 generate 重写：故事、新 token 数、是否自然结束都与记录相同
+    rows = [rec["stories"][0], next(s for s in rec["stories"] if s["kind"] == "open")]
+    for row in rows:
+        for name, model in models.items():
+            assert h1.write_story(model, tok, row["prompt"], row["seed"]) == row[name]
+
+    # 8 条留出 pair 上的对数概率之和（原书 08_dpo.py 的函数），以及由它们算出的偏好
+    heldout = json.loads(h1.HELDOUT_PAIRS.read_text(encoding="utf-8"))
+    lp = h1.pair_logprobs(models, tok, heldout)
+    for name in models:
+        for k in ("chosen", "rejected"):
+            assert np.allclose(lp[name][k], rec["pairs"]["heldout"]["logprobs"][name][k], atol=1e-3)
+    summary = h1.pair_summary(lp)
+    for k in ("reward_acc", "pretrain_prefers_chosen_by_sum", "dpo_prefers_chosen_by_sum"):
+        assert summary[k] == rec["pairs"]["heldout"][k]
+
+    # 语言建模 loss 与参数的移动量
+    tokens = heldout_tokens(rec["lm_loss"]["tokens"])
+    for name, model in models.items():
+        assert abs(lm_loss(model, tokens) - rec["lm_loss"][name]) < 1e-4
+    assert h1.parameter_shift(models["pretrain"], models["dpo"]) == pytest.approx(rec["param_shift"], rel=1e-6)

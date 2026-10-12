@@ -40,6 +40,21 @@ test('playground: the preset counts the caption quotes (deep indentation vs a ch
   assert.ok(!ordinary.ids.includes(999) && ordinary.roundTrip);
 });
 
+test('figure 1-1 (chapter opener): the default text round-trips; each Chinese character of its comment is 3 byte tokens', () => {
+  const page = readFileSync(join(ROOT, 'content', 'ch01.md'), 'utf8');
+  const m = page.match(/```widget ch01-playground[^\n]*\n(.*)\n```/);
+  const { text: opener, compact } = JSON.parse(m[1]);
+  assert.equal(compact, true);
+  const { ids, roundTrip } = analyze(toks.codebot, opener);
+  assert.ok(roundTrip);
+  const comment = [...utf8Encode('打招呼')];                  // 9 bytes, each one a token of its own (ids 0-255 are bytes)
+  assert.equal(comment.length, 9);
+  const at = ids.findIndex((_, i) => comment.every((b, k) => ids[i + k] === b));
+  assert.ok(at >= 0, 'the comment is encoded byte by byte');
+  // the indentation before '#' and 'print' is merged: newline + 3 spaces is one token (265), as in verify 1.9-a
+  assert.equal(ids.filter((id) => id === 265).length, 2);
+});
+
 test('pretok viewer: all branches == pretokenize; switching branches off behaves as the caption says', () => {
   const all = [true, true, true, true, true, true];
   for (const p of PRE) {

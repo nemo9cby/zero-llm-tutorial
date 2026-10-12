@@ -3,11 +3,12 @@
    config: { bot: "codebot", stage: "pretrain" } */
 import { h, fmt } from './_lib.js';
 
+// DPO is not a fourth step after RL: StoryBot does it right after pretraining, in place of SFT + RL.
 const STAGES = [
   { id: 'pretrain', name: '预训练', en: 'pretraining' },
   { id: 'SFT', name: 'SFT', en: 'supervised fine-tuning' },
   { id: 'GRPO', name: '强化学习', en: 'GRPO' },
-  { id: 'DPO', name: '偏好学习', en: 'DPO' },
+  { id: 'DPO', name: 'DPO', en: '代替 2、3，接在预训练之后' },
 ];
 
 const OBJECTIVE = {
@@ -16,7 +17,7 @@ const OBJECTIVE = {
   SFT: ['同一个交叉熵，但只在“回答”部分计算；指令部分的标签设为 −100，不计入 loss。',
     'loss = 回答部分 −log p(下一个 token | 前文) 的平均'],
   GRPO: ['模型自己作答，按奖励给回答打分；比同组平均分高的回答，概率被推高，低的被压低。',
-    '梯度方向 = Σ advantage × ∇log p(回答)，advantage = 得分 − 组内平均分'],
+    '梯度方向 = Σ 优势 × ∇log p(回答)，优势 = 得分 − 组内平均分'],
   DPO: ['给成对的回答（喜欢的 / 不喜欢的），让模型相对参考模型更偏向喜欢的那个。',
     'loss = −log σ(β × [喜欢的回答的 Δ − 不喜欢的回答的 Δ])，Δ = log π − log π_ref'],
 };
@@ -40,6 +41,7 @@ const CSS = `
 .w-ch00-pipe .stage.off { opacity: .45; border-style: dashed; }
 .w-ch00-pipe .stage:not(:last-child)::after { content: '→'; position: absolute; right: -.5rem; top: 1.2rem;
   transform: translateX(50%); color: var(--ink-3); font-size: .8rem; }
+.w-ch00-pipe .stage:nth-child(3)::after { content: ''; }   /* no arrow from RL to DPO: DPO replaces 2–3 */
 .w-ch00-pipe .detail { margin-top: .9rem; padding: .7rem .9rem; background: var(--paper-2); border-radius: 6px; font-size: .9rem; }
 .w-ch00-pipe .detail dl { display: grid; grid-template-columns: 4.5em minmax(0, 1fr); gap: .25rem .8rem; margin: 0; }
 .w-ch00-pipe .detail dt { color: var(--ink-3); }
@@ -68,9 +70,16 @@ function stageFacts(bot, stageId) {
     DPO: 'storybot/model_dpo.pt：更爱写快乐结局（要自己训练，Hugging Face 上没有）' };
   const data = { SFT: `${fmt(s.examples)} 条“指令 → 回答”（${s.data}）`,
     GRPO: `${s.data}，外加奖励函数：回答里最后一个整数等于正确答案得 1 分`,
-    DPO: `${fmt(s.examples)} 对（同一个开头，快乐结局 / 悲伤结局）（${s.data}）` };
-  const scale = { SFT: `${fmt(s.max_iters)} 步 × ${s.batch_size} 条`,
-    GRPO: `${fmt(s.max_iters)} 步 × ${s.batch_size} 道题 × 每题 ${s.group_size} 个回答`,
+    DPO: `${s.data}：${fmt(s.examples)} 对故事，同一个开头，一个快乐结局、一个悲伤结局` };
+  // DataLoader keeps the last, smaller batch and itertools.cycle replays the first epoch, so the batch
+  // sizes repeat in this pattern (SFT: 34 × 32 + 4; GRPO: 32, 32, 17).
+  const split = (n, b) => Array.from({ length: Math.ceil(n / b) }, (_, k) => Math.min(b, n - k * b));
+  const p = split(s.examples, s.batch_size);
+  const scale = {
+    SFT: `${fmt(s.max_iters)} 步，每步最多 ${s.batch_size} 条（${fmt(s.examples)} 条被切成 ${p.length - 1} 个 `
+      + `${s.batch_size} 条的 batch 加 1 个 ${p[p.length - 1]} 条的，轮流使用）`,
+    GRPO: `${fmt(s.max_iters)} 步，每步最多 ${s.batch_size} 道题 × 每题 ${s.group_size} 个回答`
+      + `（${s.examples} 道题分成 ${p.join('、')} 道的 ${p.length} 批，轮流使用）`,
     DPO: `${fmt(s.max_iters)} 步 × ${s.batch_size} 对，β = ${s.beta}` };
   return { data: data[stageId], scale: scale[stageId], output: files[stageId], script: s.script };
 }

@@ -1,0 +1,84 @@
+{
+ "input": "storybot/tiny_stories_valid.txt",
+ "rounds": [
+  {
+   "whole": {
+    "wall": 14.258,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    }
+   },
+   "chunked": {
+    "wall": 14.735,
+    "load": {
+     "mean": 99.7,
+     "min": 96.5,
+     "max": 100.0
+    }
+   }
+  },
+  {
+   "whole": {
+    "wall": 19.956,
+    "load": {
+     "mean": 100.0,
+     "min": 99.8,
+     "max": 100.0
+    }
+   },
+   "chunked": {
+    "wall": 22.856,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    }
+   }
+  },
+  {
+   "whole": {
+    "wall": 19.462,
+    "load": {
+     "mean": 100.0,
+     "min": 99.8,
+     "max": 100.0
+    }
+   },
+   "chunked": {
+    "wall": 19.781,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    }
+   }
+  }
+ ],
+ "same_counts_every_round": true,
+ "env": {
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "logical_cpus": 16,
+  "physical_cores": 8,
+  "ram_gb": 47.7,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "numpy": "2.5.4",
+  "regex": "2026.9.29",
+  "date": "2026-10-12 13:31",
+  "utc_offset": "-0400"
+ },
+ "provenance": {
+  "script": "verify/_ch04_bench.py",
+  "command": "python verify/_ch04_bench.py run pool_startup pretok_repeat shrink repeat_small",
+  "tutorial": {
+   "commit": "dda64b3d6eaa9e4a6e68de6b1b0a83fbedbab7b4",
+   "dirty": true
+  },
+  "dlfs6": {
+   "commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
+   "dirty": false
+  }
+ }
+}

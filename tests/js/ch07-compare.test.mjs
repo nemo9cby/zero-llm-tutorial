@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { Tokenizer } from '../../web/widgets/_bpe.js';
-import { BOTS, compare, tokenLabel } from '../../web/widgets/ch07-compare.js';
+import { BOTS, compare, tokenInfo, tokenLabel } from '../../web/widgets/ch07-compare.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const readJSON = (rel) => JSON.parse(readFileSync(join(ROOT, rel), 'utf8'));
@@ -57,4 +57,17 @@ test('chips show half characters as Python-style byte escapes', () => {
   assert.equal(partial.length, 157);
   assert.equal(tokenLabel(web, partial[0]).text, '\\xe2\\x80');
   assert.deepEqual(tokenLabel(web, 256), { text: ' t', partial: false });
+});
+
+test('the status line names the token, its id and its bytes', () => {
+  const web = toks[2];
+  const label = (id) => tokenLabel(web, id);
+  assert.equal(tokenInfo('WebBot', 0, 256, web.tokenBytes(256), label(256)),
+    'WebBot 的第 1 个 token：id 256，字节 20 74（“ t”）');
+  const half = [...Array(web.vocabSize - 257).keys()].map((k) => k + 256).find((id) => label(id).partial);
+  assert.equal(tokenInfo('WebBot', 1_233, half, web.tokenBytes(half), label(half)),
+    `WebBot 的第 1,234 个 token：id ${half.toLocaleString('en-US')}，字节 e2 80（单独不是完整的 UTF-8 字符）`);
+  const eot = { text: '<|endoftext|>', partial: false, special: true };
+  assert.equal(tokenInfo('CodeBot', 2, 999, new Uint8Array(), eot),
+    'CodeBot 的第 3 个 token：id 999，特殊 token <|endoftext|>');
 });

@@ -1,6 +1,7 @@
 /* P.8 Three checkpoints, one prompt: pretrain continues text, SFT follows the template, GRPO gets the sums right.
-   Then the 81 single-digit additions of 09_grpo.py (and two sets it never trained on), asked in this browser, next
-   to the answers PyTorch gave with the same int8 weights (web/data/playground/addition.json).
+   Then the 81 single-digit additions of 09_grpo.py (and two sets GRPO never trained on). Each set first shows the
+   answers PyTorch gave with the same int8 weights (web/data/playground/addition.json); a button re-asks every
+   problem in this browser. Browser results are kept per set, so switching sets back and forth loses nothing.
    config: { prompt, template, maxNewTokens, set } */
 import { h } from './_lib.js';
 import {
@@ -79,8 +80,9 @@ export async function mount(root, config = {}) {
 
   // addition
   let setKey = cfg.set;
+  const tested = new Map();                      // set key -> {answers: {sft, grpo}, summary}: answers computed here
   const setSwitch = h('div', { class: 'w-pg-switch', role: 'group', 'aria-label': '选择题目集' }, SETS.map((s) => h('button', {
-    type: 'button', 'aria-pressed': String(s.key === setKey), onclick: () => { setKey = s.key; drawEmpty(); },
+    type: 'button', 'aria-pressed': String(s.key === setKey), 'data-key': s.key, onclick: () => { setKey = s.key; drawSet(); },
   }, s.label)));
   const runBtn = h('button', { type: 'button', class: 'w-pg-btn primary' }, '在浏览器里逐题测试 SFT 与 GRPO');
   const addStatus = statusLine();
@@ -89,11 +91,16 @@ export async function mount(root, config = {}) {
   box.replaceChildren(
     h('div', { class: 'w-row' }, h('label', { class: 'w-pg-field' }, tpl, '套用 Alpaca 模板')), presets,
     input, h('div', { class: 'w-row' }, askBtn), status.el, cards,
-    h('div', { class: 'w-label', style: 'margin-top:1rem' }, '个位数加法：SFT 与 GRPO 逐题比较（绿色 = 答对，格子里是模型的回答）'),
+    h('div', { class: 'w-label', style: 'margin-top:1rem' },
+      '加法题：SFT 与 GRPO 逐题比较。绿色 = 答对，格子里是模型的回答，∅ = 空回答（模型直接输出了 <|endoftext|>）'),
     h('div', { class: 'w-row' }, setSwitch, runBtn), addStatus.el, pair, addNote,
   );
   let busy = false;
-  const setBusy = (b) => { busy = b; askBtn.disabled = b; runBtn.disabled = b; };
+  const setBusy = (b) => {
+    busy = b; askBtn.disabled = b; runBtn.disabled = b;
+    for (const btn of setSwitch.children) btn.disabled = b;
+  };
+  const labelOf = (n) => entries.find((c) => c.name === n)?.label || n;
 
   async function ask() {
     if (busy) return;
@@ -155,14 +162,29 @@ export async function mount(root, config = {}) {
     return { key: setKey, prompts: rec.sets[setKey], answers: rec.answers[setKey] };
   }
 
-  async function drawEmpty() {
-    for (const b of setSwitch.children) b.setAttribute('aria-pressed', String(b.textContent === SETS.find((s) => s.key === setKey).label));
+  const block = (n, set, answers, where) => h('div', {},
+    h('div', { class: 'w-label' }, `${labelOf(n)}（${where}）`), grid(set, answers, n));
+
+  // Show the current set: the answers computed in this browser if it was tested here, else PyTorch's record.
+  async function drawSet() {
+    for (const b of setSwitch.children) b.setAttribute('aria-pressed', String(b.dataset.key === setKey));
     try {
       const rec = await loadRecord();
       const set = currentSet(rec);
-      pair.replaceChildren(...['sft', 'grpo'].map((n) => h('div', {}, h('div', { class: 'w-label' }, entries.find((c) => c.name === n)?.label || n),
-        grid(set, null, n))));
+      const done = tested.get(setKey);
+      if (done) {
+        pair.replaceChildren(...['sft', 'grpo'].map((n) => block(n, set, done.answers[n], '在这个浏览器里算出的回答')));
+        addNote.textContent = done.summary;
+        addStatus.say('这一组已经在浏览器里测过了。');
+        return;
+      }
+      pair.replaceChildren(...['sft', 'grpo'].map((n) => {
+        const r = rec.models[`ours-${n}-q8`].results[setKey];
+        return block(n, set, r.responses.map((text, i) => ({ text, ok: r.correct[i] > 0 })), 'PyTorch 记录的回答');
+      }));
       addNote.textContent = '';
+      addStatus.say('这一组还没在浏览器里测过；格子里先显示 PyTorch 用同一份 int8 权重的回答（ch03 的模板，greedy 解码）。'
+        + '点“在浏览器里逐题测试”，可以在这里逐题重算。');
     } catch (err) {
       addStatus.error(err);
     }
@@ -177,25 +199,28 @@ export async function mount(root, config = {}) {
       const prompts = set.prompts.map((p) => tok.encode(alpaca(p)));
       const summary = [];
       const blocks = [];
+      const all = {};
       for (const n of ['sft', 'grpo']) {
         await ensureModel(n, addStatus);
         const answers = [];
-        const holder = h('div', {}, h('div', { class: 'w-label' }, entries.find((c) => c.name === n)?.label || n), grid(set, answers, n));
+        const holder = block(n, set, answers, '在这个浏览器里算出的回答');
         blocks.push(holder);
         pair.replaceChildren(...blocks, ...(blocks.length < 2 ? [h('div')] : []));
         const handle = await engine().call('addition', n, { prompts, maxNew: rec.max_new_tokens }, (ev) => {
           const text = tok.decode(ev.ids);
           answers[ev.index] = { text, ok: reward(text, set.answers[ev.index]), ids: ev.ids };
           if (ev.index % 9 === 8 || ev.index === prompts.length - 1) holder.lastChild.replaceWith(grid(set, answers, n));
-          addStatus.say(`${entries.find((c) => c.name === n)?.label}：${ev.index + 1} / ${prompts.length}`);
+          addStatus.say(`${labelOf(n)}：${ev.index + 1} / ${prompts.length}`);
         });
         await handle.promise;
-        const ref = rec.models[`ours-${n}-q8`].results[setKey];
+        all[n] = answers;
+        const ref = rec.models[`ours-${n}-q8`].results[set.key];
         const same = answers.filter((a, i) => a && a.text === ref.responses[i]).length;
         const right = answers.filter((a) => a?.ok).length;
-        summary.push(`${entries.find((c) => c.name === n)?.label} 答对 ${right}/${prompts.length}（PyTorch 用同一份 int8 权重：${ref.n_correct}/${prompts.length}；逐题回答相同 ${same}/${prompts.length}）`);
+        summary.push(`${labelOf(n)} 答对 ${right}/${prompts.length}（PyTorch 用同一份 int8 权重：${ref.n_correct}/${prompts.length}；逐题回答相同 ${same}/${prompts.length}）`);
       }
-      addNote.textContent = `${summary.join('；')}。`;
+      tested.set(set.key, { answers: all, summary: `${summary.join('；')}。` });
+      addNote.textContent = tested.get(set.key).summary;
       addStatus.say('完成。');
     } catch (err) {
       addStatus.error(err);
@@ -208,6 +233,5 @@ export async function mount(root, config = {}) {
   runBtn.addEventListener('click', runAddition);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') ask(); });
   status.say('点按钮后，三个检查点依次下载（各 11.3 MB）并回答同一个 prompt。');
-  addStatus.say('每道题都按 ch03 的模板提问，greedy 解码，直到模型输出 <|endoftext|>。');
-  drawEmpty();
+  drawSet();
 }

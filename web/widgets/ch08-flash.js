@@ -111,6 +111,16 @@ const svg = (tag, attrs = {}, text) => {
   return el;
 };
 
+const isDark = () => {
+  const t = document.documentElement.dataset.theme;
+  return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+};
+
+function onThemeChange(fn) {
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', fn);
+  new MutationObserver(fn).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+}
+
 export function mount(root, config = {}) {
   injectStyle();
   const N = config.n || 8, d = config.d || 4, seed = config.seed ?? 7;
@@ -171,6 +181,7 @@ export function mount(root, config = {}) {
     const done = new Set(run.steps.slice(0, k).map((s) => `${s.i0},${s.j0}`));
     const cur = k > 0 ? run.steps[k - 1] : null;
     const skipped = new Set(run.skipped.map(([i, j]) => `${i},${j}`));
+    const doneMix = isDark() ? 38 : 22;          // 暗色背景上，淡的混色几乎看不出来
     for (let r = 0; r < N; r++) {
       svgEl.append(svg('text', { x: lab - 4, y: lab + r * cell + cell / 2 + 4, 'text-anchor': 'end', 'font-size': 10, fill: 'var(--ink-3)' }, `q${r}`));
       svgEl.append(svg('text', { x: lab + r * cell + cell / 2, y: lab - 6, 'text-anchor': 'middle', 'font-size': 10, fill: 'var(--ink-3)' }, `k${r}`));
@@ -180,7 +191,7 @@ export function mount(root, config = {}) {
         if (skipped.has(tile)) fill = 'url(#w-ch08-hatch)';
         else if (causal && c > r) fill = 'var(--paper-3)';
         else if (cur && tile === `${cur.i0},${cur.j0}`) fill = 'color-mix(in srgb, var(--ai) 60%, var(--paper))';
-        else if (done.has(tile)) fill = 'color-mix(in srgb, var(--ai) 22%, var(--paper))';
+        else if (done.has(tile)) fill = `color-mix(in srgb, var(--ai) ${doneMix}%, var(--paper))`;
         svgEl.append(svg('rect', { x: lab + c * cell + 1, y: lab + r * cell + 1, width: cell - 2, height: cell - 2, rx: 2, fill }));
         if (causal && c > r && !skipped.has(tile)) {
           svgEl.append(svg('text', { x: lab + c * cell + cell / 2, y: lab + r * cell + cell / 2 + 4, 'text-anchor': 'middle',
@@ -238,6 +249,7 @@ export function mount(root, config = {}) {
     if (e.key === 'ArrowRight') { e.preventDefault(); stop(); k = Math.min(run.steps.length, k + 1); draw(); }
     if (e.key === 'ArrowLeft') { e.preventDefault(); stop(); k = Math.max(0, k - 1); draw(); }
   });
+  onThemeChange(() => draw());
   compute();
   draw();
 }

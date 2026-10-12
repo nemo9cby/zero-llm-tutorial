@@ -61,7 +61,9 @@ export async function mount(root, config = {}) {
         yFormat: (v) => pct(v, 0), height: 220 };
       if (chart) chart.update(opts); else chart = lineChart(chartBox, opts);
       const first = res.lens[0].ids[0], last = ids[ids.length - 1];
-      note.textContent = `第 0 层（还没进任何块）的第一名是「${tokenLabel(tok, first)}」${first === last ? '，正是输入的最后一个 token 自己' : ''}；`
+      note.textContent = `第 0 层（还没进任何块）的第一名是「${tokenLabel(tok, first)}」`
+        + (first === last ? '，正是输入的最后一个 token 自己；'
+          : `（id ${first}），不是输入的最后一个 token「${tokenLabel(tok, last)}」（id ${last}）；`)
         + `最终的第一名「${tokenLabel(tok, res.trackIds[0])}」从第 ${firstLayerTop(res)} 层起一直排在第一。`;
       status.say(`${ids.length} 个 token，前向 ${res.ms.toFixed(0)} ms`);
     } catch (err) {

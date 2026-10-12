@@ -1,12 +1,14 @@
 // 第 9 章交互图里的计算：与正文结论一致（node --test tests/js/ch09-widgets.test.mjs）
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { makeData, batchGrad, accumulate } from '../../web/widgets/ch09-accum.js';
 import { initialGrads, ringTrace } from '../../web/widgets/ch09-allreduce.js';
 import { ACCOUNTING, zeroBytes, COMM } from '../../web/widgets/ch09-zero.js';
 import { COEFFS, makeMatrix, nsMatrix, singularValues, nsScalar, symEig, polyText } from '../../web/widgets/ch09-muon.js';
 import { parseCalls, compactNewlines } from '../../web/widgets/ch09-cpurun.js';
+import { bookLr } from '../../web/widgets/ch09-util.js';
 
 const close = (a, b, tol) => Math.abs(a - b) <= tol * Math.max(1, Math.abs(b));
 
@@ -16,6 +18,15 @@ test('梯度累积：每份除以 K 时等于大 batch；不除时是 K 倍', ()
   for (const K of [1, 2, 4, 8, 16]) {
     assert.ok(close(accumulate(xs, ts, 0.5, K, true)[K], big, 1e-12), `K=${K}`);
     assert.ok(close(accumulate(xs, ts, 0.5, K, false)[K], K * big, 1e-12), `K=${K} 忘了除以 K`);
+  }
+});
+
+test('Ring all-reduce：各卡起始的梯度互不相同（数据并行里各卡读的数据不同）', () => {
+  for (const W of [2, 3, 4, 6, 8]) {
+    const g = initialGrads(W);
+    assert.equal(g.length, W);
+    assert.equal(new Set(g.map(String)).size, W, `W=${W}: ${JSON.stringify(g)}`);
+    assert.ok(g.flat().every((v) => Number.isInteger(v) && v >= 1 && v <= 9));
   }
 });
 
@@ -74,6 +85,9 @@ test('Muon 的五次迭代：5 步把 [0.01, 1] 里的奇异值都送进 [0.68, 
   }
   assert.ok(lo > 0.68 && hi < 1.14, `${lo} ${hi}`);
   assert.ok(nsScalar(0.01, COEFFS.cubic.abc, 5) < 0.1);       // 经典三次迭代 5 步时还远没到 1
+  const c10 = nsScalar(0.01, COEFFS.cubic.abc, 10), c11 = nsScalar(0.01, COEFFS.cubic.abc, 11);
+  assert.ok(c10 < 0.68 && c11 > 0.68, `${c10} ${c11}`);       // 验证 9.5-b：要 11 步才进入同一区间
+  assert.ok(Math.abs(nsScalar(0.001, COEFFS.quintic.abc, 5) - 0.47) < 0.01);   // 图 9-5 的图注：0.001 只到约 0.47
 });
 
 test('运行记录解析：config、train、val 分开', () => {
@@ -88,6 +102,17 @@ test('运行记录解析：config、train、val 分开', () => {
   assert.equal(r.cfg.effective_batch_size, 32);
   assert.equal(r.train.length, 1);
   assert.equal(r.val[0].data['val/loss'], 10.83);
+});
+
+test('图 9-6 的学习率图里叠加的 get_lr 公式，与记录下来的 train/lr 逐步相同', () => {
+  const text = readFileSync(new URL('../../web/data/ch09/webbot-cpu-shrunk/wandb.jsonl', import.meta.url), 'utf8');
+  const { cfg, train } = parseCalls(text);
+  assert.equal(train.length, cfg.max_iters);
+  for (const c of train) {
+    const want = bookLr(c.step, cfg.learning_rate, cfg.warmup_iters, cfg.max_iters);
+    assert.ok(Math.abs(c.data['train/lr'] - want) <= 1e-12, `step ${c.step}`);
+  }
+  assert.equal(bookLr(cfg.warmup_iters, 6e-4, cfg.warmup_iters, cfg.max_iters), 6e-4);
 });
 
 test('续写的换行压缩：只改换行，其余文字不变', () => {

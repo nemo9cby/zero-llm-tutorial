@@ -1,0 +1,33 @@
+{
+ "input": "codebot/tiny_codes.txt (LF)",
+ "bytes": 6487033,
+ "vocab": 1000,
+ "naive": {
+  "wall": 4593.927,
+  "cpu": 3147.047,
+  "load": {
+   "mean": 97.8,
+   "min": 0.0,
+   "max": 100.0
+  },
+  "phases": {
+   "Training BPE": {
+    "wall": 4586.123,
+    "cpu": 3141.156
+   }
+  }
+ },
+ "equals_codebot_merge_rules_pkl": true,
+ "env": {
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "logical_cpus": 16,
+  "physical_cores": 8,
+  "ram_gb": 47.7,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "numpy": "2.5.4",
+  "regex": "2026.9.29",
+  "note": "RTX 3060 Ti busy with the tutorial's training run during all measurements (CPU only here)",
+  "date": "2026-10-11 21:02"
+ }
+}

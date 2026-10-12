@@ -17,7 +17,8 @@ import torch
 import torch.nn.functional as F
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _ch03_dlfs6 import ALPACA, CODEBOT, DLFS6, ROOT, arithmetic_prompts, load_defs  # noqa: E402
+from _ch03_dlfs6 import (ALPACA, CODEBOT, DLFS6, ROOT, RUN_CHECKPOINTS, arithmetic_prompts,  # noqa: E402
+                         load_defs, run_checkpoint)
 
 OUT = ROOT / "web" / "data" / "ch03"
 sys.path.insert(0, str(DLFS6))
@@ -103,14 +104,47 @@ def export_sft_tokens(tok) -> None:
         "prompt_ids": prompt_ids, "response_ids": response_ids})
 
 
+ANSWER_DISTS_SOURCE = (
+    "P(response == answer, then <|endoftext|>) at T=1, canonical tokenization; last column 'other' = 1 - sum. "
+    "sft/grpo: the official codebot checkpoints; run_sft/run_grpo/run_evalfix: the checkpoints of this book's own "
+    "RTX 3060 Ti runs (see run_checkpoints: run id, path inside runs/<run>/work/, sha256)")
+
+def sha256(path: Path) -> str:
+    import hashlib
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def add_run_answer_dists(tok, res: dict) -> dict:
+    """Add the answer distributions of the book's own runs (when their checkpoints are present)."""
+    from codebot.model import GPT
+    res["run_checkpoints"] = {}
+    for key, (run, rel) in RUN_CHECKPOINTS.items():
+        path = run_checkpoint(key)
+        if not path.is_file():
+            print(f"skip {key}: {path} not found (run gpu/run_local.py first)")
+            res.pop(key, None)                 # never keep rows whose checkpoint is not recorded below
+            continue
+        m = GPT.load_from(str(path), device="cpu")
+        m.eval()
+        res[key] = [[round(x, 5) for x in r] for r in answer_dists(m, tok)]
+        res["run_checkpoints"][key] = {"run": run, "path": rel, "sha256": sha256(path)}
+    return res
+
+
 def export_answer_dists(tok, ms) -> None:
-    res = {"source": "official codebot checkpoints; P(response == answer, then <|endoftext|>) at T=1, canonical "
-                     "tokenization; last column 'other' = 1 - sum",
+    res = {"source": ANSWER_DISTS_SOURCE,
            "prompts": [f"{i}+{j}=" for i in range(1, 10) for j in range(1, 10)],
            "answers": [str(a) for a in range(19)] + ["other"]}
     for k in ("sft", "grpo"):
         res[k] = [[round(x, 5) for x in r] for r in answer_dists(ms[k], tok)]
-    dump("answer_dists.json", res)
+    dump("answer_dists.json", add_run_answer_dists(tok, res))
+
+
+def export_run_answer_dists(tok) -> None:
+    """Only (re)compute the run_* rows; the official sft/grpo rows already in answer_dists.json stay as they are."""
+    res = json.loads((OUT / "answer_dists.json").read_text(encoding="utf-8"))
+    res["source"] = ANSWER_DISTS_SOURCE
+    dump("answer_dists.json", add_run_answer_dists(tok, res))
 
 
 def first_update_ratios(tok, seed: int = 0, n_prompts: int = 32, group_size: int = 8) -> dict:
@@ -136,8 +170,26 @@ def first_update_ratios(tok, seed: int = 0, n_prompts: int = 32, group_size: int
         rt = (g["compute_probs"](model, ids) / (po + 1e-8))[m]
         model.eval()
         re_ = (g["compute_probs"](model, ids) / (po + 1e-8))[m]
-    return {"responses": R, "advantages": [round(a, 6) for a in A.tolist()],
+    return {"responses": R, "lengths": response_lengths(tok, R), "advantages": [round(a, 6) for a in A.tolist()],
             "train": [round(x, 5) for x in rt.tolist()], "eval": [round(x, 7) for x in re_.tolist()]}
+
+
+def response_lengths(tok, responses: list[str]) -> list[int]:
+    """Token count of each response as GRPODataset.get_batch encodes it: the ratio arrays above list the
+    response tokens row by row, so these lengths tell a NumPy cell which tokens belong to which response."""
+    return [len(tok.encode(r)) for r in responses]
+
+
+def add_ratio_lengths(tok) -> None:
+    """Add the per-response token counts to the existing ratio_first_update.json without resampling."""
+    old = json.loads((OUT / "ratio_first_update.json").read_text(encoding="utf-8"))
+    new = {}
+    for k, v in old.items():
+        if k != "lengths":
+            new[k] = v
+        if k == "responses":
+            new["lengths"] = response_lengths(tok, v)
+    dump("ratio_first_update.json", new)
 
 
 def export_ratios(tok) -> None:
@@ -218,7 +270,9 @@ EXPORTS = {
     "next_token": export_next_token,
     "sft_tokens": lambda tok, ms: export_sft_tokens(tok),
     "answer_dists": export_answer_dists,
+    "answer_dists_runs": lambda tok, ms: export_run_answer_dists(tok),
     "ratios": lambda tok, ms: export_ratios(tok),
+    "ratio_lengths": lambda tok, ms: add_ratio_lengths(tok),
     "corpus_head": lambda tok, ms: export_corpus_head(),
     "free_running": export_free_running,
     "samples": export_samples,

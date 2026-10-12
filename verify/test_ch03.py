@@ -17,7 +17,8 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from _ch03_dlfs6 import ALPACA, CODEBOT, DLFS6, ROOT, arithmetic_prompts, load_defs, load_model, load_tokenizer, verify_cell
+from _ch03_dlfs6 import (ALPACA, CODEBOT, DLFS6, ROOT, RUN_CHECKPOINTS, arithmetic_prompts, load_defs, load_model,
+                         load_run_model, load_tokenizer, run_checkpoint, verify_cell)
 
 DATA = ROOT / "web" / "data" / "ch03"
 
@@ -51,7 +52,10 @@ def grpo_fns(dlfs6_path):
 def test_corpus_windows_and_epochs(dlfs6_path):
     ids = np.fromfile(CODEBOT / "tiny_codes.bin", dtype=np.uint16)
     assert len(ids) == 2_677_398
-    assert (ids == 999).sum() == 21_835          # <|endoftext|>：每篇文档结尾一个
+    assert (ids == 999).sum() == 21_835          # <|endoftext|>：夹在相邻两篇之间的分隔符
+    assert ids[0] != 999 and ids[-1] != 999      # 开头和结尾都没有分隔符，所以一共 21,836 篇
+    docs = [d for d in np.split(ids, np.where(ids == 999)[0]) if len(d[d != 999])]
+    assert len(docs) == 21_835 + 1
     assert ids.min() == 9 and ids.max() == 999 and (ids == 0).sum() == 0
     TokenDataset = load_defs("ch03/01_pretrain.py", ["TokenDataset"])["TokenDataset"]
     ds = TokenDataset(ids, 256)
@@ -84,6 +88,8 @@ def test_param_count_and_initial_loss(dlfs6_path):
     print(f"初始 loss {loss:.4f}，ln 1000 = {math.log(1000):.4f}，logit 标准差 {sigma:.4f}")
     assert 6.9 < loss < 7.1
     assert abs(sigma - 0.02 * math.sqrt(384)) < 0.02           # 0.3919
+    # ln V + σ²/2 把同一位置的 1000 个 logit 当作独立的正态变量，只是近似；在真实语料的 16 个窗口上
+    # 实测相差约 0.027（第 2 章在随机 token 上做同样的检验，相差不到 0.01），所以这里的容差取 0.03
     assert abs(loss - (math.log(1000) + sigma ** 2 / 2)) < 0.03
 
 
@@ -97,6 +103,30 @@ def test_pretrained_checkpoint_fits_its_training_text(dlfs6_path, models):
         loss = F.cross_entropy(models["pretrain"](xb).view(-1, 1000), yb.view(-1)).item()
     print(f"训练语料上的 loss {loss:.4f}，困惑度 {math.exp(loss):.2f}")
     assert loss < 0.6 and math.exp(loss) < 2
+
+
+def test_low_training_loss_is_not_verbatim_recall(dlfs6_path, models):
+    """loss 很低 ≠ 逐字背诵：给出语料里的 96 个 token，让官方预训练模型 greedy 续写 32 个，
+    与语料原文逐 token 比较。teacher forcing 下 top-1 准确率很高，自由续写却很少整段对上。"""
+    ids = np.fromfile(CODEBOT / "tiny_codes.bin", dtype=np.uint16).astype(np.int64)
+    starts = np.random.default_rng(123).integers(0, len(ids) - 300, 64)
+    P, K = 96, 32                                            # 前缀 96 个 token，续写 32 个
+    full = torch.tensor(np.stack([ids[s:s + P + K] for s in starts]))
+    m = models["pretrain"]
+    with torch.no_grad():
+        lg = m(full[:, :-1])
+        loss = F.cross_entropy(lg.reshape(-1, 1000), full[:, 1:].reshape(-1)).item()
+        top1 = (lg.argmax(-1) == full[:, 1:]).float().mean().item()
+        cur = full[:, :P]
+        for _ in range(K):                                   # greedy 续写，不看原文
+            cur = torch.cat([cur, m(cur)[:, -1].argmax(-1, keepdim=True)], 1)
+    match = (cur[:, P:] == full[:, P:]).int()
+    verbatim = int((match.sum(1) == K).sum())                # 32 个 token 全部对上的窗口
+    prefix = match.cumprod(1).sum(1)                         # 从头开始连续对上的 token 数
+    print(f"teacher forcing：loss {loss:.3f}，top-1 准确率 {top1:.1%}；自由续写 32 个 token：逐 token 一致 "
+          f"{match.float().mean().item():.1%}，整段一致的窗口 {verbatim}/64，连续一致的长度中位数 {int(prefix.median())}")
+    assert loss < 0.6 and top1 > 0.8                         # 在语料上拟合得很紧……
+    assert verbatim <= 8 and int(prefix.median()) < 16       # ……但整段复述的窗口不到八分之一
 
 
 def test_overfit_one_batch_first(dlfs6_path):
@@ -128,6 +158,13 @@ def test_generate_is_the_same_function_everywhere(dlfs6_path):
     futils = next(n for n in ast.parse(inspect.getsource(utils)).body
                   if isinstance(n, ast.FunctionDef) and n.name == "generate")
     assert ast.dump(f02) == ast.dump(futils)
+    # 区别只在注释：去掉 ❶❷❸ 标号之后，还有两行注释的措辞不同
+    def comments(src, fn):
+        lines = src.splitlines()[fn.lineno - 1:fn.end_lineno]
+        return [ln.split("#", 1)[1].strip().lstrip("❶❷❸ ") for ln in lines if "#" in ln]
+    c02 = comments(src02, f02)
+    cut = comments(inspect.getsource(utils), futils)
+    assert len(c02) == len(cut) and sum(a != b for a, b in zip(c02, cut)) == 2
     # 只有温度这一个旋钮：没有 top_k / top_p 参数
     assert list(inspect.signature(utils.generate).parameters) == [
         "model", "tokenizer", "prompt", "max_new_tokens", "temperature"]
@@ -143,8 +180,8 @@ def test_temperature_zero_is_greedy_and_tiny_temperature_breaks(dlfs6_path, tok,
         logits = m(torch.tensor([tok.encode(p)]))[:, -1, :]
     probs = F.softmax(logits / 1e-45, dim=-1)      # float32 溢出成 inf，inf - inf = nan
     assert torch.isnan(probs).any()
-    with pytest.raises(RuntimeError):
-        torch.multinomial(probs, num_samples=1)
+    with pytest.raises(RuntimeError):              # 原书的 generate() 本身：torch.multinomial 拒绝 NaN 概率
+        generate(m, tok, p, max_new_tokens=1, temperature=1e-45)
     ok = F.softmax(logits / 0.01, dim=-1)          # 0.01 不会溢出，但也不等于 greedy
     assert not torch.isnan(ok).any()
     top2 = ok.topk(2).values[0].tolist()
@@ -178,6 +215,8 @@ def test_samples_export(dlfs6_path, tok, models):
             assert ex.chat_greedy(tok, models[name], row["instruction"]) == row[name], (name, row["instruction"])
     first = exp["pretrain_def"][0]
     assert ex.pretrain_sample(tok, models["pretrain"], first["seed"]) == first["text"]
+    # 上限 60 与上限 1000 得到同一段文字：这一次没写满 60 个 token 就采到了 EOS
+    assert ex.pretrain_sample(tok, models["pretrain"], first["seed"], max_new_tokens=1000) == first["text"]
 
 
 def test_next_token_export_matches_checkpoints(dlfs6_path, tok, models):
@@ -205,27 +244,24 @@ def test_alpaca_ids_and_the_stale_comment(dlfs6_path, tok):
     assert len(tok.encode(ALPACA.format("Hello"))) == 19
 
 
-def test_sft_dataset_labels_padding_and_export(dlfs6_path, tok, tmp_path):
-    """原书 SFTDataset 与页面数据 sft_tokens.json 逐位一致（抽查约 1/10 的样本，含 3+4=）；
+def test_sft_dataset_labels_padding_and_export(dlfs6_path, tok):
+    """原书 SFTDataset 与页面数据 sft_tokens.json 逐位一致（全部 1092 条样本）；
     全量统计（23,635 个带 label 的位置等）由页面上的验证单元在这份数据上计算。"""
     data = json.loads((CODEBOT / "tiny_codes_sft.json").read_text(encoding="utf-8"))
     exp = read_json("sft_tokens.json")
     assert len(data) == len(exp["prompt_ids"]) == 1092
     assert exp["instructions"] == [d["instruction"] for d in data]
     k34 = exp["instructions"].index("3+4=")
-    pick = sorted(set(range(0, 1092, 10)) | {k34, 1091})
-    sub = tmp_path / "sft_subset.json"
-    sub.write_text(json.dumps([data[k] for k in pick], ensure_ascii=False), encoding="utf-8")
     SFTDataset = load_defs("ch03/03_sft.py", ["SFTDataset"])["SFTDataset"]
-    ds = SFTDataset(str(sub), tok, 256)
-    for row, k in enumerate(pick):
-        ids, labels = ds.samples[row]
+    ds = SFTDataset(str(CODEBOT / "tiny_codes_sft.json"), tok, 256)
+    assert len(ds.samples) == 1092
+    for k, (ids, labels) in enumerate(ds.samples):
         p, r = exp["prompt_ids"][k], exp["response_ids"][k]
         full = p + r
         ref_ids = (full[:-1] + [0] * 256)[:256]
         ref_labels = (([-100] * len(p) + r)[1:] + [-100] * 256)[:256]
-        assert ids == ref_ids and labels == ref_labels      # 导出的 token 能逐位重建原书的样本
-    ids, labels = ds.samples[pick.index(k34)]
+        assert ids == ref_ids and labels == ref_labels, k   # 导出的 token 能逐位重建原书的每一条样本
+    ids, labels = ds.samples[k34]
     assert labels[:23] == [-100] * 21 + [55, 999] and set(labels[23:]) == {-100}
     assert ids[22] == 55 and set(ids[23:]) == {0}           # 输入里有 '7'，没有 EOS；之后全是 padding id 0
     lens = [len(p) + len(r) for p, r in zip(exp["prompt_ids"], exp["response_ids"])]
@@ -245,6 +281,15 @@ def test_trailing_padding_does_not_change_earlier_logits(dlfs6_path, models):
         diff = (a - b).abs().max().item()
         print(f"{len(seq)} 个真实 token：两种补齐方式的 logits 最大差 {diff:.2e}")
         assert diff < 1e-4                                   # 只剩 float32 的舍入误差
+        # 训练时开着 dropout：同一个种子，两种形状抽到的 dropout 掩码不同，结果只是统计上等价
+        import copy
+        m = copy.deepcopy(models["sft"]).train()
+        with torch.no_grad():
+            torch.manual_seed(0)
+            a = m(x256)[0, :len(seq)]
+            torch.manual_seed(0)
+            b = m(x137)[0, :len(seq)]
+        assert (a - b).abs().max().item() > 1e-3
 
 
 def test_cross_entropy_ignore_index_is_a_token_mean(dlfs6_path):
@@ -290,12 +335,16 @@ def test_prompt_masking_effect_on_losses(dlfs6_path, tok, models):
 def test_greedy_probe_before_and_after_rl(dlfs6_path, tok, models, grpo_fns):
     from codebot.utils import generate
     reward = grpo_fns["calculate_reward"]
-    acc = {}
+    right = {}
     for name in ("sft", "grpo"):
-        acc[name] = sum(reward(gt, generate(models[name], tok, p, temperature=0)[len(p):])
-                        for p, gt in arithmetic_prompts())
-    print("81 道加法的 greedy 正确数：", acc)
-    assert acc == {"sft": 44.0, "grpo": 67.0}
+        right[name] = [reward(gt, generate(models[name], tok, p, temperature=0)[len(p):]) == 1.0
+                       for p, gt in arithmetic_prompts()]
+    acc = {name: sum(r) for name, r in right.items()}
+    fixed = sum(not a and b for a, b in zip(right["sft"], right["grpo"]))     # SFT 错、GRPO 对
+    broken = sum(a and not b for a, b in zip(right["sft"], right["grpo"]))    # SFT 对、GRPO 错
+    print("81 道加法的 greedy 正确数：", acc, f"；GRPO 修好 {fixed} 道，弄坏 {broken} 道")
+    assert acc == {"sft": 44, "grpo": 67}
+    assert (fixed, broken) == (29, 6) and 44 + fixed - broken == 67
 
 
 def test_truncated_answer_scores_zero(dlfs6_path, tok, models, grpo_fns):
@@ -340,6 +389,16 @@ def test_answer_distribution_export(dlfs6_path, tok, models):
             for a, ans in enumerate(answers):
                 prob = lp[a, torch.arange(len(ans)), torch.tensor(ans)].sum().exp().item()
                 assert abs(prob - data[name][k][a]) < 2e-5, (name, p, a)
+    # 只算标准切分：'10' 是一个 token（id 743）；“先 '1' 后 '0'”这条非标准路径的概率在 1e-5 量级
+    assert tok.encode("10") == [743] and tok.encode("1") + tok.encode("0") == [49, 48]
+    for p, gt in arithmetic_prompts():
+        if gt != 10:
+            continue
+        x = torch.tensor([tok.encode(p) + [49, 48, eos]])
+        for name in ("sft", "grpo"):
+            with torch.no_grad():
+                lp = F.log_softmax(models[name](x)[0, -4:-1], -1)
+            assert lp[torch.arange(3), torch.tensor([49, 48, eos])].sum().exp().item() < 2e-5, (name, p)
 
 
 # ---------------------------------------------------------------- 3.9 GRPO
@@ -365,13 +424,38 @@ def test_dataloader_cycle_replays_the_same_batches(dlfs6_path, tok, grpo_fns):
     assert first == second             # itertools.cycle 记住了第一轮，之后原样重放
 
 
-def test_get_batch_never_contains_eos(dlfs6_path, tok, grpo_fns):
+def test_get_batch_never_contains_eos(dlfs6_path, tok, models, grpo_fns):
     ds = grpo_fns["GRPODataset"](tok)
     p = ALPACA.format("3+4=")
     ids, mask = ds.get_batch([p, p], ["7", "12"], "cpu")
     assert ids[0, -3:].tolist() == [10, 55, 0] and mask[0, -3:].tolist() == [0, 1, 0]
     assert ids[1, -3:].tolist() == [10, 49, 50] and mask[1, -3:].tolist() == [0, 1, 1]
-    assert 999 not in ids.tolist()[0] + ids.tolist()[1]  # EOS 不在 batch 里，也就从不进入 loss
+    # 真实的回答来自原书的 generate_group（温度 1，采到 EOS 就停）：拼进 batch 之后同样没有 EOS
+    torch.manual_seed(0)
+    prompts, responses, _ = grpo_fns["generate_group"](models["sft"], tok, [p], [7], 8)
+    ids, mask = ds.get_batch(prompts, responses, "cpu")
+    assert 999 not in ids.flatten().tolist()              # EOS 不在 batch 里，也就从不进入 loss
+    # 空回答（第一步就采到 EOS）：掩码全为 0，它对 loss 没有任何贡献
+    ids, mask = ds.get_batch([p], [""], "cpu")
+    assert mask.sum().item() == 0
+
+
+def test_empty_answer_is_never_penalized(dlfs6_path, tok, models):
+    """EOS 从不进入 loss，但它的概率没有被冻结：压低别的 token 时，softmax 把概率挪给了它。
+    第一步就选 EOS 的“空回答”永远 0 分，却永远不会被惩罚。"""
+    def p_empty(m, q):                                    # 第一个回答 token 就是 EOS 的概率
+        with torch.no_grad():
+            return F.softmax(m(torch.tensor([tok.encode(ALPACA.format(q))]))[0, -1], -1)[999].item()
+    pe = {name: p_empty(models[name], "5+3=") for name in ("sft", "grpo")}
+    print(f"官方模型，5+3= 回答为空的概率：SFT {pe['sft']:.4f} → GRPO {pe['grpo']:.4f}")
+    assert pe["sft"] < 0.02 and pe["grpo"] > 0.15
+    runs = {k: load_run_model(k) for k in ("run_sft", "run_grpo", "run_evalfix")}
+    pr = {k: p_empty(m, "3+3=") for k, m in runs.items()}
+    print("本书的运行，3+3= 回答为空的概率：", {k: round(v, 4) for k, v in pr.items()})
+    assert pr["run_sft"] < 0.01 and pr["run_grpo"] > 0.99 and pr["run_evalfix"] < 0.01
+    from codebot.utils import generate
+    p = ALPACA.format("3+3=")
+    assert generate(runs["run_grpo"], tok, p, temperature=0)[len(p):] == ""     # greedy 也是空回答
 
 
 def _batch(tok, grpo_fns, responses, prompts):
@@ -464,6 +548,7 @@ def test_dropout_makes_the_first_ratio_noisy(dlfs6_path, tok, models, grpo_fns):
         policy.train()
         r_train = (cp(policy, ids) / (po + 1e-8))[m]
     assert r_eval.numel() == exp["summary"]["n_tokens"] == 283
+    assert exp["lengths"] == [len(tok.encode(r)) for r in exp["responses"]] and sum(exp["lengths"]) == 283
     assert r_eval.min().item() > 0.99998 and r_eval.max().item() <= 1.0 + 1e-6   # 只剩 +1e-8 造成的微小偏差
     outside = ((r_train < 0.8) | (r_train > 1.2)).float().mean().item()
     print(f"train 模式：ratio 均值 {r_train.mean():.3f}，标准差 {r_train.std():.3f}，落在 [0.8, 1.2] 外 {outside:.1%}")
@@ -481,8 +566,104 @@ def test_dropout_makes_the_first_ratio_noisy(dlfs6_path, tok, models, grpo_fns):
         grads.append(torch.cat([p.grad.flatten().clone() for p in policy.parameters() if p.grad is not None]))
     g0, g1 = grads[0].double(), grads[1].double()
     cos = (g0 @ g1 / (g0.norm() * g1.norm())).item()
-    print(f"dropout 梯度与干净梯度的余弦：{cos:.3f}")
-    assert cos < 0.9
+    print(f"前 8 道题的 64 条回答，一次 dropout 抽样（种子 2）的梯度与干净梯度的余弦：{cos:.3f}")
+    assert 0.7 < cos < 0.8                                # 正文：“余弦只有 0.76”
+
+
+def test_dropout_biases_the_logged_grpo_loss(dlfs6_path, tok, models, grpo_fns):
+    """原脚本进度条上的 loss 大多是正的，并不贴着 0。同一批 256 条回答、权重相同（第一次更新）：
+    eval 模式下 loss = −ΣA·L/N；train 模式（脚本的做法）下抽 20 次 dropout，loss 次次为正。
+    同时数一数梯度的“有效权重” A·ρ（被裁剪掉的 token 记 0）：dropout 让推高一侧变弱，压低一侧几乎不变。"""
+    import copy
+    exp = read_json("ratio_first_update.json")
+    ds = grpo_fns["GRPODataset"](tok)
+    prompts = [p for p, _ in ds.data[:32] for _ in range(8)]
+    ids, mask = ds.get_batch(prompts, exp["responses"], "cpu")
+    adv = torch.tensor(exp["advantages"])
+    m = mask[:, 1:].bool()
+    A = adv[:, None].expand_as(m)[m]                       # 每个回答 token 的优势
+    N = len(adv)
+    cp, old = grpo_fns["compute_probs"], models["sft"]
+    policy = copy.deepcopy(old)
+
+    def clipped(r, eps=0.2):                               # 与 grpo_loss 相同的算式（逐 token 的比值 r）
+        return (-torch.min(r * A, torch.clamp(r, 1 - eps, 1 + eps) * A).sum() / N).item()
+
+    def weights(r):                                        # 梯度权重 A·ρ，被裁剪的 token 记 0
+        live = ((A > 0) & (r <= 1.2)) | ((A < 0) & (r >= 0.8))
+        w = torch.where(live, A * r, torch.zeros_like(r))
+        return w[A > 0].sum().item(), w[A < 0].sum().item()
+
+    with torch.no_grad():
+        po = cp(old, ids)
+        policy.eval()
+        r_eval = (cp(policy, ids) / (po + 1e-8))[m]
+        policy.train()
+        draws = []
+        for s in range(20):
+            torch.manual_seed(100 + s)
+            draws.append((cp(policy, ids) / (po + 1e-8))[m])
+        torch.manual_seed(100)                             # 原书的 grpo_loss，与第 0 次抽样同一个种子
+        book = grpo_fns["grpo_loss"](policy, old, ids, mask, adv, 0.2).item()
+    assert abs(book - clipped(draws[0])) < 1e-5
+    formula = (-(adv * mask[:, 1:].sum(1)).sum() / N).item()
+    loss_clip = np.array([clipped(r) for r in draws])
+    loss_noclip = np.array([clipped(r, eps=1e9) for r in draws])
+    w_eval, w_train = weights(r_eval), np.array([weights(r) for r in draws])
+    print(f"eval 模式：loss {clipped(r_eval):+.4f}（−ΣA·L/N = {formula:+.4f}）；有效权重 推高 {w_eval[0]:+.1f}，压低 {w_eval[1]:+.1f}")
+    print(f"train 模式 20 次：loss 平均 {loss_clip.mean():+.4f}（{loss_clip.min():+.4f} 到 {loss_clip.max():+.4f}），"
+          f"去掉裁剪 {loss_noclip.mean():+.4f}；有效权重 推高 {w_train[:, 0].mean():+.1f}，压低 {w_train[:, 1].mean():+.1f}")
+    assert abs(clipped(r_eval) - formula) < 1e-4 and abs(formula - 0.0073) < 1e-4
+    assert loss_clip.min() > 0 and 0.07 < loss_clip.mean() < 0.12          # 20 次全为正，平均约 +0.09
+    assert 0.03 < loss_noclip.mean() < loss_clip.mean()                    # 不裁剪也偏正；裁剪的 min 又放大了偏差
+    assert w_train[:, 0].mean() < 0.65 * w_eval[0]                         # 推高一侧少了三分之一以上……
+    assert abs(w_train[:, 1].mean() - w_eval[1]) < 0.1 * abs(w_eval[1])    # ……压低一侧几乎不变
+    assert np.all(w_train.sum(1) < 0)                                      # 每一次抽样，合力都是“往下压”
+
+
+def test_local_runs_answer_distributions_and_greedy(dlfs6_path, tok, grpo_fns):
+    """本书自己的 3060 Ti 运行（runs/<run>/work/ 下的 checkpoint）：
+    answer_dists.json 里 run_* 三行可以从 checkpoint 重新算出；修复版的 SFT 起点就是原样运行产出的那一个；
+    greedy 答对 44 / 70 / 81 道（与进度条上的 54.3%…、86.4%、100% 一致）。"""
+    import hashlib
+    from codebot.utils import generate
+    data = read_json("answer_dists.json")
+    evalfix = json.loads((ROOT / "web/data/runs/codebot-grpo-evalfix-3060ti/report.json").read_text(encoding="utf-8"))
+    assert data["run_checkpoints"]["run_sft"]["sha256"] == evalfix["seeded"][0]["sha256"]   # 同一个 SFT 起点
+    eos = tok.end_token_id
+    answers = [tok.encode(str(a)) + [eos] for a in range(19)]
+    reward = grpo_fns["calculate_reward"]
+    greedy = {}
+    for key in RUN_CHECKPOINTS:
+        m = load_run_model(key)
+        assert hashlib.sha256(run_checkpoint(key).read_bytes()).hexdigest() == data["run_checkpoints"][key]["sha256"]
+        greedy[key] = sum(reward(gt, generate(m, tok, p, temperature=0)[len(p):]) for p, gt in arithmetic_prompts())
+        for k, (p, gt) in enumerate(arithmetic_prompts()):
+            if k % 10:
+                continue
+            pid = tok.encode(p)
+            x = torch.tensor([pid + a + [0] * (3 - len(a)) for a in answers])
+            with torch.no_grad():
+                lp = F.log_softmax(m(x)[:, len(pid) - 1:-1], -1)
+            for a, ans in enumerate(answers):
+                prob = lp[a, torch.arange(len(ans)), torch.tensor(ans)].sum().exp().item()
+                assert abs(prob - data[key][k][a]) < 2e-5, (key, p, a)
+    print("本书运行的 greedy 正确数：", greedy)
+    assert greedy == {"run_sft": 44, "run_grpo": 70, "run_evalfix": 81}
+
+
+def test_optimizers_descend_by_default_but_can_ascend(dlfs6_path):
+    """3.6.1：PyTorch 的优化器默认做梯度下降；SGD、Adam、AdamW 也都有 maximize 参数（默认 False）。"""
+    for opt_cls in (torch.optim.SGD, torch.optim.Adam, torch.optim.AdamW):
+        assert inspect.signature(opt_cls).parameters["maximize"].default is False
+    steps = {}
+    for maximize in (False, True):
+        p = torch.nn.Parameter(torch.zeros(1))
+        opt = torch.optim.SGD([p], lr=0.1, maximize=maximize)
+        (2 * p).sum().backward()                     # J = 2θ，梯度为 +2
+        opt.step()
+        steps[maximize] = p.item()
+    assert steps == {False: pytest.approx(-0.2), True: pytest.approx(0.2)}   # 默认往下走；maximize=True 往上走
 
 
 def test_zero_gradient_still_moves_weights_through_weight_decay(dlfs6_path):
@@ -494,10 +675,15 @@ def test_zero_gradient_still_moves_weights_through_weight_decay(dlfs6_path):
 
 
 def test_recorded_grpo_runs(dlfs6_path):
-    """页面引用的 GRPO 对照实验记录（研究阶段 seed 0 与本章复现 seed 2）：核对正文写到的数字。"""
+    """页面引用的 CPU 对照实验记录（verify/_ch03_grpo_replicate.py 的输出，seed 0、1、2 各两条）：
+    核对正文写到的数字；并确认批量采样从没碰到 40 个 token 的上限，所以它与原书逐条调用 generate() 等价。"""
     runs = read_json("grpo_dropout_runs.json")
+    assert sorted((r["seed"], r["dropout"]) for r in runs["runs"]) == [(s, d) for s in (0, 1, 2) for d in (False, True)]
     for run in runs["runs"]:
         rows = [json.loads(line) for line in (DATA / run["file"]).read_text(encoding="utf-8").splitlines()]
-        assert len(rows) == run["iters"]
+        assert len(rows) == run["iters"] == 60
+        assert "_ch03_grpo_replicate.py" in run["env"] and f"--seed {run['seed']}" in run["env"]
         accs = [r["greedy_acc"] for r in rows if "greedy_acc" in r]
         assert abs(accs[-1] - run["final_greedy_acc"]) < 0.05, run["file"]
+        assert all(r["truncated"] == 0 for r in rows), run["file"]
+        assert all(r["greedy_truncated"] == 0 for r in rows if "greedy_acc" in r), run["file"]

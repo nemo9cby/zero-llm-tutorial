@@ -2,7 +2,7 @@
    CodeBot 写法的结果由 verify/test_ch02.py 在多组配置上与 PyTorch 核对。 */
 import { h, fmt } from './_lib.js';
 import { seriesColor } from './_plot.js';
-import { injectStyle } from './ch02-util.js';
+import { injectStyle, onThemeChange } from './ch02-util.js';
 
 export const PRESETS = {
   codebot: { label: 'CodeBot（本章）', V: 1000, ctx: 256, E: 384, L: 6, ff: 1536, style: 'codebot', tied: true },
@@ -24,7 +24,15 @@ export function countParams({ V, ctx, E, L, ff, tied = true, style = 'codebot' }
   if (!tied) parts.push({ key: 'unw', name: 'unembed 权重（不共享）', n: V * E });
   if (style === 'codebot') parts.push({ key: 'unb', name: 'unembed 偏置', n: V });
   const total = parts.reduce((a, p) => a + p.n, 0);
-  return { parts, total, stateDictSum: total + (tied ? V * E : 0), approx12: 12 * L * E * E };
+  // Big matrices inside the blocks: 4E² (attention) + 2·E·ff (FFN) per block; equal to 12·L·E² only when ff = 4E.
+  return { parts, total, stateDictSum: total + (tied ? V * E : 0), approx12: 12 * L * E * E, approxBlocks: L * (4 * E * E + 2 * E * ff) };
+}
+
+/** The footnote under the table: the 12·L·E² rule of thumb assumes ff = 4E. */
+export function approxNote({ L, E, ff }, r) {
+  return ff === 4 * E
+    ? `粗估 12·L·E² = ${fmt(r.approx12)}：只算块内的大矩阵（FFN 宽度 ff = 4E 时，每块是 4E² + 8E²），嵌入和偏置不在其中。`
+    : `块内的大矩阵 L·(4E² + 2·E·ff) = ${fmt(r.approxBlocks)}。现在 ff ≠ 4E，所以不能再用 12·L·E² = ${fmt(r.approx12)} 来粗估。`;
 }
 
 export function mount(root) {
@@ -73,9 +81,10 @@ export function mount(root) {
         h('td', { class: 'n' }, fmt(p.n)), h('td', { class: 'n' }, `${((100 * p.n) / r.total).toFixed(1)}%`))))),
       h('p', { class: 'w-label' }, `对 state_dict 的张量求和：${fmt(r.stateDictSum)}`
         + (st.tied ? `（共享的 ${fmt(st.V * st.E)} 个参数被算了两次）` : '（不共享时与总数相同）')),
-      h('p', { class: 'w-label' }, `粗估 12·L·E² = ${fmt(r.approx12)}：只算块内的大矩阵，嵌入和偏置不在其中。`),
+      h('p', { class: 'w-label' }, approxNote(st, r)),
     );
   }
   sync();
   render();
+  onThemeChange(render);
 }

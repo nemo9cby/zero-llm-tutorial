@@ -1,7 +1,7 @@
 {
  "_provenance": {
   "generated_by": "CUDA_VISIBLE_DEVICES=-1 uv run python verify/_parts_preview.py --write",
-  "date": "2026-10-11",
+  "date": "2026-10-12",
   "device": "cpu",
   "python": "3.12.9",
   "torch": "2.14.1+cu130",
@@ -9,13 +9,15 @@
   "dlfs6_commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
   "generate": "storybot/utils.generate，prompt = <|endoftext|>（同 ch06/06_generate.py），temperature 1.0，max_new_tokens 255（书中为 300；255 + 1 个 prompt token 正好不超过上下文 256）",
   "val_loss_subset": "验证集中 32 个随机 256-token 窗口（np.random.default_rng(0)），fp32",
+  "updates": "iters 取自文件名；ch06/05_pretrain.py 在第 i 次循环的 optimizer.step() 之后保存 model_iter_{i}.pt（i 从 0 数起），所以中间检查点做过 i + 1 次更新；model_pretrain.pt 在循环结束后保存，做过 max_iters 次更新。tokens_seen = updates × 32 × 256",
   "key_rename": "HF 检查点的 blocks.N.mlp.* 改名为 blocks.N.ffn.*"
  },
  "checkpoints": [
   {
    "file": "storybot/model_iter_500.pt",
    "iters": 500,
-   "tokens_seen": 4096000,
+   "updates": 501,
+   "tokens_seen": 4104192,
    "val_loss_subset": 2.4456,
    "samples": [
     {
@@ -33,7 +35,8 @@
   {
    "file": "storybot/model_iter_5000.pt",
    "iters": 5000,
-   "tokens_seen": 40960000,
+   "updates": 5001,
+   "tokens_seen": 40968192,
    "val_loss_subset": 1.6619,
    "samples": [
     {
@@ -51,6 +54,7 @@
   {
    "file": "storybot/model_pretrain.pt",
    "iters": 40000,
+   "updates": 40000,
    "tokens_seen": 327680000,
    "val_loss_subset": 1.3094,
    "samples": [

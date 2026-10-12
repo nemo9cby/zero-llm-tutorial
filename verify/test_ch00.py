@@ -84,6 +84,20 @@ def test_corpus_sizes(dlfs6_path):
     assert BY_ID["webbot"]["corpus"]["tokens"] == pp.HF_SIZES["webbot/owt_train.bin"] // 2 == 2_649_004_800
 
 
+def test_cpu_step_record(dlfs6_path):
+    """web/data/ch00/cpu_step.json（0.7 节的 CPU 时间账）：配置取自原书脚本，早先的两次计时取自研究日志。
+    计时本身取决于机器和负载，不在这里重测；重新测量用 `_parts_preview.py --write --only cpustep`。"""
+    rec = json.loads((pp.WEB_DATA / "ch00" / "cpu_step.json").read_text(encoding="utf-8"))
+    h = pp.script_hparams(rec["script"])
+    assert rec["script"] == "ch03/01_pretrain.py" and rec["max_iters"] == h["max_iters"] == 20_000
+    assert rec["tokens_per_step"] == h["batch_size"] * h["context_len"] == 8_192
+    assert rec["params"] == BY_ID["codebot"]["params"] and len(rec["seconds_per_step"]) >= 3
+    log = (pp.ROOT / "research" / "repo-ch03-train-align.md").read_text(encoding="utf-8")
+    assert "torch 2.9.1+cpu（8 threads）" in log
+    for e in rec["earlier"]:
+        assert f"{e['s_per_step']:.3f} s/iter" in log and e["torch"] == "2.9.1+cpu" and e["threads"] == 8
+
+
 def test_initial_loss_is_a_little_above_ln_vocab(models):
     for key, model in models.items():
         tokens = np.memmap(pp.DLFS6 / BY_ID[key]["init_loss_data"], dtype=np.uint16, mode="r")
@@ -112,22 +126,29 @@ def test_embed_dim_is_the_residual_width(models):
         assert inner[key](model.blocks[0]) == cfg["ff_dim"] != d  # FFN 的中间宽度是另一个数
 
 
-def test_windows_pitfalls(dlfs6_path):
-    from codebot.tokenizer import train_bpe
+def test_windows_pitfalls(dlfs6_path, tmp_path):
+    import contextlib
+    import io
+    import pickle
+    from storybot.tokenizer import train_bpe                    # 第 4 章起的训练器：以二进制模式读文件
     raw = (pp.DLFS6 / "codebot/tiny_codes.txt").read_bytes()
     assert b"\r" not in raw                                      # core.autocrlf=false 的检出是纯 LF
-    assert len(raw) + raw.count(b"\n") == 6_743_534              # autocrlf=true 时每行多一个 \r
-    # 第 1 章的 train_bpe 在 CRLF 文本上会把 \r\n 学成 token（前 300 个程序，4 次合并）
-    sample = pp.EOT.join(raw.decode("utf-8").split(pp.EOT)[:300])
-
-    def first_merges(text):
-        vocab = {i: bytes([i]) for i in range(256)}
-        for (a, b), new in train_bpe(text, 256 + 1 + 4).items():
-            vocab[new] = vocab[a] + vocab[b]
-        return [vocab[i] for i in range(256, 260)]                # 第 k 次合并的 id 是 256 + k
-    assert first_merges(sample) == [b"  ", b"in", b"er", b"or"]
-    assert first_merges(sample.replace("\n", "\r\n")) == [b"  ", b"in", b"\r\n", b"er"]
-    # 书中脚本用不带 encoding 的 open() 读 SFT 数据；中文 Windows 的默认编码是 GBK
+    doc = json.loads((pp.WEB_DATA / "part1/doclen.json").read_text(encoding="utf-8"))
+    assert raw.count(b"\n") == doc["line_feeds"] == 256_501     # 页面上 0.7-a 用的换行数
+    crlf = tmp_path / "tiny_codes.txt"
+    crlf.write_bytes(raw.replace(b"\n", b"\r\n"))                # autocrlf=true 检出的样子：每行多一个 \r
+    assert crlf.stat().st_size == len(raw) + doc["line_feeds"] == 6_743_534
+    # 第 1 章的脚本用文本模式读（open(...).read()）：Python 把 \r\n 还原成 \n，结果与 LF 版完全相同
+    assert "open(\"codebot/tiny_codes.txt\").read()" in (pp.DLFS6 / "ch01/07_tiny_codes.py").read_text(encoding="utf-8")
+    with open(crlf, encoding="utf-8") as f:
+        assert f.read() == raw.decode("utf-8")
+    # 二进制读取看得见 \r：在完整的 CRLF 版语料上，第 2 次合并就成了 \r\n，原本第 2 的 4 个空格被挤到第 3
+    with contextlib.redirect_stderr(io.StringIO()):            # tqdm 进度条
+        rules = train_bpe(str(crlf), 256 + 3 + 1, num_processes=8, num_chunks=64)
+    assert list(rules) == [(32, 32), (13, 10), (256, 256)]
+    official = list(pickle.loads((pp.DLFS6 / "codebot/merge_rules.pkl").read_bytes()))
+    assert official[:2] == [(32, 32), (256, 256)]               # LF 版：两个空格，然后四个空格
+    # 原书读 SFT 数据的两个脚本用不带 encoding 的 open()；简体中文 Windows 的默认编码是 GBK
     for rel in ("ch03/03_alpaca.py", "ch03/03_sft.py"):
         src = (pp.DLFS6 / rel).read_text(encoding="utf-8")
         assert "open('codebot/tiny_codes_sft.json')" in src or "open(data_path)" in src
@@ -135,5 +156,8 @@ def test_windows_pitfalls(dlfs6_path):
     utf8, gbk = json.loads(data.decode("utf-8")), json.loads(data.decode("gbk"))   # GBK 不报错……
     changed = [(a["response"], b["response"]) for a, b in zip(utf8, gbk) if a != b]
     assert len(changed) == 2 and all("O(n²)" in a and "O(n虏)" in b for a, b in changed)  # ……而是悄悄改字
+    # 用文本模式读 TinyStories 的写法只在 ch04/02_bpe_cache.py 末尾的注释里；照着它读就会报错
+    cache_src = (pp.DLFS6 / "ch04/02_bpe_cache.py").read_text(encoding="utf-8")
+    assert '# file_path = "storybot/tiny_stories_train.txt"' in cache_src and "# text = open(file_path).read()" in cache_src
     with pytest.raises(UnicodeDecodeError):
         (pp.DLFS6 / "storybot/tiny_stories_valid.txt").read_bytes().decode("gbk")

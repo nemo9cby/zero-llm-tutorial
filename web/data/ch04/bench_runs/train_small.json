@@ -1,0 +1,165 @@
+{
+ "input": "tiny_stories_valid.txt first 499,577 bytes",
+ "bytes": 499577,
+ "vocab": 1000,
+ "runs": {
+  "dedup": [
+   {
+    "wall": 21.806,
+    "cpu": 13.812,
+    "load": {
+     "mean": 100.0,
+     "min": 99.8,
+     "max": 100.0
+    },
+    "phases": {
+     "Pretokenizing": {
+      "wall": 0.225,
+      "cpu": 0.203
+     },
+     "Training BPE": {
+      "wall": 21.575,
+      "cpu": 13.609
+     }
+    }
+   },
+   {
+    "wall": 21.161,
+    "cpu": 14.75,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    },
+    "phases": {
+     "Pretokenizing": {
+      "wall": 0.278,
+      "cpu": 0.141
+     },
+     "Training BPE": {
+      "wall": 20.876,
+      "cpu": 14.609
+     }
+    }
+   }
+  ],
+  "naive": [
+   {
+    "wall": 249.888,
+    "cpu": 185.0,
+    "load": {
+     "mean": 99.9,
+     "min": 89.4,
+     "max": 100.0
+    },
+    "phases": {
+     "Training BPE": {
+      "wall": 249.515,
+      "cpu": 184.656
+     }
+    }
+   }
+  ],
+  "cache": [
+   {
+    "wall": 2.762,
+    "cpu": 1.531,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    },
+    "phases": {
+     "Pretokenizing": {
+      "wall": 0.218,
+      "cpu": 0.188
+     },
+     "Training BPE": {
+      "wall": 2.498,
+      "cpu": 1.328
+     }
+    }
+   },
+   {
+    "wall": 1.768,
+    "cpu": 1.469,
+    "load": {
+     "mean": 99.4,
+     "min": 99.0,
+     "max": 100.0
+    },
+    "phases": {
+     "Pretokenizing": {
+      "wall": 0.217,
+      "cpu": 0.156
+     },
+     "Training BPE": {
+      "wall": 1.51,
+      "cpu": 1.281
+     }
+    }
+   }
+  ],
+  "chunk": [
+   {
+    "wall": 2.734,
+    "cpu": 1.75,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    },
+    "phases": {
+     "Pretokenizing": {
+      "wall": 0.469,
+      "cpu": 0.172
+     },
+     "Training BPE": {
+      "wall": 2.197,
+      "cpu": 1.547
+     }
+    }
+   }
+  ],
+  "heap": [
+   {
+    "wall": 1.435,
+    "cpu": 0.703,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    }
+   },
+   {
+    "wall": 0.998,
+    "cpu": 0.766,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    }
+   }
+  ]
+ },
+ "identical_to_naive": {
+  "dedup": true,
+  "naive": true,
+  "cache": true,
+  "chunk": true,
+  "heap": true
+ },
+ "merges": 743,
+ "env": {
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "logical_cpus": 16,
+  "physical_cores": 8,
+  "ram_gb": 47.7,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "numpy": "2.5.4",
+  "regex": "2026.9.29",
+  "note": "RTX 3060 Ti busy with the tutorial's training run during all measurements (CPU only here)",
+  "date": "2026-10-11 20:34"
+ }
+}

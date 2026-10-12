@@ -1,7 +1,8 @@
 /* 附录 B 的交互图：缩放前后的一行注意力。
    config: { d: 64, n: 16 }  —— d 取 2 的幂（1…4096），n 是一行里键的个数。
    上图：随机取一个查询 q 和 n 个键，各分量独立标准正态，画出 softmax 之后的一行权重；
-   下图：每个 d 重复 300 次的平均最大权重（不缩放 vs 除以 √d），与验证 B-g 是同一个实验。 */
+   下图：每个 d 重复 300 次的平均最大权重（不缩放 vs 除以 √d），与验证 B-g 是同一个实验；
+   交互图默认每行 16 个键（手机上 32 根柱子太挤），所以数值比 B-g 的 32 个键略大，规律相同（见 JS 测试）。 */
 import { h } from './_lib.js';
 import { barChart, lineChart, fmtNum } from './_plot.js';
 import { makeRng, softmax, nextId, appendixRoot } from './appendix-common.js';

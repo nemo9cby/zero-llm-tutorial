@@ -8,15 +8,19 @@
 
 | 情况 | 推荐 | 原因 |
 |---|---|---|
-| CodeBot、StoryBot、DPO | 本机 3060 Ti 或 Modal | 小模型，几十分钟到两小时；Modal 按秒计费、一条命令 |
-| WebBot 单卡全程（约 9 小时） | RunPod / Lambda 按需实例 | 整机按时间计费；RunPod 写明按需 Pod 的资源不会被其他用户挤占。Modal 的 GPU 函数默认都可能被抢占，而原书脚本不能断点续训 |
+| CodeBot、StoryBot、DPO | 本机 3060 Ti 或 Modal | 小模型：CodeBot 本机实测预训练 42 分钟、GRPO 约 1.5 小时；StoryBot 在 Modal H100 上实测预训练 16 分钟。Modal 按秒计费、一条命令 |
+| WebBot 单卡全程（约 10 小时） | RunPod / Lambda 按需实例 | 整机按时间计费；RunPod 写明按需 Pod 的资源不会被其他用户挤占。Modal 的 GPU 函数默认都可能被抢占，而原书脚本不能断点续训 |
 | WebBot 8 卡 | Lambda 8× H100 或 RunPod 8 卡 Pod | 单机 8 卡，NVLink；先读 `content/gpu.md` 的多卡陷阱 |
-| 只想先摸底 | 任意平台跑 `webbot-probe` | 200 步计时探针，几毛钱到一美元 |
+| 只想先摸底 | 任意平台跑 `webbot-probe` | 200 步计时探针；在 Modal H100 上实测 218 秒、约 0.27 美元 |
+
+WebBot 单卡全程的时间来自 200 步探针（运行记录 `webbot-probe`）：每步 0.317 秒、每次完整评估约 56 秒，
+外推全程约 10.4 小时（`content/gpu.md` 的验证 G.2-j）。事前按 MFU 35% 估算的是 9.1 小时。
 
 2026-10-11 的部分按需价格（每 GPU·小时）：RunPod H100 SXM Community 2.69 / Secure 3.49，
 RTX 4090 Community 0.34；Lambda 1× H100 SXM 4.29、8× H100 SXM 每卡 3.99。
-来源：<https://www.runpod.io/pricing>、<https://lambda.ai/pricing>。RunPod 页面卡片上偶尔显示第三个数字，
-下单前以控制台为准。
+来源：<https://www.runpod.io/pricing>、<https://lambda.ai/pricing>。RunPod 的 Community / Secure 价格取自
+价格页里的结构化数据（JSON-LD）；页面卡片上显示的是另一组更高的价格（2026-10-12 查看：H100 SXM 3.99、
+RTX 4090 0.89、B200 7.99），下单前以控制台为准。
 
 ## 一、把教程带到机器上
 
@@ -60,8 +64,11 @@ git bundle create zllm.bundle HEAD
 ## 四、`setup_gpu_box.sh` 做了什么
 
 1. 读 `nvidia-smi` 的驱动版本。`uv.lock` 在 Linux 上锁定的 torch 2.14.1 来自 PyPI，用 CUDA 13.0 构建，
-   需要 580 以上的驱动；驱动在 525–579 之间时，改装同一版本的 CUDA 12.6 构建
-   （`https://download.pytorch.org/whl/cu126`），并写入 `UV_NO_SYNC=1`，免得 `uv run` 把它“修”回去。
+   需要 580 以上的驱动；驱动在 525–579 之间时，改装同一版本的 CUDA 12.6 构建：
+   `uv pip install --reinstall-package torch "torch==2.14.1+cu126" --index https://download.pytorch.org/whl/cu126`。
+   必须用 `--index`：如果写成 `--index-url <cu126> --extra-index-url <PyPI>`，uv 会让 PyPI 排在前面，
+   装回的还是 CUDA 13.0 版（<https://docs.astral.sh/uv/reference/cli/#uv-pip-install>）；钉住 `+cu126`
+   则让选错版本时当场报错。之后写入 `UV_NO_SYNC=1`，免得 `uv run` 把它“修”回去。
 2. 安装 uv，克隆 bundle，取回并核对原书子模块。
 3. `uv sync --frozen`，然后在 GPU 上自检一行：torch 版本、CUDA 版本、几张什么卡、是否支持 bf16。
 4. 没有 gcc 时装 `build-essential`：第 9 章的 `torch.compile` 要用 Triton 现场编译 kernel。
@@ -83,8 +90,9 @@ uv run python gpu/run_local.py --run webbot-8xh100 --job webbot --nproc 8       
 ```
 
 `--job` 的定义在 `gpu/jobs.py`，与 Modal 上跑的作业完全相同。`--nproc 8` 用 torchrun 启动 8 个进程，
-同时把 `max_iters` 和 `warmup_iters` 除以 8（`--scale batch` 则改为把每卡 batch 除以 8）；
-改了什么、为什么改，都会写进 `report.json` 对应步骤的 `patches` 字段。
+同时把 `max_iters` 和 `warmup_iters` 除以 8：总 token 不变、最省钱，但全局 batch 变成 8 倍、更新次数变成 1/8，
+峰值学习率没变，优化过程与单卡不同。`--scale batch` 则改为把每卡 batch 除以 8：优化过程与单卡相同，
+但评估时另外 7 张卡空等，费用约翻倍。改了什么、为什么改，都会写进 `report.json` 对应步骤的 `patches` 字段。
 
 `Ctrl-b d` 离开 tmux，`tmux attach -t train` 回来。日志在 `runs/<run>/<脚本名>.log`。
 
@@ -107,7 +115,7 @@ uv run python tools/build.py
 
 | 现象 | 原因与处理 |
 |---|---|
-| `CUDA unavailable` | 驱动太旧而装了 CUDA 13 的 torch：重跑脚本（它会按驱动选 cu126），并 `source $WORK/zllm.env` |
+| `CUDA unavailable` | 驱动太旧而装了 CUDA 13 的 torch：重跑脚本（驱动在 525–579 之间时，它用 `--index` 改装 `torch==2.14.1+cu126`），并 `source $WORK/zllm.env`；`uv run python -c "import torch; print(torch.__version__)"` 应以 `+cu126` 结尾 |
 | `uv run` 又开始下载 torch | 没有 `source $WORK/zllm.env`（低版本驱动分支需要 `UV_NO_SYNC=1`） |
 | ch09 卡在 `torch.compile` 报找不到编译器 | `apt-get install -y build-essential` |
 | ch09 要求登录 wandb | `run_local.py` 默认设 `WANDB_MODE=disabled`；想记录到 W&B 就先 `wandb login` 再设 `WANDB_MODE=online` |

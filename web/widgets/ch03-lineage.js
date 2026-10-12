@@ -1,5 +1,5 @@
 /* 图：从 REINFORCE 到 GRPO 的“家谱”，以及配置行解码器。
-   所有算法都写成 ∇J ≈ E[ Σ_t Φ_t ∇log π(a_t|s_t) ]，每一代只改 Φ（或改“用谁的样本”）。
+   所有算法都写成 ∇J ≈ E[ Σ_t Φ_t ∇log π(a_t|s_t) ]。前五代只改 Φ；后两代改“用谁的样本”（重要性比值与裁剪）和归一化。
    前四行沿用《深度学习入门4：强化学习》9.6 节的编号。config: {} */
 import { h } from './_lib.js';
 import { injectStyle, segmented } from './ch03-common.js';
@@ -14,7 +14,7 @@ export const LINEAGE = [
   { tag: '(3)', name: '带基线的 REINFORCE', phi: 'Φ_t = G_t − b(s_t)',
     where: '《深度学习入门4》9.3 节（式 9.4）；本章 3.7.2 节；附录 C',
     needs: '一个不依赖动作的基线', note: '期望不变，方差下降（验证 3.7-b：1.589 → 0.531）。' },
-  { tag: '(4)', name: 'Actor-Critic', phi: 'Φ_t = r_t + γV(s_{t+1}) − V(s_t)　TD 误差',
+  { tag: '(4)', name: 'Actor-Critic', phi: 'Φ_t = r_t + γV(s′) − V(s_t)　TD 误差（s′ 是下一个状态）',
     where: '《深度学习入门4》9.4 节（式 9.6）', needs: '再训练一个价值网络 V（critic）',
     note: 'PPO 通常用 critic 的估计计算 GAE，在偏差与方差之间折中。对 LLM 来说，critic 往往又是一个 Transformer。' },
   { tag: '(5)', name: 'GRPO 的组内优势', phi: 'Φ_t = A_i = r_i − mean(r_1 … r_G)',

@@ -75,9 +75,9 @@ export function mount(root, config = {}) {
   const gridBox = h('div', { class: 'grid' });
   const phase = h('div', { class: 'phase', 'aria-live': 'polite' });
   const kRow = h('div', { class: 'chips' }), vRow = h('div', { class: 'chips' });
+  const kTitle = h('div', { class: 'panel-title' }), vTitle = h('div', { class: 'panel-title' });
   const counts = h('div', { class: 'readout' });
-  const side = h('div', { class: 'side' }, phase, h('div', { class: 'panel-title' }, 'K cache'), kRow,
-    h('div', { class: 'panel-title' }, 'V cache'), vRow, counts);
+  const side = h('div', { class: 'side' }, phase, kTitle, kRow, vTitle, vRow, counts);
   box.append(legend, h('div', { class: 'stage' }, gridBox, side));
 
   function start() {
@@ -91,7 +91,8 @@ export function mount(root, config = {}) {
     const c = colors();
     legend.replaceChildren(
       h('span', { style: `--c:${c.new}` }, '本步新算'),
-      mode === 'nocache' ? h('span', { style: `--c:${c.redo}` }, '本步重复计算') : h('span', { style: `--c:${c.past}` }, '之前算过（结果已用掉）'),
+      mode === 'nocache' ? h('span', { style: `--c:${c.redo}` }, '本步重复计算')
+        : h('span', { style: `--c:${c.past}` }, '之前的步骤算过（分数用完即弃，缓存里只留 K、V）'),
       ...(mode === 'cache' && buggy ? [h('span', { style: `--c:${c.future}` }, '看见了未来')] : []));
     const avail = Math.max(220, (gridBox.parentElement?.clientWidth || 360));
     const lab = 26, cs = Math.max(14, Math.min(26, Math.floor((Math.min(avail, 420) - lab - 4) / N)));
@@ -124,6 +125,8 @@ export function mount(root, config = {}) {
     const len = mode === 'cache' ? (s === 0 ? P : P + s) : P + s;     // tokens whose K, V exist after this step
     const fresh = mode === 'cache' ? (s === 0 ? [...Array(P).keys()] : [P + s - 1]) : [...Array(len).keys()];
     const chip = (t) => h('span', { class: `chip ${fresh.includes(t) ? (mode === 'nocache' && s > 0 && t < len - 1 ? 'redo' : 'fresh') : ''}` }, String(t));
+    kTitle.textContent = mode === 'cache' ? 'K cache' : '本步算出的 K（不保存）';
+    vTitle.textContent = mode === 'cache' ? 'V cache' : '本步算出的 V（不保存）';
     kRow.replaceChildren(...Array.from({ length: len }, (_, t) => chip(t)));
     vRow.replaceChildren(...Array.from({ length: len }, (_, t) => chip(t)));
     const { tokens, scores } = stepCounts(mode, P, s, buggy);

@@ -1,9 +1,13 @@
 /* 图：文档长度（token 数）的累计分布，竖线是模型的上下文长度。用在第 I–III 部的扉页。
    Lengths come from data/<part>/doclen.json: tokens between two <|endoftext|> in the book's .bin files
    (verify/test_part{1,2,3}.py recompute them).
+   Each dataset keeps its colour on every page: the series are drawn in the fixed order TinyCodes (part1),
+   TinyStories (part2), OpenWebText (part3), and every page that shows a later dataset also shows the earlier ones.
    config: { datasets: [{ name, file }], xMax: 1024 } */
 import { h, fmt } from './_lib.js';
 import { lineChart } from './_plot.js';
+
+const ORDER = ['data/part1/doclen.json', 'data/part2/doclen.json', 'data/part3/doclen.json'];
 
 async function load(file) {
   const r = await fetch(file);
@@ -19,6 +23,8 @@ export async function mount(root, config) {
     root.append(h('p', { class: 'w-label' }, `无法读取文档长度数据（${err.message}）。`));
     return;
   }
+  const rank = (s) => (ORDER.includes(s.file) ? ORDER.indexOf(s.file) : ORDER.length);
+  sets.sort((a, b) => rank(a) - rank(b));
   const xMax = config.xMax || 1024;
   const steps = 96;
   const series = sets.map((s) => {
@@ -38,7 +44,8 @@ export async function mount(root, config) {
   root.append(chart);
   lineChart(chart, {
     series, xLabel: '文档长度（token）', yLabel: '不超过该长度的文档占比（%）', yMin: 0, yMax: 100, height: 240,
-    vLines: ctxs.map((c) => ({ x: c, label: `上下文 ${fmt(c)}` })),
+    // labels at the bottom: right of each line the cumulative curves are already high, so the text stays clear
+    vLines: ctxs.map((c) => ({ x: c, label: `上下文 ${fmt(c)}`, labelY: 'bottom' })),
     yFormat: (v) => `${Math.round(v)}`,
   });
   root.append(...sets.map((s) => {

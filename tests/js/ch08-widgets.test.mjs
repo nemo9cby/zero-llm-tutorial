@@ -2,11 +2,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { lossFit, nOpt, chinchilla20, h100Hours, human, PRESETS as SCALE } from '../../web/widgets/ch08-scaling.js';
-import { gaussianMatrix, naiveAttention, flashSteps, maxAbsDiff } from '../../web/widgets/ch08-flash.js';
-import { kvBytesPerToken, groupOf, divisors, formatBytes, PRESETS as GQA } from '../../web/widgets/ch08-gqa.js';
+import { lossFit, nOpt, chinchilla20, h100Hours, human, formatHours, decadeTicks, PRESETS as SCALE } from '../../web/widgets/ch08-scaling.js';
+import { gaussianMatrix, naiveAttention, flashSteps, finalDenominators, maxAbsDiff } from '../../web/widgets/ch08-flash.js';
+import { kvBytesPerToken, groupOf, misgrouped, divisors, formatBytes, chartUnit, PRESETS as GQA } from '../../web/widgets/ch08-gqa.js';
 import { softmax, topk, route, auxLoss, routerLogits, TOKENS, E } from '../../web/widgets/ch08-moe.js';
-import { turns, slowPairs, ntkBase } from '../../web/widgets/ch08-ropeext.js';
+import { turns, slowPairs, ntkBase, pairTicks } from '../../web/widgets/ch08-ropeext.js';
 
 const close = (a, b, tol) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b} (tol ${tol})`);
 
@@ -41,6 +41,13 @@ test('scaling: 20 倍规则、D/N 与 H100 估算（验证 8.1-d、8.1-f）', ()
   assert.equal(human(152_316_672), '152M');
   assert.equal(human(1.4e12), '1.4T');
   assert.equal(human(13_107_200_000), '13.1B');
+  // 读数的格式：大预设不再显示成“约 471618.7 小时”
+  const { N: cN, D: cD } = SCALE.chinchilla, { N: lN, D: lD } = SCALE.llama7b;
+  assert.equal(formatHours(h100Hours(6 * N * D)), '约 9.6 小时');
+  assert.equal(formatHours(h100Hours(6 * cN * cD)), '约 47 万小时（约 54 年）');
+  assert.equal(formatHours(h100Hours(6 * lN * lD)), '约 3.2 万小时（约 3.7 年）');
+  assert.equal(formatHours(0.5), '约 30 分钟');
+  assert.deepEqual(decadeTicks(5.86, 11.06), [6, 7, 8, 9, 10, 11]);    // 横轴只标整数个数量级
 });
 
 test('flash: 分块 + online softmax 与朴素 attention 相同（验证 8.2-c）', () => {
@@ -57,13 +64,16 @@ test('flash: 分块 + online softmax 与朴素 attention 相同（验证 8.2-c�
       assert.equal(run.skipped.length, causal ? tiles - (nb * (nb + 1)) / 2 : 0);
     }
   }
-  // 每行最后的 ℓ 与一次性计算的分母相同
+  // 每行最后的 m、ℓ 与一次性计算的最大值、分母相同（ℓ 就是图里进度条的分母）
   const run = flashSteps(Q, K, V, { block: 2, causal: true });
   const last = run.steps[run.steps.length - 1];
+  const fin = finalDenominators(Q, K, true);
   for (let r = 0; r < N; r++) {
     const s = K.map((k, c) => (c > r ? -Infinity : k.reduce((a, x, j) => a + x * Q[r][j], 0) / 2));
     const m = Math.max(...s);
     close(last.m[r], m, 1e-12);
+    close(fin[r].m, m, 1e-12);
+    close(last.l[r], fin[r].l, 1e-12);
   }
 });
 
@@ -78,6 +88,17 @@ test('gqa: KV cache 字节数与分组约定（验证 8.3-a、8.3-b）', () => {
   assert.deepEqual(divisors(12), [1, 2, 3, 4, 6, 12]);
   assert.equal(formatBytes(12 * 1024), '12 KiB');
   assert.equal(formatBytes(4 * 2 ** 30), '4 GiB');
+  // 平铺时拿错 K、V 的头：WebBot 的 12 个里有 8 个，6/2 的例子里是第 1、4 个；MHA、MQA 不受影响
+  assert.deepEqual(misgrouped(12, 4), [1, 2, 3, 4, 7, 8, 9, 10]);
+  assert.deepEqual(misgrouped(6, 2), [1, 4]);
+  assert.deepEqual([misgrouped(12, 12), misgrouped(12, 1)], [[], []]);
+  // 柱状图的单位跟着最大的柱子走：Mixtral 的 MHA 是 16 GiB，不再显示成 16384 MiB
+  const mixMHA = kvBytesPerToken({ ...GQA.mixtral, KV: GQA.mixtral.H }) * GQA.mixtral.T;
+  assert.equal(mixMHA, 16 * 2 ** 30);
+  assert.deepEqual(chartUnit(mixMHA), [2 ** 30, 'GiB']);
+  assert.deepEqual(chartUnit(kvBytesPerToken(GQA.webbot_mha) * 1024), [2 ** 20, 'MiB']);
+  assert.deepEqual(chartUnit(6 * 2 ** 40), [2 ** 30, 'GiB']);
+  assert.deepEqual(chartUnit(20 * 2 ** 40), [2 ** 40, 'TiB']);
 });
 
 test('moe: top-k softmax、分派与辅助 loss（验证 8.4-a、8.4-c、8.4-d）', () => {
@@ -100,12 +121,21 @@ test('moe: top-k softmax、分派与辅助 loss（验证 8.4-a、8.4-c、8.4-d�
     r.gates.forEach((g) => close(g.reduce((a, b) => a + b, 0), 1, 1e-12));
   }
   assert.equal(route(logits, { k: 1, capacityFactor: 1 }).capacity, TOKENS.length / E);   // Switch 式 (3)
+  assert.equal(route(logits, { k: 2, capacityFactor: 1.25 }).capacity, 10);   // top-2：分派 T·k 次，容量也乘 k
 
   // 辅助 loss：均匀为 1，偏向一个专家时趋近 E
   close(auxLoss(TOKENS.map(() => [0, 0, 0, 0])).value, 1, 1e-12);
   close(auxLoss(TOKENS.map(() => [50, 0, 0, 0])).value, E, 1e-12);
   const a0 = auxLoss(routerLogits(0)).value, a4 = auxLoss(routerLogits(4)).value;
   assert.ok(a0 < 2 && a4 > 3 && a4 < E, `${a0} ${a4}`);
+  // 默认状态：f 不均匀，P 却接近均匀，所以辅助 loss 仍在 1 附近（图里在每个专家旁显示 f 和 P）
+  const d0 = auxLoss(routerLogits(0));
+  assert.deepEqual(d0.f.map((x) => +x.toFixed(3)), [0.375, 0.125, 0.25, 0.25]);
+  assert.ok(Math.abs(d0.value - 1) < 0.01 && d0.P.every((p) => Math.abs(p - 1 / E) < 0.04), `${d0.value} ${d0.P}`);
+  // E·Σ f·P − 1 = E·Σ (f − 1/E)(P − 1/E)：只有 f 和 P 一起偏向同一个专家，它才会高于 1
+  for (const r of [d0, auxLoss(routerLogits(4))]) {
+    close(r.value - 1, E * r.f.reduce((s, f, e) => s + (f - 1 / E) * (r.P[e] - 1 / E), 0), 1e-12);
+  }
   assert.ok(route(routerLogits(4), { k: 2, capacityFactor: 1.25 }).dropped > route(routerLogits(0), { k: 2, capacityFactor: 1.25 }).dropped);
 });
 
@@ -123,4 +153,8 @@ test('ropeext: 转不满一圈的维度与 NTK-aware 的两端（验证 8.6-b、
   close(ntk[31] / train[31], (2 * 1024 - 1) / (2 * 1023), 1e-9);    // 最低频放慢 s 倍，转过的角度与训练时几乎相同
   pi.forEach((x, i) => assert.ok(x <= train[i] * (1023.5 / 1023) + 1e-12));
   assert.ok(extra[31] > train[31] * 1.9);
+  // 横轴刻度都是整数编号（每头维度 32 时不再出现 2.5、7.5 这样的位置）
+  assert.deepEqual(pairTicks(32), [0, 4, 8, 12, 15]);
+  assert.deepEqual(pairTicks(64), [0, 8, 16, 24, 31]);
+  assert.ok([32, 64, 128].every((D) => pairTicks(D).every(Number.isInteger)));
 });

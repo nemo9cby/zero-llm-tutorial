@@ -38,9 +38,12 @@ UTF-16 以 2 个字节为一个单位。U+FFFF 以内的码位直接写成一个
 
 $$
 \begin{aligned}
-&v = \text{0x1F601} - \text{0x10000} = \underbrace{0000111101}_{\text{0x03D}}\;\underbrace{1000000001}_{\text{0x201}} && \text{（20 位，一分为二）}\\
-&\text{0xD800} + \text{0x03D} = \text{0xD83D} && \text{（高 10 位）}\\
-&\text{0xDC00} + \text{0x201} = \text{0xDE01} && \text{（低 10 位）}
+&v = \text{0x1F601} - \text{0x10000} = \underbrace{0000111101}_{\text{0x03D}}\;\underbrace{1000000001}_{\text{0x201}}\\[-3pt]
+&\quad{\footnotesize\text{（20 位，一分为二）}}\\[2pt]
+&\text{0xD800} + \text{0x03D} = \text{0xD83D}\\[-3pt]
+&\quad{\footnotesize\text{（高 10 位）}}\\[2pt]
+&\text{0xDC00} + \text{0x201} = \text{0xDE01}\\[-3pt]
+&\quad{\footnotesize\text{（低 10 位）}}
 \end{aligned}
 $$
 
@@ -116,15 +119,20 @@ UTF-8 的规则可以写成一张表。码位越大，需要的有效位数越�
 
 开头的第一个问题也有了答案：ASCII 字符的码位小于 0x80，落在第 1 行；`あ` 是 U+3042，`深度学习入门` 这几个字的码位都在 U+4E00–U+9FFF 之间（[验证 A-c](#v-A-c) 的最后一行），都落在第 3 行，所以要 3 个字节。
 
-下面手算 `あ` 的编码，每一步的理由写在右边：
+下面手算 `あ` 的编码，每一步下面用小字写着理由：
 
 $$
 \begin{aligned}
-&\operatorname{ord}(\text{あ}) = \text{0x3042} && \text{（查码位）}\\
-&\text{0x0800} \le \text{0x3042} \le \text{0xFFFF} && \text{（表的第 3 行：3 个字节）}\\
-&\text{0x3042} = 0011\;000001\;000010_{(2)} && \text{（16 位，按 4+6+6 切开）}\\
-&\to 1110\mathbf{0011}\;\;10\mathbf{000001}\;\;10\mathbf{000010} && \text{（依次填进模板）}\\
-&= \text{E3 81 82} = 227,\ 129,\ 130 && \text{（与 1.2 节的输出一致）}
+&\operatorname{ord}(\text{あ}) = \text{0x3042}\\[-3pt]
+&\quad{\footnotesize\text{（查码位）}}\\[2pt]
+&\text{0x0800} \le \text{0x3042} \le \text{0xFFFF}\\[-3pt]
+&\quad{\footnotesize\text{（表的第 3 行：3 个字节）}}\\[2pt]
+&\text{0x3042} = 0011\;000001\;000010_{(2)}\\[-3pt]
+&\quad{\footnotesize\text{（16 位，按 4+6+6 切开）}}\\[2pt]
+&\to 1110\mathbf{0011}\;\;10\mathbf{000001}\;\;10\mathbf{000010}\\[-3pt]
+&\quad{\footnotesize\text{（依次填进模板）}}\\[2pt]
+&= \text{E3 81 82} = 227,\ 129,\ 130\\[-3pt]
+&\quad{\footnotesize\text{（与 1.2 节的输出一致）}}
 \end{aligned}
 $$
 
@@ -235,9 +243,12 @@ assert ours.count(0) == 1                                  # 只有 U+0000 本�
 
 $$
 \begin{aligned}
-&\text{E3 81 82} = 1110\,0011\;\;10\,000001\;\;10\,000010_{(2)} && \text{（写成二进制）}\\
-&\to 0011\;000001\;000010_{(2)} && \text{（去掉标记位）}\\
-&= \text{0x3042} = \text{あ} && \text{（拼起来就是码位）}
+&\text{E3 81 82} = 1110\,0011\;\;10\,000001\;\;10\,000010_{(2)}\\[-3pt]
+&\quad{\footnotesize\text{（写成二进制）}}\\[2pt]
+&\to 0011\;000001\;000010_{(2)}\\[-3pt]
+&\quad{\footnotesize\text{（去掉标记位）}}\\[2pt]
+&= \text{0x3042} = \text{あ}\\[-3pt]
+&\quad{\footnotesize\text{（拼起来就是码位）}}
 \end{aligned}
 $$
 

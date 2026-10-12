@@ -39,6 +39,11 @@ export function mount(root, config = {}) {
 .w-ch05-clock .dial { text-align: center; font-size: 11px; color: var(--ink-2); line-height: 1.35; }
 .w-ch05-clock .dial svg { width: 52px; height: 52px; display: block; margin: 0 auto; }
 .w-ch05-clock .heat { margin-top: .4rem; max-width: 420px; }
+/* 暗色主题下发散色阶的中点也是深色：格子里的数字一律用白色（_plot.js 只在 |t| > 0.55 时才用白色） */
+:root[data-theme="dark"] .w-ch05-clock .heat svg text[fill="#1b2233"] { fill: #ffffff; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .w-ch05-clock .heat svg text[fill="#1b2233"] { fill: #ffffff; }
+}
 `));
 
   // ---- panel A: the multi-hand clock

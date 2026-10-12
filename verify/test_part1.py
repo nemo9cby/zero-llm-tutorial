@@ -56,6 +56,59 @@ def test_codebot_preview_matches_record(dlfs6_path):
     assert rec["models"]["grpo"]["addition_greedy"]["7+8"] == "16"
 
 
+def test_pretrain_windows_cross_programs(dlfs6_path):
+    """ch03/01_pretrain.py 的 TokenDataset：整份语料首尾相连，每个位置都可以是一条 256-token 训练数据的开头。"""
+    import ast
+    import numpy as np
+    import torch
+    from torch.utils.data import Dataset
+    src = (pp.DLFS6 / "ch03/01_pretrain.py").read_text(encoding="utf-8")
+    node = next(n for n in ast.parse(src).body if isinstance(n, ast.ClassDef) and n.name == "TokenDataset")
+    ns = {"torch": torch, "Dataset": Dataset}
+    exec(compile(ast.Module(body=[node], type_ignores=[]), "ch03/01_pretrain.py:TokenDataset", "exec"), ns)
+    assert "dataset = TokenDataset(ids, context_len)" in src and "DataLoader(dataset, batch_size=batch_size, shuffle=True)" in src
+    ids = np.fromfile(pp.DLFS6 / "codebot/tiny_codes.bin", dtype=np.uint16)
+    ds = ns["TokenDataset"](ids, 256)
+    assert len(ds) == len(ids) - 256                              # 每个起点都是一条数据
+    x, y = ds[1]
+    assert torch.equal(x[1:], y[:-1])                             # y 是 x 往后错一位
+    starts = np.random.default_rng(0).integers(1, len(ds), size=4000)
+    seps = np.array([int((ds[int(i)][0] == 999).sum()) for i in starts])
+    assert 2.0 < seps.mean() < 2.2 and (seps >= 2).mean() > 0.5  # 平均两个多分隔记号，多数窗口跨过 2 个以上
+    at_boundary = np.isin(ids[starts - 1], [999]) | (ids[starts] == 999)
+    assert at_boundary.mean() < 0.03                              # 开头几乎总在某个程序的中间
+
+
+def test_sft_and_grpo_batches_follow_dataloader_cycle(dlfs6_path):
+    """ch03/03_sft.py 与 09_grpo.py 都用 cycle(DataLoader(dataset, batch_size=32, shuffle=True))：
+    DataLoader 不丢弃最后不满的 batch，cycle 从第二轮起按第一轮的顺序原样重放。"""
+    from collections import Counter
+    from itertools import cycle
+    import torch
+    from torch.utils.data import DataLoader
+    for rel in ("ch03/03_sft.py", "ch03/09_grpo.py"):
+        src = (pp.DLFS6 / rel).read_text(encoding="utf-8")
+        assert "DataLoader(dataset, batch_size=batch_size, shuffle=True)" in src and "cycle(dataloader)" in src, rel
+        assert "drop_last" not in src, rel
+        h = pp.script_hparams(rel)
+        assert (h["batch_size"], h["max_iters"]) == (32, 500), rel
+    n_sft = len(json.loads((pp.DLFS6 / "codebot/tiny_codes_sft.json").read_text(encoding="utf-8")))
+
+    def batches(n):
+        torch.manual_seed(0)
+        it = cycle(DataLoader(list(range(n)), batch_size=32, shuffle=True))
+        return [next(it) for _ in range(500)]
+
+    sft = batches(n_sft)                                         # 1,092 = 34 × 32 + 4：每轮 35 个 batch
+    assert Counter(len(b) for b in sft) == {32: 486, 4: 14}
+    assert sum(len(b) for b in sft) == 15_608 and round(15_608 / n_sft, 1) == 14.3
+    assert torch.equal(sft[0], sft[35])                          # 第二轮原样重放第一轮
+    grpo = batches(81)                                           # 81 = 32 + 32 + 17：每三步一轮
+    assert [len(b) for b in grpo[:6]] == [32, 32, 17, 32, 32, 17]
+    assert Counter(len(b) for b in grpo) == {32: 334, 17: 166} and sum(len(b) for b in grpo) == 13_510
+    assert torch.equal(grpo[0], grpo[3])
+
+
 def test_codebot_ships_data_and_tokenizer_in_git(dlfs6_path):
     tracked = subprocess.check_output(["git", "-C", str(pp.DLFS6), "ls-files", "codebot"], text=True).split()
     for f in ("codebot/tiny_codes.txt", "codebot/tiny_codes.bin", "codebot/merge_rules.pkl",

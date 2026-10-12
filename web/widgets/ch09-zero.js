@@ -44,7 +44,7 @@ function injectStyle() {
 .w-ch09-zero .lab { font-size: .82rem; color: var(--ink-2); line-height: 1.3; }
 .w-ch09-zero .track { position: relative; height: 1.5rem; background: var(--paper-2); border-radius: 3px; }
 .w-ch09-zero .seg { position: absolute; top: 0; bottom: 0; }
-.w-ch09-zero .cap { position: absolute; top: -.25rem; bottom: -.25rem; width: 0; border-left: 2px dashed var(--shu); }
+.w-ch09-zero .cap { position: absolute; top: -.25rem; bottom: -.25rem; width: 0; border-left: 2px dashed var(--ink); }
 .w-ch09-zero .val { position: absolute; top: 1.55rem; left: 0; font-size: .75rem; color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .w-ch09-zero .row { margin-bottom: .9rem; }
 .w-ch09-zero .legend { display: flex; flex-wrap: wrap; gap: .3rem 1rem; font-size: .8rem; color: var(--ink-2); }
@@ -80,7 +80,7 @@ export function mount(root, config = {}) {
   );
   const legend = h('div', { class: 'legend' },
     PART.map(([, name, c]) => h('span', { style: `--c:${c}` }, name)),
-    h('span', { style: '--c:transparent;border-left:2px dashed var(--shu);padding-left:4px' }, '每张卡的显存'));
+    h('span', { style: '--c:transparent;border-left:2px dashed var(--ink);padding-left:4px' }, '每张卡的显存上限'));
   const bars = h('div', { class: 'bars' });
   const acctNote = h('p', { class: 'w-label', style: 'margin:.2rem 0 .6rem' });
   const summary = h('p', { class: 'w-label', 'aria-live': 'polite' });

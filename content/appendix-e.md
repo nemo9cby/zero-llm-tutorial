@@ -26,7 +26,13 @@ $$
 \mathrm{KL}(\pi\,\|\,\pi_{\text{ref}}) = \sum_y \pi(y)\log\frac{\pi(y)}{\pi_{\text{ref}}(y)}
 $$
 
-这里，$r(y)$ 是回答 $y$ 的奖励，$\beta > 0$ 控制“离参考策略多远”的代价：$\beta$ 越大，越不愿意偏离。KL 散度有一条重要的性质：$\mathrm{KL}(p\,\|\,q) \ge 0$，当且仅当 $p = q$ 时等于 0（吉布斯不等式）。证明只需一行：$\log$ 是凹函数，所以 $-\mathrm{KL}(p\,\|\,q) = \sum_y p(y)\log\frac{q(y)}{p(y)} \le \log\sum_y p(y)\frac{q(y)}{p(y)} = \log 1 = 0$。
+这里，$r(y)$ 是回答 $y$ 的奖励，$\beta > 0$ 控制“离参考策略多远”的代价：$\beta$ 越大，越不愿意偏离。KL 散度有一条重要的性质：$\mathrm{KL}(p\,\|\,q) \ge 0$，当且仅当 $p = q$ 时等于 0（吉布斯不等式）。证明只需一行。$\log$ 是凹函数，由**琴生不等式**（Jensen's inequality），
+
+$$
+-\mathrm{KL}(p\,\|\,q) = \sum_{p(y)>0} p(y)\log\frac{q(y)}{p(y)} \le \log\sum_{p(y)>0} q(y) \le \log 1 = 0
+$$
+
+求和只取 $p(y) > 0$ 的 $y$（$p(y) = 0$ 的项按惯例记为 0）。$\log$ 是严格凹的，第一个等号只在 $q(y)/p(y)$ 处处相等时成立；第二个等号要求 $q$ 在 $p$ 为 0 的地方也为 0。两者合起来，就是 $p = q$。
 
 先手算一个 KL：$p = (0.5, 0.5)$、$q = (0.9, 0.1)$ 时，$\mathrm{KL}(p\,\|\,q) = 0.5\ln\frac{0.5}{0.9} + 0.5\ln\frac{0.5}{0.1} = -0.2939 + 0.8047 = 0.5108$。这里用的是自然对数，单位叫 **nats**；换成以 2 为底就是 bits，$0.5108 / \ln 2 = 0.737$ bits。
 
@@ -42,6 +48,7 @@ def kl(p, q):
 hand = kl(np.array([0.5, 0.5]), np.array([0.9, 0.1]))
 print(f"KL = {hand:.4f} nats = {hand / np.log(2):.4f} bits")
 assert abs(hand - 0.5108) < 1e-4
+assert abs(1 / np.log(2) - 1.4427) < 1e-4                # 1 nat = 1.4427 bits
 
 rng = np.random.default_rng(0)
 pairs = rng.dirichlet(np.ones(4), size=(2000, 2))      # 2000 对随机分布
@@ -55,32 +62,49 @@ beta = 0.5
 ```
 
 ::: confusion 每一步的 KL 加起来，是不是就是“策略总共移动了多少”？
-训练日志里常常每一步都记录一个 KL，把它们加起来，感觉就像“走过的路程”。但上面目标函数里的 KL 衡量的是**最终的策略离参考策略有多远**，是位移，不是路程。两者可以差得很远：策略在 A、B 两个分布之间来回摆动两次，每一步的 KL 加起来是 1.76 nats，可最后回到了 A，相对起点的 KL 是 0。可以带走的结论：**KL 正则约束的是“现在离参考策略多远”，不是“一路上动了多少”**；另外要分清单位，自然对数的 nats 乘以 1.4427 才是 bits。
+训练日志里常常每一步都记录一个 KL，把它们加起来，感觉就像“走过的路程”。但上面目标函数里的 KL 衡量的是**最终的策略离参考策略有多远**，与“每步 KL 之和”是两回事，而且谁大谁小都有可能。来回摆动时，和可以远大于它：A→B→A→B→A，每步 KL 之和是 1.76 nats，最后却回到了 A，相对起点的 KL 是 0。沿直线小步前进时，和又可以远小于它：从 A 到 B 分 100 等步走，每步 KL 之和只有 0.0044 nats，而 $\mathrm{KL}(B\,\|\,A) = 0.368$。严格地讲，KL 不是距离：它不对称，也不满足三角不等式；相邻的两个分布之间，它近似于距离的平方，所以同一段路切成 $n$ 步，每步之和大约缩小为 $1/n$。可以带走的结论：**想知道离参考策略多远，就直接算 $\mathrm{KL}(\pi\,\|\,\pi_{\text{ref}})$，不要把每步的 KL 加起来。**
 :::
 
-```verify id=E-b title="路程与位移：来回摆动时每步 KL 之和很大，相对起点的 KL 却是 0"
+```verify id=E-b title="每步 KL 之和与相对起点的 KL：来回摆动时和大得多，小步直走时和小得多"
 A, B = np.array([0.5, 0.5]), np.array([0.9, 0.1])
-path = [A, B, A, B, A]
-odometer = sum(kl(path[k + 1], path[k]) for k in range(len(path) - 1))
-displacement = kl(path[-1], path[0])
-print(f"每步 KL 之和 {odometer:.2f} nats（{odometer / np.log(2):.2f} bits），"
-      f"相对起点的 KL {displacement:.1f}")
-assert abs(odometer - 1.7578) < 1e-4 and displacement == 0
-assert abs(1 / np.log(2) - 1.4427) < 1e-4                # 1 nat = 1.4427 bits
+
+def odometer(path):                      # 把每一步的 KL 加起来
+    return sum(kl(path[k + 1], path[k]) for k in range(len(path) - 1))
+
+swing = [A, B, A, B, A]                  # 来回摆动两次，回到起点
+print(f"来回摆动：每步 KL 之和 {odometer(swing):.2f} nats，"
+      f"相对起点的 KL {kl(swing[-1], swing[0]):.1f}")
+assert abs(odometer(swing) - 1.7578) < 1e-4 and kl(swing[-1], swing[0]) == 0
+
+sums = {}
+for n in (2, 10, 100):                   # 从 A 沿直线走到 B，分 n 等步
+    straight = [(1 - t) * A + t * B for t in np.linspace(0, 1, n + 1)]
+    sums[n] = odometer(straight)
+    print(f"直线分 {n:3d} 步：每步 KL 之和 {sums[n]:.4f} nats，n × 和 = {n * sums[n]:.3f}")
+print(f"终点相对起点：KL(B‖A) = {kl(B, A):.3f}；反过来 KL(A‖B) = {kl(A, B):.3f}")
+assert sums[100] < 0.01 < kl(B, A)       # 小步直走：和远小于终点的 KL（违反三角不等式）
+assert abs(100 * sums[100] / (10 * sums[10]) - 1) < 0.05   # 和大约缩小为 1/n
+assert abs(kl(A, B) - kl(B, A)) > 0.1                   # KL 不对称
 ```
 
 ## E.2 最优策略：π* ∝ π_ref · exp(r/β)
 
-现在求使 $\mathcal J(\pi)$ 最大的 $\pi$。思路是把 $\mathcal J$ 改写成“一个 KL 加一个常数”，这样最大值一眼就能看出来。每一行右边写着理由：
+现在求使 $\mathcal J(\pi)$ 最大的 $\pi$。思路是把 $\mathcal J$ 改写成“一个 KL 加一个常数”，这样最大值一眼就能看出来。每一行下面用小字写着理由：
 
 $$
 \begin{aligned}
-\mathcal J(\pi) &= \sum_y \pi(y)\,r(y) - \beta\sum_y \pi(y)\log\frac{\pi(y)}{\pi_{\text{ref}}(y)} && \text{（写成求和）}\\
-&= -\beta\sum_y \pi(y)\Big[\log\frac{\pi(y)}{\pi_{\text{ref}}(y)} - \frac{r(y)}{\beta}\Big] && \text{（提出 }-\beta\text{）}\\
-&= -\beta\sum_y \pi(y)\log\frac{\pi(y)}{\pi_{\text{ref}}(y)\,e^{r(y)/\beta}} && \text{（合并对数）}\\
-&= -\beta\sum_y \pi(y)\log\frac{\pi(y)}{Z\,\pi^*(y)} && \text{（代入 }Z\text{ 与 }\pi^*\text{）}\\
-&= -\beta\sum_y \pi(y)\log\frac{\pi(y)}{\pi^*(y)} + \beta\log Z\sum_y \pi(y) && \text{（拆开对数）}\\
-&= -\beta\,\mathrm{KL}(\pi\,\|\,\pi^*) + \beta\log Z && \text{（}\textstyle\sum_y\pi(y) = 1\text{）}
+\mathcal J(\pi) &= \sum_y \pi(y)\,r(y) - \beta\sum_y \pi(y)\log\frac{\pi(y)}{\pi_{\text{ref}}(y)}\\[-3pt]
+&\quad{\footnotesize\text{（写成求和）}}\\[2pt]
+&= -\beta\sum_y \pi(y)\Big[\log\frac{\pi(y)}{\pi_{\text{ref}}(y)} - \frac{r(y)}{\beta}\Big]\\[-3pt]
+&\quad{\footnotesize\text{（提出 }-\beta\text{）}}\\[2pt]
+&= -\beta\sum_y \pi(y)\log\frac{\pi(y)}{\pi_{\text{ref}}(y)\,e^{r(y)/\beta}}\\[-3pt]
+&\quad{\footnotesize\text{（合并对数）}}\\[2pt]
+&= -\beta\sum_y \pi(y)\log\frac{\pi(y)}{Z\,\pi^*(y)}\\[-3pt]
+&\quad{\footnotesize\text{（代入 }Z\text{ 与 }\pi^*\text{）}}\\[2pt]
+&= -\beta\sum_y \pi(y)\log\frac{\pi(y)}{\pi^*(y)} + \beta\log Z\sum_y \pi(y)\\[-3pt]
+&\quad{\footnotesize\text{（拆开对数）}}\\[2pt]
+&= -\beta\,\mathrm{KL}(\pi\,\|\,\pi^*) + \beta\log Z\\[-3pt]
+&\quad{\footnotesize\text{（}\textstyle\sum_y\pi(y) = 1\text{）}}
 \end{aligned}
 $$
 
@@ -143,8 +167,10 @@ E.2 节从奖励得到了策略。反过来，也可以从策略读出奖励。�
 
 $$
 \begin{aligned}
-\log\pi^*(y) &= \log\pi_{\text{ref}}(y) + \frac{r(y)}{\beta} - \log Z && \text{（对 }\pi^*\text{ 的定义取对数）}\\
-r(y) &= \beta\log\frac{\pi^*(y)}{\pi_{\text{ref}}(y)} + \beta\log Z && \text{（移项，两边乘以 }\beta\text{）}
+\log\pi^*(y) &= \log\pi_{\text{ref}}(y) + \frac{r(y)}{\beta} - \log Z\\[-3pt]
+&\quad{\footnotesize\text{（对 }\pi^*\text{ 的定义取对数）}}\\[2pt]
+r(y) &= \beta\log\frac{\pi^*(y)}{\pi_{\text{ref}}(y)} + \beta\log Z\\[-3pt]
+&\quad{\footnotesize\text{（移项，两边乘以 }\beta\text{）}}
 \end{aligned}
 $$
 
@@ -171,9 +197,12 @@ $$
 
 $$
 \begin{aligned}
-P(y_w \succ y_l) &= \sigma\big(r(y_w) - r(y_l)\big) && \text{（BT 模型）}\\
-&= \sigma\Big(\big[\hat r^*(y_w) + \beta\log Z\big] - \big[\hat r^*(y_l) + \beta\log Z\big]\Big) && \text{（E.3 节）}\\
-&= \sigma\big(\hat r^*(y_w) - \hat r^*(y_l)\big) && \text{（}\beta\log Z\text{ 抵消）}
+P(y_w \succ y_l) &= \sigma\big(r(y_w) - r(y_l)\big)\\[-3pt]
+&\quad{\footnotesize\text{（BT 模型）}}\\[2pt]
+&= \sigma\Big(\big[\hat r^*(y_w) + \beta\log Z\big] - \big[\hat r^*(y_l) + \beta\log Z\big]\Big)\\[-3pt]
+&\quad{\footnotesize\text{（E.3 节）}}\\[2pt]
+&= \sigma\big(\hat r^*(y_w) - \hat r^*(y_l)\big)\\[-3pt]
+&\quad{\footnotesize\text{（}\beta\log Z\text{ 抵消）}}
 \end{aligned}
 $$
 

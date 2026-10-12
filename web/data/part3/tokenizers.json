@@ -1,41 +1,44 @@
 {
  "_provenance": {
   "generated_by": "CUDA_VISIBLE_DEVICES=-1 uv run python verify/_parts_preview.py --write",
-  "date": "2026-10-11",
+  "date": "2026-10-12",
   "device": "cpu",
   "python": "3.12.9",
   "torch": "2.14.1+cu130",
   "numpy": "2.5.4",
   "dlfs6_commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
-  "note": "所有分词器都用 storybot.tokenizer.BPETokenizer 的按 rank 合并编码；对 CodeBot 的合并规则，它与 codebot.tokenizer 的逐条套用结果相同（test_parts.py 有对拍）",
-  "samples": "TinyCodes 开头、TinyStories 验证集开头（跳过半截的第一段）、OWT 验证集开头，各取整篇文档直到 ≥ 50,000 字节"
+  "note": "所有分词器都用 storybot.tokenizer.BPETokenizer 的按 rank 合并编码；对 CodeBot 的合并规则，它与 codebot.tokenizer 的逐条套用结果相同（verify/test_part3.py::test_tokenizer_matrix_matches_record 有对拍）",
+  "samples": "TinyCodes 开头、TinyStories 验证集开头（跳过半截的第一段）、OWT 验证集开头，各取整篇文档直到 ≥ 1,000,000 字节"
  },
  "matrix": [
   {
    "corpus": "TinyCodes",
-   "bytes": 53177,
+   "bytes": 1058307,
+   "docs": 4483,
    "tokens": {
-    "codebot": 24828,
-    "storybot": 25760,
-    "webbot": 18408
+    "codebot": 477989,
+    "storybot": 512049,
+    "webbot": 374649
    }
   },
   {
    "corpus": "TinyStories",
-   "bytes": 50959,
+   "bytes": 1017125,
+   "docs": 1253,
    "tokens": {
-    "codebot": 25019,
-    "storybot": 12391,
-    "webbot": 12543
+    "codebot": 502468,
+    "storybot": 247509,
+    "webbot": 250263
    }
   },
   {
    "corpus": "OpenWebText",
-   "bytes": 50577,
+   "bytes": 1004790,
+   "docs": 202,
    "tokens": {
-    "codebot": 25243,
-    "storybot": 14831,
-    "webbot": 10837
+    "codebot": 500610,
+    "storybot": 312152,
+    "webbot": 217979
    }
   }
  ],

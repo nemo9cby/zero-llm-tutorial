@@ -29,8 +29,11 @@ function injectStyle() {
 .w-gpu-calc dd { margin: 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .w-gpu-calc .note { margin: .5rem 0; padding: .35rem .75rem; border-left: 2px solid var(--kincha); font-size: .86rem; }
 .w-gpu-calc .note.info { border-left-color: var(--rule); color: var(--ink-2); }
+.w-gpu-calc .cmp { overflow-x: auto; }
 .w-gpu-calc table { margin: .5rem 0; font-size: .84rem; }
-.w-gpu-calc th, .w-gpu-calc td { padding: .25rem .9rem .25rem 0; white-space: nowrap; }
+.w-gpu-calc th, .w-gpu-calc td { padding: .25rem .5rem .25rem 0; white-space: nowrap; vertical-align: top; }
+.w-gpu-calc th { white-space: normal; text-align: left; }
+.w-gpu-calc td.lab { white-space: normal; min-width: 5.5em; }
 .w-gpu-calc td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .w-gpu-calc tr.hl td { font-weight: 700; }
 .w-gpu-calc .src { font-size: .78rem; color: var(--ink-3); overflow-wrap: anywhere; }
@@ -63,6 +66,7 @@ export function usd(x) {
 export function tokens(n) {
   return n >= 1e8 ? `${fmt(n)}（约 ${(n / 1e8).toFixed(n >= 1e10 ? 0 : 1)} 亿）` : fmt(n);
 }
+const sameShape = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 export async function mount(root, config = {}) {
   injectStyle();
@@ -77,13 +81,16 @@ export async function mount(root, config = {}) {
   const id = `gpucalc${++uid}`;
   const offerById = Object.fromEntries(gpus.offers.map((o) => [o.id, o]));
   const gpuById = Object.fromEntries(gpus.gpus.map((g) => [g.id, g]));
+  // maxIters: what the run uses (a preset or the reader); userIters: only what the reader typed. The multi-GPU
+  // comparison starts from the single-GPU job, so a preset's already divided max_iters never feeds back into it.
   const st = { scenario: null, bot: 'codebot', offer: 'local:rtx3060ti', world: 1, mfu: 0.3, floorMs: 15,
-    maxIters: null, batch: null, accum: null, nmm: null, sPerIt: null, evalS: null };
+    maxIters: null, userIters: null, batch: null, accum: null, nmm: null, sPerIt: null, evalS: null };
 
   // ---------------------------------------------------------------- controls
   const field = (label, control, cls) => h('label', { for: control.id, class: cls || null }, label, control);
+  const customOpt = h('option', { value: 'custom', disabled: true, hidden: true }, '自定义（改过预设）');
   const selScenario = h('select', { id: `${id}-sc` },
-    scenarios.map((s) => h('option', { value: s.id }, s.label)));
+    scenarios.map((s) => h('option', { value: s.id }, s.label)), customOpt);
   const selOffer = h('select', { id: `${id}-of` });
   const groups = {};
   for (const o of gpus.offers) {
@@ -96,9 +103,21 @@ export async function mount(root, config = {}) {
   const mfu = h('input', { id: `${id}-mfu`, type: 'range', min: 1, max: 60, step: 1, 'aria-label': 'MFU（百分比）' });
   const mfuOut = h('span', { class: 'val' });
   const floor = h('input', { id: `${id}-fl`, type: 'number', min: 0, max: 500, step: 1 });
+  // Once the reader changes anything a preset sets, the preset's name no longer describes the run.
+  const markCustom = () => {
+    customOpt.hidden = false;
+    selScenario.value = 'custom';
+    st.scenario = null;
+  };
   const num = (key, min, label) => {
     const el = h('input', { id: `${id}-${key}`, type: 'number', min, step: 1, placeholder: '原书默认' });
-    el.addEventListener('input', () => { const v = parseInt(el.value, 10); st[key] = v > 0 ? v : null; render(); });
+    el.addEventListener('input', () => {
+      const v = parseInt(el.value, 10);
+      st[key] = v > 0 ? v : null;
+      if (key === 'maxIters') st.userIters = st.maxIters;
+      markCustom();
+      render();
+    });
     return field(label, el);
   };
   const real = (key, label) => {
@@ -106,7 +125,7 @@ export async function mount(root, config = {}) {
     el.addEventListener('input', () => { const v = parseFloat(el.value); st[key] = v > 0 ? v : null; render(); });
     return field(label, el);
   };
-  const sPerItField = real('sPerIt', '实测：每步秒数（s/it）');
+  const sPerItField = real('sPerIt', '实测：每步秒数（读进度条中段）');
   const evalSField = real('evalS', '实测：每次评估秒数');
   const advIters = num('maxIters', 1, 'max_iters（总步数）');
   const advBatch = num('batch', 1, '每卡 micro-batch');
@@ -123,7 +142,7 @@ export async function mount(root, config = {}) {
       field('每步最少耗时（毫秒）', floor)),
     h('details', {}, h('summary', {}, '改超参数（留空 = 原书脚本的值）'),
       h('div', { class: 'ctrls' }, advIters, advBatch, advAccum, advNmm)),
-    h('details', {}, h('summary', {}, '用实测数字估算（填入探针或 tqdm 的读数）'),
+    h('details', {}, h('summary', {}, '用实测数字估算（填入探针或 tqdm 中段的读数）'),
       h('div', { class: 'ctrls' }, sPerItField, evalSField)),
     out));
 
@@ -141,8 +160,14 @@ export async function mount(root, config = {}) {
   }
   function applyScenario(sid) {
     const s = scenarios.find((x) => x.id === sid) || scenarios[0];
+    if (s.bot !== st.bot) {
+      // Probe readings belong to one bot: CodeBot's preset must not inherit WebBot's 0.317 s/step.
+      st.sPerIt = st.evalS = null;
+      for (const wrap of [sPerItField, evalSField]) wrap.querySelector('input').value = '';
+    }
     Object.assign(st, { scenario: s.id, bot: s.bot, offer: s.offer, world: s.world, mfu: s.mfu,
-      maxIters: s.max_iters || null, batch: s.batch || null, accum: s.accum || null, nmm: null });
+      maxIters: s.max_iters || null, userIters: null, batch: s.batch || null, accum: s.accum || null, nmm: null });
+    customOpt.hidden = true;
     selScenario.value = s.id;
     selOffer.value = st.offer;
     for (const [key, wrap] of [['maxIters', advIters], ['batch', advBatch], ['accum', advAccum], ['nmm', advNmm]]) {
@@ -152,9 +177,9 @@ export async function mount(root, config = {}) {
   }
 
   selScenario.addEventListener('change', () => { applyScenario(selScenario.value); render(); });
-  selOffer.addEventListener('change', () => { st.offer = selOffer.value; setWorldOptions(); render(); });
-  selWorld.addEventListener('change', () => { st.world = parseInt(selWorld.value, 10); render(); });
-  mfu.addEventListener('input', () => { st.mfu = parseInt(mfu.value, 10) / 100; render(); });
+  selOffer.addEventListener('change', () => { st.offer = selOffer.value; setWorldOptions(); markCustom(); render(); });
+  selWorld.addEventListener('change', () => { st.world = parseInt(selWorld.value, 10); markCustom(); render(); });
+  mfu.addEventListener('input', () => { st.mfu = parseInt(mfu.value, 10) / 100; markCustom(); render(); });
   floor.addEventListener('input', () => { const v = parseFloat(floor.value); st.floorMs = v >= 0 ? v : 0; render(); });
 
   // ---------------------------------------------------------------- output
@@ -209,24 +234,25 @@ export async function mount(root, config = {}) {
     }
 
     if (st.bot === 'webbot' && st.world > 1) {
-      const n = st.world;
-      const variants = [
-        ['单卡（原样）', { world: 1 }],
-        [`${n} 卡原样（陷阱）`, { world: n }],
-        [`${n} 卡，max_iters ÷ ${n}`, { world: n, maxIters: Math.round((st.maxIters || b.max_iters) / n) }],
-      ];
-      if (128 % n === 0) {
-        const seqs = 128 / n;
-        variants.push([`${n} 卡，每卡 batch ÷ ${n}`, { world: n, maxIters: st.maxIters, batch: seqs >= 32 ? 32 : seqs, accum: seqs >= 32 ? seqs / 32 : 1 }]);
-      }
-      const body = variants.map(([label, args]) => {
+      // Rows come from the single-GPU job (the book's max_iters, or what the reader typed), never from the preset.
+      const variants = cm.multiGpuVariants(b, st.world, st.userIters || b.max_iters);
+      let matched = false;
+      const body = variants.map(({ label, args }) => {
         const sh = cm.runShape(b, args);
         const e = cm.estimate(b, gpu, price, sh, st.mfu, st.floorMs);
-        return h('tr', {}, h('td', {}, label), h('td', { class: 'num' }, `${(sh.train_tokens / 1e8).toFixed(0)} 亿`),
-          h('td', { class: 'num' }, fmt(sh.evals)), h('td', { class: 'num' }, hours(e.wall_hours)), h('td', { class: 'num' }, usd(e.usd)));
+        const same = sameShape(sh, shape);
+        matched ||= same;
+        return h('tr', { class: same ? 'hl' : null },
+          h('td', { class: 'lab' }, label), h('td', { class: 'num' }, usd(e.usd)),
+          h('td', { class: 'num' }, hours(e.wall_hours)), h('td', { class: 'num' }, fmt(sh.evals)),
+          h('td', { class: 'num' }, `${(sh.train_tokens / 1e8).toFixed(0)} 亿`));
       });
-      children.push(h('table', {}, h('thead', {}, h('tr', {}, ['跑法', '训练 token', '评估', '墙钟', '费用'].map((t) => h('th', {}, t)))),
-        h('tbody', {}, body)));
+      children.push(h('div', { class: 'cmp' }, h('table', {},
+        h('thead', {}, h('tr', {}, ['跑法', '费用', '墙钟', '评估', '训练 token'].map((t) => h('th', {}, t)))),
+        h('tbody', {}, body))));
+      children.push(h('p', { class: 'note info' }, (matched ? '加粗的一行就是上面的配置。' : '')
+        + `max_iters ÷ ${st.world} 的全局 batch 是单卡的 ${st.world} 倍、更新次数只有单卡的 1/${st.world}；`
+        + `每卡 batch ÷ ${st.world} 与单卡的优化过程相同。`));
     }
     const prov = gpus.providers[offer.provider];
     children.push(h('p', { class: 'src' },

@@ -8,8 +8,8 @@ import { injectStyle, tokenLabel, bytesRepr, presetButtons } from './ch01-util.j
 
 export const RULES = [
   { value: 'first', label: '先出现者胜（ch01/03–06）' },
-  { value: 'ids', label: 'id 最大者胜（codebot）' },
-  { value: 'bytes', label: '字节串最大者胜（CS336）' },
+  { value: 'ids', label: '比 id（codebot）' },
+  { value: 'bytes', label: '比字节串（CS336）' },
 ];
 const SHORT = { first: '先出现', ids: '比 id', bytes: '比字节串' };
 

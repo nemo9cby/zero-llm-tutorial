@@ -4,7 +4,7 @@ The workbench's default weights are the tutorial's own run of the book's ch03 sc
 manifest copies the producing step from web/data/runs/<run>/report.json into provenance.run_step):
 
     uv run python tools/export_codebot.py --ckpt runs/codebot-3060ti/work/codebot/model_sft.pt --name sft \
-        --label SFT --template alpaca --order 1 --description "..."
+        --label SFT --template alpaca --order 1 --source "gpu/run_local.py --run codebot-3060ti" --description "..."
 
 The book's official checkpoints (Hugging Face, fetched by tools/fetch_data.py) go through the same command;
 a new --name adds an entry to the workbench's checkpoint switch:

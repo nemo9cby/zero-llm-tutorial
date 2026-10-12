@@ -3,12 +3,15 @@
 本章的 NumPy 验证单元由 verify/_ch08_cells.py 直接从 content/ch08.md 读出并执行，
 所以这里对拍的就是页面上发布的那份代码。真实权重的测试需要先下载 StoryBot 的 checkpoint：
     uv run python tools/fetch_data.py
+另一份 StoryBot 权重是本书在 Modal H100 上原样训练的（运行记录 storybot-h100，见 web/data/runs/），
+只在跑过那次训练的机器上有；没有时相应的参数化用例会跳过。
 运行：
     uv run pytest verify/test_ch08.py
 """
 import math
 import shutil
 import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -16,6 +19,12 @@ import torch
 import torch.nn.functional as F
 
 from _ch08_cells import run_cells_upto
+
+ROOT = Path(__file__).resolve().parent.parent
+STORYBOT_CKPTS = {                                   # 两份 StoryBot 预训练权重（结构相同，FFN 的键名不同）
+    "hf": "third_party/dlfs6/storybot/model_pretrain.pt",          # 原书作者发布在 Hugging Face 上，键名 mlp
+    "h100": "runs/storybot-h100/work/storybot/model_pretrain.pt",  # 本书用 ch06/05_pretrain.py 原样训练，键名 ffn
+}
 
 
 # ---------------------------------------------------------------- fixtures
@@ -38,6 +47,18 @@ def storybot_ckpt(dlfs6_path):
     if not path.is_file():
         pytest.skip("缺少 storybot/model_pretrain.pt：先运行 uv run python tools/fetch_data.py")
     return torch.load(path, map_location="cpu", weights_only=True)
+
+
+@pytest.fixture(scope="module", params=list(STORYBOT_CKPTS))
+def storybot(request, dlfs6_path):
+    """(权重的名字, 配置, state_dict)；state_dict 的 FFN 键名统一成 storybot/model.py 的 ffn。"""
+    rel = STORYBOT_CKPTS[request.param]
+    if not (ROOT / rel).is_file():
+        how = "uv run python tools/fetch_data.py" if request.param == "hf" else "运行记录 storybot-h100 的训练（gpu/modal_app.py）"
+        pytest.skip(f"缺少 {rel}：先运行 {how}")
+    ck = torch.load(ROOT / rel, map_location="cpu", weights_only=True)
+    sd = {k.replace(".mlp.", ".ffn."): w for k, w in ck["model_state_dict"].items()}
+    return request.param, storybot_config(ck), sd
 
 
 @pytest.fixture(scope="module")
@@ -73,7 +94,8 @@ def test_param_counts_match_formula(wb, sb):
             model = wb.GPT(50000, 1024, 768, 12, kv, 12, 2048)
             assert count(model) == ns["total_params"](ns["webbot_params"](KV=kv)) == expected
         story = sb.GPT(10000, 256, 512, 16, 4, 1344)     # ch06/05_pretrain.py 的配置
-    assert count(story) == 22_696_448
+    story_formula = ns["webbot_params"](V=10000, E=512, H=16, KV=16, L=4, FF=1344)   # StoryBot 就是 KV = H 的特例
+    assert count(story) == ns["total_params"](story_formula) == 22_696_448
     assert model.blocks[0].attn.W_k.weight.shape == (64, 768)   # 最后一个是 KV=1：W_k 只有一个头
 
 
@@ -141,8 +163,49 @@ def test_sdpa_on_cpu_is_flash_kernel_with_linear_memory():
     assert "aten::_scaled_dot_product_flash_attention_for_cpu" in sdpa_runs[0][1]
     for small, big in zip(naive_mib, naive_mib[1:]):
         assert 3.5 < big / small < 4.5        # 长度翻倍，朴素写法分配的内存变成约 4 倍
+    # 逐项数得出来：q@kᵀ、除以 √d、ones、tril、masked_fill、softmax 是 6 个 fp32 的 T×T，
+    # “== 0” 是 1 个 bool 的 T×T，再加上 (T, 64) 的输出。正文引用的 25、100、401 MiB 就是这一行
+    expected = [(6 * 4 + 1) * T * T / 2**20 + T * 64 * 4 / 2**20 for T in sizes]
+    assert [round(m, 2) for m in expected] == [25.25, 100.5, 401.0]
+    assert all(abs(a - b) < 0.5 for a, b in zip(naive_mib, expected))
     assert sdpa_mib[-1] < 2 * sdpa_mib[0]     # SDPA 几乎不随长度增长
+    assert sdpa_mib[-1] < 8                   # 正文：约 5 MiB
     assert naive_mib[-1] > 50 * sdpa_mib[-1]
+
+
+def test_naive_attention_under_bf16_autocast_saves_fp32_softmax(sb):
+    """StoryBot 的手写 attention 换成 WebBot 的尺寸、在 ch09 的 bf16 autocast 下训练时，为反向传播存下了什么。
+
+    本机不用 GPU：FakeTensorMode 里的“CUDA 张量”只有形状和 dtype，不分配显存；
+    autocast(device_type='cuda') 在没有 CUDA 时会自动关闭，所以直接打开 CUDA 的 autocast 状态。
+    """
+    from torch._subclasses.fake_tensor import FakeTensorMode
+
+    B, H, T, D = 32, 12, 1024, 64                            # WebBot 训练时的一个 micro-batch
+    saved = []                                               # 每个留给反向传播的张量：(形状, dtype, 字节数)
+
+    def pack(t):
+        saved.append((tuple(t.shape), t.dtype, t.numel() * t.element_size()))
+        return t
+
+    with FakeTensorMode(), torch.device("cuda"):
+        attn = sb.MultiHeadAttention(H * D, H, D, rope=sb.RoPE(10000, D, T))
+        x = torch.empty(B, T, H * D, requires_grad=True)
+        before = torch.is_autocast_enabled("cuda"), torch.get_autocast_dtype("cuda")
+        torch.set_autocast_enabled("cuda", True)            # 相当于 ch09 的 autocast(device_type='cuda', dtype=bf16)
+        torch.set_autocast_dtype("cuda", torch.bfloat16)
+        try:
+            with torch.autograd.graph.saved_tensors_hooks(pack, lambda t: t):
+                out = attn(x)
+        finally:
+            torch.set_autocast_enabled("cuda", before[0])
+            torch.set_autocast_dtype("cuda", before[1])
+    assert out.dtype == torch.bfloat16
+    big = [(dtype, nbytes) for shape, dtype, nbytes in saved if shape[-2:] == (T, T) and math.prod(shape) == B * H * T * T]
+    # softmax 在 autocast 的 fp32 名单上：概率按 fp32 存一份（1.5 GiB），与 V 相乘前又转成 bf16 存一份（0.75 GiB）
+    assert len(big) == 2 and dict(big) == {torch.float32: 3 * 2**29, torch.bfloat16: 3 * 2**28}
+    per_layer = sum(nbytes for _, nbytes in big)
+    assert per_layer == 2.25 * 2**30 and 12 * per_layer == 27 * 2**30   # 12 层合计 27 GiB
 
 
 # ---------------------------------------------------------------- 8.3 GQA
@@ -200,10 +263,10 @@ def test_gqa_with_all_kv_heads_is_storybot_mha(wb, sb, storybot_ckpt, valid_toke
     assert greedy(story, prompt) == greedy(web, prompt)
 
 
-def test_mean_pooled_gqa_needs_uptraining(wb, storybot_ckpt, valid_tokens):
-    V, C, E, H, L, FF, theta = storybot_config(storybot_ckpt)
+def test_mean_pooled_gqa_needs_uptraining(wb, storybot, valid_tokens):
+    name, (V, C, E, H, L, FF, theta), story_sd = storybot     # 两份权重各跑一遍
     D = E // H
-    sd = storybot_ckpt["model_state_dict"]
+    sd = {k.replace(".ffn.", ".mlp."): w for k, w in story_sd.items()}   # WebBot 的 Block 里叫 mlp
     x, y = windows(valid_tokens, 8, C, 680_000)              # 验证集上 8 个长 256 的窗口
 
     def mean_pooled(kv):                                     # GQA 论文的做法：每组各头的 K、V 投影取平均
@@ -220,8 +283,11 @@ def test_mean_pooled_gqa_needs_uptraining(wb, storybot_ckpt, valid_tokens):
         model.load_state_dict(mean_pooled(kv))
         with torch.no_grad():
             losses[kv] = F.cross_entropy(model(x).reshape(-1, V), y.reshape(-1)).item()
-    print({kv: round(loss, 3) for kv, loss in losses.items()})
-    expected = {16: 1.266, 8: 4.380, 4: 7.321, 1: 7.465}     # 正文 8.3 节引用的数
+    print(name, {kv: round(loss, 3) for kv, loss in losses.items()})
+    expected = {                                             # 正文 8.3 节引用的数
+        "hf": {16: 1.266, 8: 4.380, 4: 7.321, 1: 7.465},
+        "h100": {16: 1.288, 8: 3.608, 4: 6.269, 1: 7.535},
+    }[name]
     for kv, value in expected.items():
         assert abs(losses[kv] - value) < 0.002, (kv, losses[kv])
 
@@ -310,7 +376,11 @@ def test_compile_recompiles_for_eval_and_last_batch(wb):
         evaluate(4)
         evaluate(3)
     assert len(compiles) == 3
-    # 注意：大小为 1 的维度总是被特化，所以这里不用 batch=1 来代表“最后一个小 batch”
+    # 例外：大小为 1 的维度总是被特化，所以这里不用 batch=1 来代表“最后一个小 batch”
+    evaluate(1)
+    assert len(compiles) == 4                                # batch = 1 又编译了一次
+    evaluate(7)
+    assert len(compiles) == 4                                # 其他大小仍然命中动态版本
     dynamo.reset()
 
 
@@ -357,11 +427,68 @@ def test_rope_clamp_in_book_models(wb, sb):
         assert torch.equal(attn.rope(probe, attn.cache_offset), attn.rope(probe, 15))   # 位置钳在 15
     assert lengths == {"storybot": 33, "webbot": 16}         # StoryBot 一直变长，WebBot 像滑动窗口
 
+    # 第 5 章 prompt 的差一位（验证 5.5-i）在 WebBot 上同样成立。表长取 WebBot 的 1,024：
+    # prompt 多 1 个 token 不报错，但所有 token 都按位置 1,023 旋转；多 2 个才报错
+    torch.manual_seed(0)
+    small = wb.GPT(1000, 1024, 64, 4, 2, 1, 172).eval()      # 表长与 WebBot 相同、只有 1 层的小模型
+    rope = small.blocks[0].attn.rope
+    probe = torch.randn(1, 1, 1025, 16)
+    rotated = rope(probe, 0)
+    assert all(torch.equal(rotated[:, :, j:j + 1], rope(probe[:, :, j:j + 1], 1023)) for j in (0, 1, 512, 1024))
+    with torch.no_grad():
+        small.clear_cache()
+        small(torch.randint(0, 1000, (1, 1025)), use_cache=True)            # 1,025 个：不报错，悄悄算错
+        small.clear_cache()
+        with pytest.raises(RuntimeError, match="must match the size"):
+            small(torch.randint(0, 1000, (1, 1026)), use_cache=True)        # 1,026 个：cos 表取出 2 行，形状对不上
 
-def test_context_extension_on_storybot(sb, storybot_ckpt, valid_tokens):
-    V, C, E, H, L, FF, theta = storybot_config(storybot_ckpt)
+    import webbot.utils as wu
+
+    class FakeTokenizer:                                     # generate 只用到 encode、decode 和 end_token_id
+        end_token_id = -1
+
+        def __init__(self, ids):
+            self.ids = ids
+
+        def encode(self, text):
+            return self.ids
+
+        def decode(self, ids):
+            return ids
+
+    prompt = [i % 1000 for i in range(1026)]                 # 1,026 个 token id（词表 1,000）
+    wu.generate(small, FakeTokenizer(prompt[:1024]), "", max_new_tokens=2, temperature=0)   # 1,024 个：正常
+    with pytest.raises(RuntimeError, match="must match the size"):          # 第 18–19 行截断的 ids 不进模型
+        wu.generate(small, FakeTokenizer(prompt), "", max_new_tokens=2, temperature=0)
+
+
+def test_book_clamp_past_context_on_storybot(sb, storybot, valid_tokens):
+    """原书 generate() 走的路径：先 prefill 256 个 token，之后每次只送 1 个（use_cache=True），位置钳在 255。"""
+    name, (V, C, E, H, L, FF, theta), sd = storybot          # 两份权重各跑一遍
+    n, T = 8, 2 * C
+    x, y = windows(valid_tokens, n, T, len(valid_tokens) // n - 600, start=777)   # 与下一个测试相同的 8 个窗口
+    model = sb.GPT(V, C, E, H, L, FF, theta).eval()
+    model.load_state_dict(sd)
+    with torch.no_grad(), pytest.raises(RuntimeError, match="must match the size"):
+        model(x)                                             # 一次喂进 512 个 token：cos 表只有 256 行，直接报错
+    model.clear_cache()
+    with torch.no_grad():
+        logits = [model(x[:, :C], use_cache=True)]           # prefill：位置 0–255
+        for t in range(C, T):                                # decode：每次 1 个 token，与 storybot/utils.py 相同
+            logits.append(model(x[:, t:t + 1], use_cache=True))
+    assert model.blocks[0].attn.k_cache.shape[2] == T        # StoryBot 的缓存一直变长，新 token 却都在位置 255
+    loss = F.cross_entropy(torch.cat(logits, 1).reshape(-1, V), y.reshape(-1), reduction="none").view(n, T)
+    halves = loss[:, :C].mean().item(), loss[:, C:].mean().item()
+    quarters = [loss[:, C + 64 * q:C + 64 * (q + 1)].mean().item() for q in range(4)]   # 后半段每 64 个位置一段
+    print(name, [round(v, 3) for v in halves], [round(v, 3) for v in quarters])
+    expected = {"hf": (1.384, 3.744), "h100": (1.414, 3.850)}[name]   # 正文 8.6 节表格里“原书代码”一行
+    assert all(abs(a - b) < 0.002 for a, b in zip(halves, expected)), halves
+    assert quarters[0] < 3.1 and min(quarters[1:]) > 3.7   # 越过 256 之后：第一段约 3，之后都在 3.7 以上
+
+
+def test_context_extension_on_storybot(sb, storybot, valid_tokens):
+    name, (V, C, E, H, L, FF, theta), sd = storybot          # 两份权重各跑一遍
     D = E // H
-    sd = {k.replace(".mlp.", ".ffn."): w for k, w in storybot_ckpt["model_state_dict"].items()}
     n, T = 8, 2 * C                                           # 8 个长 512 的窗口：训练长度的 2 倍
     x, y = windows(valid_tokens, n, T, len(valid_tokens) // n - 600, start=777)
     s = T / C
@@ -391,12 +518,10 @@ def test_context_extension_on_storybot(sb, storybot_ckpt, valid_tokens):
     with torch.no_grad():
         results["reference"] = tuple(
             F.cross_entropy(original(x[:, a:a + C]).reshape(-1, V), y[:, a:a + C].reshape(-1)).item() for a in (0, C))
-    print({k: tuple(round(v, 3) for v in pair) for k, pair in results.items()})
-    expected = {                                              # 正文 8.6 节表格里的数
-        "extrapolate": (1.384, 2.496),
-        "pi": (1.553, 1.418),
-        "ntk": (1.388, 1.330),
-        "reference": (1.384, 1.336),
-    }
+    print(name, {k: tuple(round(v, 3) for v in pair) for k, pair in results.items()})
+    expected = {                                              # 正文 8.6 节表格里的数（hf），以及表后那句话（h100）
+        "hf": {"extrapolate": (1.384, 2.496), "pi": (1.553, 1.418), "ntk": (1.388, 1.330), "reference": (1.384, 1.336)},
+        "h100": {"extrapolate": (1.414, 2.446), "pi": (1.640, 1.445), "ntk": (1.420, 1.319), "reference": (1.414, 1.348)},
+    }[name]
     for key, pair in expected.items():
         assert all(abs(a - b) < 0.002 for a, b in zip(results[key], pair)), (key, results[key])

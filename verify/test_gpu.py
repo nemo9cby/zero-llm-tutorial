@@ -5,17 +5,23 @@ Everything here runs on the CPU in well under two minutes and never contacts Mod
   * the page's verify cells, gpu/costs.py and the widget's JS agree;
   * gpu/jobs.py patches keep WebBot's token budget on N GPUs, applied to the real ch09 script;
   * gpu/run_local.py and gpu/modal_app.py record runs in the same format (fake book, fake Volume);
-  * gpu/setup_gpu_box.sh picks the right torch build for a host's driver (dry run, fake nvidia-smi).
+  * gpu/setup_gpu_box.sh picks the right torch build for a host's driver (dry run, fake nvidia-smi);
+  * the recorded runs the page quotes are what the raw logs and git history say they are.
+The one exception is marked `slow`: it asks uv to resolve the setup script's torch flags (needs the network).
 """
 from __future__ import annotations
 
 import ast
 import contextlib
+import importlib.util
+import inspect
 import io
+import itertools
 import json
 import math
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -28,6 +34,8 @@ from conftest import DLFS6, ROOT
 
 GPU = ROOT / "gpu"
 DATA = ROOT / "web" / "data" / "gpu"
+RUNS = ROOT / "web" / "data" / "runs"
+RAW_RUNS = ROOT / "runs"                      # raw logs of the recorded runs (gitignored, present where they ran)
 sys.path.insert(0, str(GPU))
 sys.path.insert(0, str(ROOT / "verify"))
 import costs  # noqa: E402
@@ -36,6 +44,7 @@ import run_local  # noqa: E402
 
 BOTS = json.loads((DATA / "bots.json").read_text(encoding="utf-8"))
 GPUS = json.loads((DATA / "gpus.json").read_text(encoding="utf-8"))
+PLAN = json.loads((DATA / "plan.json").read_text(encoding="utf-8"))
 PAGE = (ROOT / "content" / "gpu.md").read_text(encoding="utf-8")
 
 
@@ -72,6 +81,44 @@ def script_constants(text: str) -> dict:
 def page_cells() -> list[str]:
     """The verify cells of content/gpu.md, in page order (same regex as tools/build.py)."""
     return [m.group(2) for m in re.finditer(r"^```verify[ \t]+(.*?)\n(.*?)^```[ \t]*$", PAGE, re.S | re.M)]
+
+
+def page_ids(slug: str) -> set[str]:
+    """Anchors a built page will have: numbered h2/h3 headings (as tools/build.py names them),
+    verify cells (v-<id>) and explicit id="..." attributes."""
+    text = (ROOT / "content" / f"{slug}.md").read_text(encoding="utf-8")
+    ids = set(re.findall(r'id="([^"]+)"', text))
+    ids |= {"s" + m.replace(".", "-") for m in re.findall(r"^#{2,3} ((?:\d+|[A-Z]+)(?:\.\d+)+)\s", text, re.M)}
+    ids |= {"v-" + v for v in re.findall(r"^```verify[ \t]+id=(\S+)", text, re.M)}
+    return ids
+
+
+def git_show(commit: str, path: str) -> str | None:
+    """The file at a commit, or None when it does not exist there."""
+    proc = subprocess.run(["git", "-C", str(ROOT), "show", f"{commit}:{path}"],
+                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+    return proc.stdout if proc.returncode == 0 else None
+
+
+def setup_dry_run(tmp_path: Path, driver: str) -> str:
+    """Run gpu/setup_gpu_box.sh with DRY_RUN=1 against a fake nvidia-smi that reports `driver`."""
+    bash = find_bash()
+    if bash is None:
+        pytest.skip("bash not available")
+    fake = tmp_path / f"bin{driver}"
+    fake.mkdir()
+    smi = fake / "nvidia-smi"
+    smi.write_bytes((
+        "#!/usr/bin/env bash\n"
+        'for a in "$@"; do case "$a" in --query-gpu=driver_version) echo "' + driver + '"; exit 0;; esac; done\n'
+        'echo "NVIDIA H100 80GB HBM3, ' + driver + ', 81559 MiB"\n').encode())
+    smi.chmod(0o755)
+    env = {**os.environ, "DRY_RUN": "1", "WORK": str(tmp_path / f"ws{driver}"), "BOTS": "storybot",
+           "TUTORIAL_SRC": "/x/zllm.bundle", "PATH": str(fake) + os.pathsep + os.environ["PATH"]}
+    proc = subprocess.run([bash, str(GPU / "setup_gpu_box.sh")], env=env, capture_output=True, text=True,
+                          encoding="utf-8", timeout=60, cwd=ROOT)
+    assert proc.returncode == 0, proc.stderr
+    return proc.stdout
 
 
 @pytest.fixture(scope="module")
@@ -193,6 +240,28 @@ def test_page_cells_agree_with_costs_module(page_ns):
                 assert math.isclose(e1["wall_h"], e2["wall_hours"], rel_tol=1e-12)
                 assert math.isclose(e1["usd"], e2["usd"], rel_tol=1e-12, abs_tol=1e-12)
                 assert math.isclose(e1["step_ms"], e2["step_ms"], rel_tol=1e-12)
+    # G.7-a reads tqdm lines with the very patterns run_local.py records metrics with
+    assert (ns["TQDM_RE"].pattern, ns["POSTFIX_RE"].pattern) == \
+        (run_local.TQDM_RE.pattern, run_local.POSTFIX_RE.pattern)
+
+
+def test_book_commit_on_the_page_is_the_submodule():
+    """The runboard's '与子模块一致' badge compares reports with bots.json; the setup script checks it too."""
+    head = run_local.git_rev(DLFS6)
+    if head == "unknown":
+        pytest.skip("third_party/dlfs6 is not a git checkout")
+    assert BOTS["dlfs6_commit"] == head
+    assert re.search(r"^DLFS6_COMMIT=(\w+)", (GPU / "setup_gpu_box.sh").read_text(encoding="utf-8"),
+                     re.M).group(1) == head
+
+
+def test_page_has_no_control_characters():
+    """A backslash escape collapsed by a shell (\\t in \\text, \\b in \\beta) leaves an invisible control
+    character that KaTeX renders without an error. tools/build.py tolerates TAB; this page never needs one."""
+    for path in (ROOT / "content" / "gpu.md", GPU / "runpod_lambda.md"):
+        for i, line in enumerate(path.read_text(encoding="utf-8").split("\n"), 1):
+            m = re.search(r"[\x00-\x08\x09\x0b-\x1f\x7f]", line)
+            assert m is None, f"{path.relative_to(ROOT)}:{i}: U+{ord(m.group()):04X}"
 
 
 def test_js_fixture_is_current():
@@ -238,6 +307,32 @@ def test_plan_json_estimates_are_current():
             assert budget >= est["usd"][1], f"{p['run']}: the documented --budget would refuse its own job"
 
 
+def test_page_links_into_other_pages_resolve():
+    """`build.py --only gpu` checks links into other pages only for the page; check their #anchors here."""
+    links = re.findall(r"\]\(([\w-]+)\.html#([^)\s]+)\)", PAGE)
+    assert len(links) >= 10
+    for slug, frag in links:
+        assert frag in page_ids(slug), f"gpu.md links to {slug}.html#{frag}, which does not exist"
+
+
+def test_runboard_cards_link_to_real_places():
+    """Every recorded run gets a card with its re-run command; every 'used in' link points at a real anchor."""
+    index = json.loads((RUNS / "index.json").read_text(encoding="utf-8"))
+    planned = {p["run"]: p for p in PLAN["planned"]}
+    assert set(index) <= set(planned), "a recorded run has no entry (command, links) in plan.json"
+    for run, p in planned.items():
+        assert p["job"] in jobs.JOBS and f"--job {p['job']}" in p["command"] and f"--run {run}" in p["command"]
+        for link in p.get("used_in", []):
+            page, _, frag = link["href"].partition("#")
+            slug = page.removesuffix(".html") if page else "gpu"
+            assert (ROOT / "content" / f"{slug}.md").is_file(), link
+            assert not frag or frag in page_ids(slug), f"{run}: no #{frag} on {slug}"
+    for run in index:
+        report = json.loads((RUNS / run / "report.json").read_text(encoding="utf-8"))
+        jobs_run = {s["job"] for s in report["steps"] if "job" in s}
+        assert jobs_run <= {planned[run]["job"]}, run
+
+
 # ---------------------------------------------------------------- G.3: multi-GPU budget
 
 def test_ddp_patches_keep_the_token_budget(dlfs6_path):
@@ -256,6 +351,7 @@ def test_ddp_patches_keep_the_token_budget(dlfs6_path):
             compile(patched, jobs.WEBBOT, "exec")
             c = script_constants(patched)
             assert tokens(c, n) == one_gpu, (n, scale)
+            assert c["learning_rate"] == base["learning_rate"] == 6e-4    # the peak LR is never rescaled
             if scale == "iters":                                    # same LR-vs-tokens warmup within 1%
                 warm_tokens = c["warmup_iters"] * c["micro_batch_size"] * c["accumulation_steps"] * c["context_len"] * n
                 assert abs(warm_tokens / (500 * 131072) - 1) < 0.01, n
@@ -281,11 +377,26 @@ def test_probe_patch_runs_the_first_200_steps(dlfs6_path):
 
 
 def test_grpo_constants_match_the_book(dlfs6_path):
+    import torch
+    from torch.utils.data import DataLoader
+    from codebot.utils import generate
+
     text = (DLFS6 / "ch03/09_grpo.py").read_text(encoding="utf-8")
     c = script_constants(text)
     assert (c["batch_size"], c["group_size"], c["max_iters"], c["eval_interval"]) == (32, 8, 500, 10)
     assert "for i in range(1, 10):" in text and "for j in range(1, 10):" in text      # 9 × 9 = 81 problems
     assert "full_text = generate(model, tokenizer, prompt, temperature=1.0)" in text  # one answer per call
+    # Batches: the DataLoader keeps the last, smaller batch and cycle() replays the first epoch (errata E07).
+    assert "dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)" in text
+    assert "data_iter = cycle(dataloader)" in text and "drop_last" not in text
+    torch.manual_seed(0)
+    it = itertools.cycle(DataLoader(list(range(81)), batch_size=32, shuffle=True))
+    sizes = [len(next(it)) for _ in range(500)]
+    assert sizes[:3] == [32, 32, 17] and sum(sizes) == 13_510         # × 8 answers = 108,080 sampled
+    # generate(): one sequence per call, the whole context recomputed for every new token (no KV cache)
+    src = inspect.getsource(generate)
+    assert "ids = torch.tensor([ids]" in src and "logits = model(ids)[:, -1, :]" in src
+    assert "cache" not in src
 
 
 # ---------------------------------------------------------------- G.4: this PC
@@ -319,9 +430,14 @@ def test_venv_python_is_only_a_launcher():
 def test_windows_cannot_run_ch09_natively():
     import torch
     import torch.distributed as dist
+    from torch._inductor.scheduler import Scheduler
 
     assert not dist.is_nccl_available()                    # ch09 initialises DDP with backend='nccl'
-    if shutil.which("cl") is None:                         # no MSVC on PATH: inductor cannot compile
+    # ch09 compiles a CUDA model: inductor's GPU backend needs Triton, which the Windows wheel does not ship
+    assert importlib.util.find_spec("triton") is None
+    backend = inspect.getsource(Scheduler.create_backend)
+    assert "if not has_triton():" in backend and "raise TritonMissing" in backend
+    if shutil.which("cl") is None:                         # no MSVC on PATH: inductor cannot compile CPU code
         with pytest.raises(Exception, match="cl is not found"):
             torch.compile(lambda x: torch.sin(x) * 2 + 1)(torch.randn(8))
 
@@ -336,36 +452,54 @@ def find_bash() -> str | None:
     return next((str(c) for c in candidates if c.is_file()), None)
 
 
+CU126 = "https://download.pytorch.org/whl/cu126"
+
+
 def test_setup_script_picks_torch_by_driver(tmp_path):
-    script = GPU / "setup_gpu_box.sh"
-    assert b"\r" not in script.read_bytes()                # CRLF would break bash on Linux
-    bash = find_bash()
-    if bash is None:
-        pytest.skip("bash not available")
-
-    def dry_run(driver: str) -> str:
-        fake = tmp_path / f"bin{driver}"
-        fake.mkdir()
-        smi = fake / "nvidia-smi"
-        smi.write_bytes((
-            "#!/usr/bin/env bash\n"
-            'for a in "$@"; do case "$a" in --query-gpu=driver_version) echo "' + driver + '"; exit 0;; esac; done\n'
-            'echo "NVIDIA H100 80GB HBM3, ' + driver + ', 81559 MiB"\n').encode())
-        smi.chmod(0o755)
-        env = {**os.environ, "DRY_RUN": "1", "WORK": str(tmp_path / f"ws{driver}"), "BOTS": "storybot",
-               "TUTORIAL_SRC": "/x/zllm.bundle", "PATH": str(fake) + os.pathsep + os.environ["PATH"]}
-        proc = subprocess.run([bash, str(script)], env=env, capture_output=True, text=True, encoding="utf-8",
-                              timeout=60, cwd=ROOT)
-        assert proc.returncode == 0, proc.stderr
-        return proc.stdout
-
-    old = dry_run("575.57.08")
-    assert "download.pytorch.org/whl/cu126" in old and "UV_NO_SYNC=1" in old
-    new = dry_run("610.60")
-    assert "cu126" not in new and "PyPI wheel (CUDA 13.0)" in new
+    assert b"\r" not in (GPU / "setup_gpu_box.sh").read_bytes()     # CRLF would break bash on Linux
+    old = setup_dry_run(tmp_path, "575.57.08")
+    install = [ln for ln in old.splitlines() if ln.startswith("+ uv pip install")]
+    assert len(install) == 1 and "UV_NO_SYNC=1" in old
+    # --index outranks PyPI; --index-url + --extra-index-url PyPI would let PyPI's CUDA 13.0 wheel win
+    assert f"--index {CU126}" in install[0] and "torch==2.14.1+cu126" in install[0]
+    assert "--index-url" not in install[0] and "--extra-index-url" not in install[0]
+    new = setup_dry_run(tmp_path, "610.60")
+    assert "cu126" not in new and "PyPI wheel (CUDA 13.0)" in new and "+ uv pip install" not in new
     for out in (old, new):
         assert "+ git clone /x/zllm.bundle" in out and "+ git submodule update --init third_party/dlfs6" in out
         assert "+ uv sync --frozen" in out and "+ uv run python gpu/fetch.py storybot" in out
+
+
+@pytest.mark.slow
+def test_setup_script_torch_flags_resolve_to_cu126(tmp_path):
+    """Ask uv itself (dry: `uv pip compile`, Linux x86_64, Python 3.12) what the script's flags install."""
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("uv not on PATH")
+    line = next(ln for ln in setup_dry_run(tmp_path, "575.57.08").splitlines() if ln.startswith("+ uv pip install"))
+    args = shlex.split(line[2:])[3:]                          # after `uv pip install`
+    i = args.index("--reinstall-package")
+    del args[i:i + 2]                                         # an install-only option
+    reqs = [a for a in args if "==" in a]
+    flags = [a for a in args if a not in reqs]
+
+    def resolve(req: str, index_flags: list[str]) -> str:
+        (tmp_path / "req.txt").write_text(req + "\n", encoding="utf-8")
+        proc = subprocess.run([uv, "pip", "compile", "req.txt", "--no-deps", "--no-config", "--no-header",
+                               "--no-annotate", "--python-platform", "x86_64-manylinux_2_28",
+                               "--python-version", "3.12", *index_flags],
+                              capture_output=True, text=True, encoding="utf-8", timeout=300, cwd=tmp_path)
+        if proc.returncode != 0:
+            if "No solution found" in proc.stderr:
+                pytest.fail(proc.stderr[-1500:])
+            pytest.skip(f"uv could not reach the package indexes: {proc.stderr[-300:]}")
+        return proc.stdout
+
+    assert reqs == ["torch==2.14.1+cu126"] and flags == ["--index", CU126]
+    assert "torch==2.14.1+cu126" in resolve(reqs[0], flags)
+    # the pitfall the script avoids: every --extra-index-url outranks --index-url, so PyPI's wheel wins
+    old = resolve("torch==2.14.1", ["--index-url", CU126, "--extra-index-url", "https://pypi.org/simple"])
+    assert re.search(r"^torch==2\.14\.1$", old, re.M), old
 
 
 def test_fetch_plans_only_what_a_bot_needs():
@@ -536,6 +670,80 @@ def test_parse_timing_reads_the_main_bar_only():
     assert t == {"rate": "2.00it/s", "s_per_it": 1.0}
     pts = run_local.parse_tqdm("\r".join(lines))
     assert len(pts) == 40 and pts[-1] == {"it": 40, "loss": 1.0}
+
+
+# Files under web/data/runs/ that no script writes: excerpts we took by hand from runs/<run>/<stem>.log.
+HAND_EXTRACTS = [("webbot-probe", "01_pretrain.log.txt", "01_pretrain.log"),
+                 ("codebot-3060ti", "02_generate.output.txt", "02_generate.log"),
+                 ("storybot-h100", "06_generate.output.txt", "06_generate.log")]
+
+
+def test_hand_extracts_match_the_raw_logs():
+    """Each excerpt is verbatim log lines in log order; timing.json follows from the probe's raw log."""
+    checked = 0
+    for run, extract, raw in HAND_EXTRACTS:
+        assert (RUNS / run / extract).is_file(), f"{run}/{extract}"
+        log = RAW_RUNS / run / raw
+        if not log.is_file():
+            continue
+        log_lines = iter(re.split(r"[\r\n]", log.read_text(encoding="utf-8", errors="replace")))
+        lines = [ln for ln in (RUNS / run / extract).read_text(encoding="utf-8").split("\n") if ln.strip()]
+        assert lines and all(any(ln == raw_ln for raw_ln in log_lines) for ln in lines), f"{run}/{extract}"
+        checked += 1
+
+    log = RAW_RUNS / "webbot-probe" / "01_pretrain.log"
+    if log.is_file():
+        first_seen: dict[int, int] = {}                      # counter -> tqdm's elapsed clock, in seconds
+        for chunk in re.split(r"[\r\n]", log.read_text(encoding="utf-8", errors="replace")):
+            m = run_local.TQDM_RE.search(chunk)
+            if not m or not run_local.POSTFIX_RE.search(m.group(3)):
+                continue                                     # evaluation bars carry no postfix
+            h, mm, ss = (int(x) if x else 0 for x in run_local.ELAPSED_RE.match(m.group(3)).groups())
+            first_seen.setdefault(int(m.group(1)), 3600 * h + 60 * mm + ss)
+        timing = json.loads((RUNS / "webbot-probe" / "timing.json").read_text(encoding="utf-8"))
+        wb = BOTS["bots"]["webbot"]
+        assert timing["first_step_s"] == first_seen[1]
+        assert timing["steady_s_per_step_20_200"] == round((first_seen[200] - first_seen[20]) / 180, 4)
+        assert timing["tokens_per_step"] == wb["batch"] * wb["accum"] * wb["ctx"]
+        checked += 1
+    if not checked:
+        pytest.skip("the raw logs (runs/<run>/*.log) are not in the repository; they exist where the runs ran")
+
+
+def test_run_reports_point_at_commits_that_contain_their_code():
+    """A report records the tutorial's HEAD when the run started. Where the code that ran was not committed
+    yet, plan.json names the first commit that has it; git must agree on both counts."""
+    if shutil.which("git") is None:
+        pytest.skip("git not available")
+    planned = {p["run"]: p for p in PLAN["planned"]}
+    shas = {json.loads((RUNS / r / "report.json").read_text(encoding="utf-8"))["tutorial_commit"]
+            for r in json.loads((RUNS / "index.json").read_text(encoding="utf-8"))}
+    shas |= {p["code_commit"]["sha"] for p in PLAN["planned"] if "code_commit" in p}
+    for sha in shas:
+        if subprocess.run(["git", "-C", str(ROOT), "cat-file", "-e", f"{sha}^{{commit}}"]).returncode:
+            pytest.skip(f"commit {sha[:7]} is not in this clone (shallow?)")
+
+    for run in json.loads((RUNS / "index.json").read_text(encoding="utf-8")):
+        report = json.loads((RUNS / run / "report.json").read_text(encoding="utf-8"))
+        needs = [("gpu/run_local.py", "def parse_tqdm")]
+        if report.get("provider") == "modal":
+            needs.append(("gpu/modal_app.py", "def run_job"))
+        needs += [("gpu/jobs.py", f'"{s["job"]}"') for s in report["steps"] if "job" in s]
+
+        def has_code(commit: str) -> bool:
+            return all((src := git_show(commit, path)) is not None and text in src for path, text in needs)
+
+        fix = planned.get(run, {}).get("code_commit")
+        if fix is None:
+            assert has_code(report["tutorial_commit"]), f"{run}: its tutorial_commit lacks the code that ran"
+            continue
+        assert not has_code(report["tutorial_commit"]), f"{run}: the recorded commit is fine; drop code_commit"
+        assert has_code(fix["sha"]), run
+        assert fix["contains"] in (git_show(fix["sha"], fix["path"]) or ""), run
+        assert fix["contains"] not in (git_show(fix["sha"] + "^", fix["path"]) or ""), \
+            f"{run}: {fix['sha'][:7]} is not the first commit with {fix['path']}"
+        assert subprocess.run(["git", "-C", str(ROOT), "merge-base", "--is-ancestor", fix["sha"], "HEAD"]
+                              ).returncode == 0, run
 
 
 def test_run_local_records_a_run_end_to_end(tmp_path, monkeypatch):

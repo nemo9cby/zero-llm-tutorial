@@ -1,6 +1,6 @@
 /* 第 4 章组件共用的纯函数（无 DOM，Node 测试直接 import）。
    pretokenize   GPT-2 预分词正则的 JS 版（与 Python regex 的切分逐个相同，见 tests/js/ch04-bpe.test.mjs）
-   IncrementalBPE  ch04/02 的增量训练：计数表 + 倒排索引，每步返回“谁受影响、计数怎样增减”
+   IncrementalBPE  ch04/02 的增量训练：计数表 + 倒排索引，每步返回“谁受影响、减去了多少旧计数、加上了多少新计数”
    chunkBoundaries ch04/03 的 find_chunk_boundaries，只用 <|endoftext|> 的字节偏移来模拟（含 4096 字节缓冲区的细节）
    amdahl          Amdahl 定律 */
 
@@ -87,8 +87,8 @@ export class IncrementalBPE {
     this.vocab.set(newId, joined);
     const affected = [...(this.pairToSeqs.get(k) || [])].sort((x, y) => x - y);
     this.pairToSeqs.delete(k);
-    const delta = new Map();                       // pair -> net change this step
-    const add = (p, d) => delta.set(p, (delta.get(p) || 0) + d);
+    const minus = new Map(), plus = new Map();      // pair -> amount subtracted (old pairs) / added (new pairs)
+    const add = (m, p, d) => m.set(p, (m.get(p) || 0) + d);
     const changes = [];
     for (const si of affected) {
       const s = this.seqs[si];
@@ -98,19 +98,28 @@ export class IncrementalBPE {
         const v = this.pairCounts.get(p) - c * s.count;
         if (v <= 0) this.pairCounts.delete(p); else this.pairCounts.set(p, v);
         this.pairToSeqs.get(p)?.delete(si);
-        add(p, -c * s.count);
+        add(minus, p, c * s.count);
       }
       for (const [p, c] of pairsOf(after)) {         // add the whole new sequence
         this.pairCounts.set(p, (this.pairCounts.get(p) || 0) + c * s.count);
         if (!this.pairToSeqs.has(p)) this.pairToSeqs.set(p, new Set());
         this.pairToSeqs.get(p).add(si);
-        add(p, c * s.count);
+        add(plus, p, c * s.count);
       }
       s.ids = after;
       changes.push({ si, before, after });
     }
-    for (const [p, d] of delta) if (d === 0) delta.delete(p);
-    return { pair: [a, b], newId, count, affected, changes, delta };
+    const delta = new Map();                       // pair -> net change this step (pairs that net to 0 left out)
+    for (const p of new Set([...minus.keys(), ...plus.keys()])) {
+      const d = (plus.get(p) || 0) - (minus.get(p) || 0);
+      if (d !== 0) delta.set(p, d);
+    }
+    return { pair: [a, b], newId, count, affected, changes, minus, plus, delta };
+  }
+
+  /** Words that contain a pair right now (the inverted index pair_to_ids), in first-seen order. */
+  wordsWith(k) {
+    return [...(this.pairToSeqs.get(k) || [])].sort((x, y) => x - y).map((si) => this.seqs[si].word);
   }
 
   /** Full recount (the 01 way) — used to show that the incremental table is always exact. */

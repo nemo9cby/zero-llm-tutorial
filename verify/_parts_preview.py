@@ -53,6 +53,18 @@ HF_SHA256 = {
     "codebot/model_sft.pt": "8d3f09b5737e0fbd27c25e337e0f69373ff29e1c2aecf24c1323ca41a8354f14",
     "codebot/model_grpo.pt": "e89848d846fe1a8bac5651dfac0c454685f401addbaaf340cf6ac8e9d939832d",
 }
+# The CS336 copies of the corpora (fetched 2026-10-12). TinyStories: LFS oid (= sha256) of
+# TinyStoriesV2-GPT4-{train,valid}.txt in TINYSTORIES_LISTING, identical to the oids of the book's
+# storybot/tiny_stories_{train,valid}.txt in HF_LISTING. OWT: sha256 of the *decompressed*
+# owt_valid.txt.gz from OWT_SAMPLE_URL (`curl -L ... | gunzip | sha256sum`), identical to the oid of the
+# book's webbot/owt_valid.txt. The local check hashes the validation file that tools/fetch_data.py downloads.
+TINYSTORIES_LISTING = "https://huggingface.co/api/datasets/roneneldan/TinyStories/tree/main"
+OWT_SAMPLE_URL = "https://huggingface.co/datasets/stanford-cs336/owt-sample/resolve/main/owt_valid.txt.gz"
+CS336_SHA256 = {
+    "storybot/tiny_stories_train.txt": "6418d412de72888f52b5142c761ac21a582f7d1166f0bfbdb5f03ccfdec90443",
+    "storybot/tiny_stories_valid.txt": "6874bae9a4c1a4e7edcf0e53b86c17817e9cf881fc75ff2368da457b80c0585d",
+    "webbot/owt_valid.txt": "2406f278e71829d273b315e9b403285baea7022b26a96d2728dd8b776ea40660",
+}
 
 
 # ---------------------------------------------------------------- small utilities
@@ -147,9 +159,13 @@ def non_ascii(raw: bytes) -> int:
 
 
 def doc_lengths(ids: np.ndarray, end_id: int) -> np.ndarray:
-    """Tokens between consecutive end tokens (the end token itself excluded)."""
+    """Tokens between consecutive end tokens (the end token itself excluded).
+
+    A file that ends with the end token (owt_valid.bin does) has no document after it, so the empty
+    segment past the last end token is not counted."""
     cut = np.flatnonzero(ids == end_id)
-    return np.diff(np.concatenate([[-1], cut, [len(ids)]])) - 1
+    lengths = np.diff(np.concatenate([[-1], cut, [len(ids)]])) - 1
+    return lengths[:-1] if len(ids) and ids[-1] == end_id else lengths
 
 
 def summarize(lengths: np.ndarray, ctx: int) -> dict:
@@ -247,7 +263,7 @@ def bots_table(models: dict | None = None) -> dict:
         "storybot": dict(name="StoryBot", part="II", page="part2.html", data="TinyStories V2-GPT4",
                          chapters={"tokenizer": "ch04", "model": "ch05", "training": "ch06"},
                          precision="bf16 autocast", arch="RoPE + SwiGLU + RMSNorm"),
-        "webbot": dict(name="WebBot", part="III", page="part3.html", data="OpenWebText (CS336 sample)",
+        "webbot": dict(name="WebBot", part="III", page="part3.html", data="OpenWebText（CS336 整理的样本）",
                        chapters={"tokenizer": "ch07", "model": "ch08", "training": "ch09"},
                        precision="bf16 autocast + torch.compile", arch="StoryBot + GQA + SDPA"),
     }
@@ -293,6 +309,88 @@ def bots_table(models: dict | None = None) -> dict:
                                       note="初始 loss：torch.manual_seed(0) 依次构造三个模型（eval 模式），"
                                            "在 init_loss_data 的前 4×256 个 token 上计算交叉熵"),
             "bots": bots}
+
+
+def cpu_name() -> str:
+    if sys.platform == "win32":
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\CentralProcessor\0")
+            return winreg.QueryValueEx(key, "ProcessorNameString")[0].strip()
+        except OSError:
+            pass
+    return platform.processor() or "unknown"
+
+
+def cpu_busy(seconds: float = 3.0) -> float | None:
+    """Fraction of all logical CPUs that were busy over `seconds` (Windows GetSystemTimes; None elsewhere)."""
+    if sys.platform != "win32":
+        return None
+    import ctypes
+    import time
+    from ctypes import wintypes
+
+    def times():
+        idle, kernel, user = wintypes.FILETIME(), wintypes.FILETIME(), wintypes.FILETIME()
+        if not ctypes.windll.kernel32.GetSystemTimes(ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user)):
+            raise OSError("GetSystemTimes failed")
+        return [(t.dwHighDateTime << 32) | t.dwLowDateTime for t in (idle, kernel, user)]
+
+    try:
+        i0, k0, u0 = times()
+        time.sleep(seconds)
+        i1, k1, u1 = times()
+    except OSError:
+        return None
+    total = (k1 - k0) + (u1 - u0)                     # kernel time includes idle time
+    return round(1 - (i1 - i0) / total, 3) if total else None
+
+
+# Earlier CPU timings of the same step, from the research log in research/repo-ch03-train-align.md §2
+# (ch03/01_pretrain.py patched to max_iters = 30 and 10; same i7-11700F; other jobs were running).
+CPU_STEP_EARLIER = [
+    {"torch": "2.9.1+cpu", "threads": 8, "iters": 30, "s_per_step": 4.142, "load": "有其他任务在运行"},
+    {"torch": "2.9.1+cpu", "threads": 8, "iters": 10, "s_per_step": 6.389, "load": "争用更重"},
+]
+
+
+def cpu_step_probe(steps: int = 5) -> dict:
+    """Seconds per CodeBot pretraining step on this machine's CPU: ch03/01_pretrain.py's model, batch shape,
+    optimizer and step (forward, cross-entropy, zero_grad, backward, AdamW step), timed after one warm-up step."""
+    import os
+    import time
+    import torch
+    import torch.nn.functional as F
+    book_path()
+    from codebot.model import GPT
+    h = script_hparams("ch03/01_pretrain.py")
+    ctx, batch = h["context_len"], h["batch_size"]
+    torch.manual_seed(0)
+    model = GPT(h["vocab_size"], ctx, h["embed_dim"], h["n_head"], h["n_layer"], h["ff_dim"], h["dropout_rate"]).train()
+    optimizer = torch.optim.AdamW(model.parameters(), lr=h["learning_rate"])
+    data = torch.from_numpy(np.fromfile(DLFS6 / "codebot/tiny_codes.bin", dtype=np.uint16).astype(np.int64))
+    busy_before = cpu_busy()
+    seconds = []
+    for k in range(steps + 1):
+        ix = torch.randint(len(data) - ctx - 1, (batch,))
+        x = torch.stack([data[i:i + ctx] for i in ix])
+        y = torch.stack([data[i + 1:i + ctx + 1] for i in ix])
+        t = time.perf_counter()
+        logits = model(x)
+        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        if k:                                          # step 0 is a warm-up
+            seconds.append(round(time.perf_counter() - t, 2))
+    return {"_provenance": provenance(
+                what="ch03/01_pretrain.py 的模型、batch 形状与 AdamW，每步 = 前向 + 交叉熵 + zero_grad + backward + step；"
+                     "第 0 步预热不计时。cpu_busy_before：开始前 3 秒内全部逻辑核的忙碌比例（GetSystemTimes）",
+                earlier="research/repo-ch03-train-align.md §2 的研究记录：同一台机器，30 步与 10 步的计时运行"),
+            "script": "ch03/01_pretrain.py", "max_iters": h["max_iters"], "tokens_per_step": batch * ctx,
+            "params": int(sum(p.numel() for p in model.parameters())),
+            "cpu": cpu_name(), "logical_cpus": os.cpu_count(), "torch_threads": torch.get_num_threads(),
+            "cpu_busy_before": busy_before, "seconds_per_step": seconds, "earlier": CPU_STEP_EARLIER}
 
 
 # ---------------------------------------------------------------- part I: CodeBot
@@ -384,6 +482,13 @@ STORY_CKPTS = [("storybot/model_iter_500.pt", 500), ("storybot/model_iter_5000.p
                ("storybot/model_pretrain.pt", 40000)]
 
 
+def storybot_updates(iters: int) -> int:
+    """Optimizer steps behind a StoryBot checkpoint. ch06/05_pretrain.py saves model_iter_{i}.pt right after
+    optimizer.step() inside `for i in range(max_iters)` (i counts from 0), so iter_500 has 501 updates;
+    model_pretrain.pt is saved after the loop, after all max_iters = 40,000 updates."""
+    return iters if iters == script_hparams("ch06/05_pretrain.py")["max_iters"] else iters + 1
+
+
 def storybot_val_loss(model, windows: int = 32, seed: int = 0) -> float:
     """Mean cross-entropy on `windows` random 256-token windows of the validation set (fixed rng)."""
     import torch
@@ -416,12 +521,16 @@ def storybot_preview(seeds=(0, 1)) -> dict:
                 torch.manual_seed(seed)
                 story = generate(model, tok, EOT, max_new_tokens=255, temperature=1.0)
                 samples.append({"seed": seed, "text": story, "tokens": len(tok.encode(story))})
-        out.append({"file": rel, "iters": iters, "tokens_seen": iters * 32 * 256,
+        updates = storybot_updates(iters)
+        out.append({"file": rel, "iters": iters, "updates": updates, "tokens_seen": updates * 32 * 256,
                     "val_loss_subset": round(storybot_val_loss(model), 4), "samples": samples})
     return {"_provenance": provenance(
                 generate="storybot/utils.generate，prompt = <|endoftext|>（同 ch06/06_generate.py），temperature 1.0，"
                          "max_new_tokens 255（书中为 300；255 + 1 个 prompt token 正好不超过上下文 256）",
                 val_loss_subset="验证集中 32 个随机 256-token 窗口（np.random.default_rng(0)），fp32",
+                updates="iters 取自文件名；ch06/05_pretrain.py 在第 i 次循环的 optimizer.step() 之后保存 "
+                        "model_iter_{i}.pt（i 从 0 数起），所以中间检查点做过 i + 1 次更新；"
+                        "model_pretrain.pt 在循环结束后保存，做过 max_iters 次更新。tokens_seen = updates × 32 × 256",
                 key_rename="HF 检查点的 blocks.N.mlp.* 改名为 blocks.N.ffn.*"),
             "checkpoints": out}
 
@@ -474,24 +583,31 @@ def owt_document(k: int) -> str:
     return tok.decode(np.asarray(ids[start:int(cut[k])]).tolist())
 
 
+MATRIX_BYTES = 1_000_000   # sample size per corpus for the bytes/token matrix (whole documents, at least this much)
+
+
 def tokenizer_matrix() -> dict:
-    """bytes/token of each bot's tokenizer on ~50 KB of each bot's data, plus one web sentence as chips."""
+    """bytes/token of each bot's tokenizer on ~1 MB of each bot's data, plus one web sentence as chips."""
+    import functools
     import pickle
     book_path()
     from storybot.tokenizer import BPETokenizer
     toks = {b: BPETokenizer(pickle.load(open(DLFS6 / f"{b}/merge_rules.pkl", "rb")))
             for b in ("codebot", "storybot", "webbot")}
-    web_ids = np.asarray(np.memmap(DLFS6 / "webbot/owt_valid.bin", dtype=np.uint16, mode="r")[:40_000]).tolist()
+    for tk in toks.values():
+        # _encode_text(pretoken) is a pure function of the pre-token, so caching it changes nothing but the speed
+        tk._encode_text = functools.lru_cache(maxsize=None)(tk._encode_text)
+    web_ids = np.asarray(np.memmap(DLFS6 / "webbot/owt_valid.bin", dtype=np.uint16, mode="r")[:600_000]).tolist()
     corpora = {
-        "TinyCodes": take_docs((DLFS6 / "codebot/tiny_codes.txt").read_text(encoding="utf-8"), 50_000),
-        "TinyStories": take_docs((DLFS6 / "storybot/tiny_stories_valid.txt").read_text(encoding="utf-8"), 50_000,
-                                 skip_first=True),
-        "OpenWebText": take_docs(toks["webbot"].decode(web_ids), 50_000),
+        "TinyCodes": take_docs((DLFS6 / "codebot/tiny_codes.txt").read_text(encoding="utf-8"), MATRIX_BYTES),
+        "TinyStories": take_docs((DLFS6 / "storybot/tiny_stories_valid.txt").read_text(encoding="utf-8"),
+                                 MATRIX_BYTES, skip_first=True),
+        "OpenWebText": take_docs(toks["webbot"].decode(web_ids), MATRIX_BYTES),
     }
     matrix = []
     for cname, text in corpora.items():
         nbytes = len(text.encode("utf-8"))
-        row = {"corpus": cname, "bytes": nbytes, "tokens": {}}
+        row = {"corpus": cname, "bytes": nbytes, "docs": text.count(EOT) + 1, "tokens": {}}
         for tname, tk in toks.items():
             ids = tk.encode(text)
             assert tk.decode(ids) == text
@@ -505,33 +621,65 @@ def tokenizer_matrix() -> dict:
         chips[tname] = [{"id": i, "bytes": tk.id_to_bytes[i].hex()} for i in ids]
     return {"_provenance": provenance(
                 note="所有分词器都用 storybot.tokenizer.BPETokenizer 的按 rank 合并编码；对 CodeBot 的合并规则，"
-                     "它与 codebot.tokenizer 的逐条套用结果相同（test_parts.py 有对拍）",
-                samples="TinyCodes 开头、TinyStories 验证集开头（跳过半截的第一段）、OWT 验证集开头，各取整篇文档直到 ≥ 50,000 字节"),
+                     "它与 codebot.tokenizer 的逐条套用结果相同（verify/test_part3.py::test_tokenizer_matrix_matches_record 有对拍）",
+                samples=f"TinyCodes 开头、TinyStories 验证集开头（跳过半截的第一段）、OWT 验证集开头，"
+                        f"各取整篇文档直到 ≥ {MATRIX_BYTES:,} 字节"),
             "matrix": matrix, "sentence": sentence, "sentence_source": f"owt_valid.bin 第 {OWT_EXCERPT_DOC + 1} 篇文档的第一句",
             "chips": chips}
 
 
+WEBBOT_TEMPERATURE = 0.5          # ch09/02_generate.py
+WEBBOT_INDEP_SEEDS = [100 + k for k in range(len(WEBBOT_PROMPTS))]
+
+
 def webbot_preview(new_tokens: int = 30) -> dict:
+    """The untrained WebBot on the book's five prompts.
+
+    Generated twice: with torch.manual_seed(0) before every prompt (all five runs draw the same random
+    numbers) and with a different seed per prompt. The first-step next-token distributions are recorded too,
+    so the page can tell coupled random numbers apart from a model that ignores its prompt."""
+    import itertools
     import torch
     book_path()
     from storybot.tokenizer import BPETokenizer
     from webbot.utils import generate
     model = build_models(seed=0)["webbot"]
     tok = BPETokenizer.load_from(str(DLFS6 / "webbot/merge_rules.pkl"))
-    outs = []
-    with single_thread():
-        for p in WEBBOT_PROMPTS:
-            torch.manual_seed(0)
-            outs.append(generate(model, tok, p, max_new_tokens=new_tokens, temperature=0.5))
+
+    def sample(seeds):
+        outs = []
+        with single_thread():
+            for p, s in zip(WEBBOT_PROMPTS, seeds):
+                torch.manual_seed(s)
+                outs.append(generate(model, tok, p, max_new_tokens=new_tokens, temperature=WEBBOT_TEMPERATURE))
+        return outs, [tok.encode(o[len(p):]) for p, o in zip(WEBBOT_PROMPTS, outs)]
+
+    outs, cont_ids = sample([0] * len(WEBBOT_PROMPTS))
+    outs_indep, cont_ids_indep = sample(WEBBOT_INDEP_SEEDS)
+    dists = []
+    with torch.no_grad():
+        for p in WEBBOT_PROMPTS:             # the distribution generate() samples the first new token from
+            model.clear_cache()
+            logits = model(torch.tensor([tok.encode(p)]), use_cache=True)[:, -1, :]
+            dists.append(torch.softmax(logits.double() / WEBBOT_TEMPERATURE, dim=-1)[0])
+        model.clear_cache()
+    tv = [round(0.5 * (a - b).abs().sum().item(), 4) for a, b in itertools.combinations(dists, 2)]
     loss = initial_loss(model, np.memmap(DLFS6 / "webbot/owt_valid.bin", dtype=np.uint16, mode="r"))
-    cont_ids = [tok.encode(o[len(p):]) for p, o in zip(WEBBOT_PROMPTS, outs)]
     return {"_provenance": provenance(
                 weights="未训练：torch.manual_seed(0) 后依次构造 CodeBot、StoryBot、WebBot（与 ch00 的 bots.json 同一顺序），取 WebBot",
-                generate=f"webbot/utils.generate，temperature 0.5（同 ch09/02_generate.py），max_new_tokens {new_tokens}"
-                         "（书中为 100），每个 prompt 前 torch.manual_seed(0)",
-                continuation_ids="续写部分（去掉 prompt）用 WebBot 分词器重新编码的 id"),
-            "prompts": WEBBOT_PROMPTS, "outputs": outs, "continuation_ids": cont_ids, "init_loss": round(loss, 4),
-            "ln_vocab": round(math.log(50000), 4)}
+                generate=f"webbot/utils.generate，temperature {WEBBOT_TEMPERATURE}（同 ch09/02_generate.py），"
+                         f"max_new_tokens {new_tokens}（书中为 100）。outputs：每个 prompt 前都 torch.manual_seed(0)，"
+                         f"五次生成用的是同一串随机数；outputs_indep：第 k 个 prompt 前 torch.manual_seed({WEBBOT_INDEP_SEEDS[0]} + k)",
+                continuation_ids="续写部分（去掉 prompt）用 WebBot 分词器重新编码的 id",
+                first_step=f"生成第一个新 token 时的分布：softmax(logits / {WEBBOT_TEMPERATURE})，float64；"
+                           "tv 是五个分布两两之间的总变差距离 ½Σ|p − q|（按 itertools.combinations 的顺序）"),
+            "prompts": WEBBOT_PROMPTS, "outputs": outs, "continuation_ids": cont_ids,
+            "indep_seeds": WEBBOT_INDEP_SEEDS, "outputs_indep": outs_indep, "continuation_ids_indep": cont_ids_indep,
+            "first_step": {"temperature": WEBBOT_TEMPERATURE, "vocab_size": len(dists[0]),
+                           "max_prob": [round(d.max().item(), 6) for d in dists],
+                           "entropy": [round(-(d * d.clamp_min(1e-300).log()).sum().item(), 4) for d in dists],
+                           "tv": tv},
+            "init_loss": round(loss, 4), "ln_vocab": round(math.log(50000), 4)}
 
 
 # ---------------------------------------------------------------- write everything
@@ -540,14 +688,15 @@ def dump(obj, rel: str) -> None:
     path = WEB_DATA / rel
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=1 if "lengths" not in obj else None) + "\n",
-                    encoding="utf-8")
+                    encoding="utf-8", newline="\n")
     print(f"wrote web/data/{rel} ({path.stat().st_size:,} B)")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--write", action="store_true", help="regenerate web/data/{ch00,part1,part2,part3}/")
-    ap.add_argument("--only", help="comma-separated subset: bots,codebot,tinycodes,storybot,tinystories,owt,tokenizers,webbot")
+    ap.add_argument("--only", help="comma-separated subset: "
+                                   "bots,cpustep,codebot,tinycodes,storybot,tinystories,owt,tokenizers,webbot")
     args = ap.parse_args()
     if not args.write:
         ap.print_help()
@@ -556,6 +705,8 @@ def main() -> None:
     want = lambda k: only is None or k in only  # noqa: E731
     if want("bots"):
         dump(bots_table(), "ch00/bots.json")
+    if want("cpustep"):
+        dump(cpu_step_probe(), "ch00/cpu_step.json")
     if want("codebot"):
         dump(codebot_preview(), "part1/preview.json")
     if want("tinycodes"):

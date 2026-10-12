@@ -1,5 +1,8 @@
-/* 图：本章在 CPU 上原样运行 ch06/08_dpo.py（1000 步）的记录（6.8.2、6.8.3 节）。
-   数据来自 data/ch06/dpo_cpu.json（verify/_ch06_dpo_run.py 生成，test_ch06.py 复核前几步）。 */
+/* 图：本章在 CPU 上运行 ch06/08_dpo.py（1000 步）的记录（6.8.2 节）。与原书相比只改了 HF 权重的键名、
+   context_len 96、随机种子与线程数（见 verify/_ch06_dpo_run.py 的说明）。
+   数据来自 data/ch06/dpo_cpu.json（verify/_ch06_dpo_run.py 生成，test_ch06.py 复核前几步）。
+   记录里的 3 段样本只续写了 120 个 token，大多停在句子中间，看不出结局，所以这里不再显示；
+   DPO 前后写出的完整故事见 6.8.3 节的 ch06-dposamples（H100 运行的两个 checkpoint）。 */
 import { h } from './_lib.js';
 import { lineChart } from './_plot.js';
 import { wilson } from './ch06-wilson.js';
@@ -11,11 +14,6 @@ function injectStyle() {
   document.head.append(h('style', {}, `
 .w-ch06-dr .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .15rem 1.2rem; font-size: .86rem; color: var(--ink-2); margin: .5rem 0; }
 .w-ch06-dr .facts b { color: var(--ink); font-variant-numeric: tabular-nums; }
-.w-ch06-dr .seg { display: flex; flex-wrap: wrap; gap: .3rem; margin: .6rem 0 .3rem; align-items: center; }
-.w-ch06-dr .seg button[aria-pressed="true"] { background: var(--ai-2); border-color: var(--ai); color: var(--ink); }
-.w-ch06-dr .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .6rem; }
-.w-ch06-dr .story { font: 14.5px/1.65 var(--serif); background: var(--paper-2); border-radius: 4px; padding: .6rem .8rem; white-space: pre-wrap; }
-.w-ch06-dr .story h4 { margin: 0 0 .3rem; font-size: .85rem; color: var(--ink-2); font-weight: 600; }
 `));
 }
 
@@ -58,20 +56,4 @@ export async function mount(root, config = {}) {
     h('div', {}, 'rejected 的 log π − log π_ref 平均 ', h('b', {}, tp.rejected_shift_nats.toFixed(1)), ' nats'),
     h('div', {}, `留出 TinyStories 文本的 loss：`, h('b', {}, rec.post.lm_loss_pretrain.toFixed(4)), ' → ', h('b', {}, rec.post.lm_loss_dpo.toFixed(4))),
     h('div', {}, `CPU 训练 ${(pv.train_seconds / 60).toFixed(0)} 分钟（${pv.threads} 线程，torch ${pv.torch}）`)));
-
-  let si = 0;
-  const seg = h('div', { class: 'seg', role: 'group', 'aria-label': '选择随机种子' });
-  const pair = h('div', { class: 'pair', 'aria-live': 'polite' });
-  root.append(h('div', { class: 'w-label', style: 'margin-top:.6rem' },
-    '同一个种子下，预训练模型与 DPO 模型从 “Once upon a time” 续写 120 个 token：'), seg, pair);
-  function render() {
-    seg.replaceChildren(h('span', { class: 'w-label' }, '种子'), ...rec.samples.map((s, i) => h('button', {
-      type: 'button', 'aria-pressed': String(i === si), onclick: () => { si = i; render(); },
-    }, String(s.seed))));
-    const s = rec.samples[si];
-    pair.replaceChildren(
-      h('div', { class: 'story' }, h('h4', {}, '预训练模型'), s.pretrain),
-      h('div', { class: 'story' }, h('h4', {}, 'DPO 之后'), s.dpo));
-  }
-  render();
 }

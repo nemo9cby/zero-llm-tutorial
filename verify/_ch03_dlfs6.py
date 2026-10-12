@@ -54,6 +54,31 @@ def load_model(name: str):
     return GPT.load_from(str(path), device="cpu")
 
 
+# 本书自己的运行：gpu/run_local.py 把 checkpoint 写在 runs/<run>/work/ 下（不入库）。键 -> (运行, 路径)
+RUN_CHECKPOINTS = {
+    "run_sft": ("codebot-3060ti", "codebot/model_sft.pt"),
+    "run_grpo": ("codebot-3060ti", "codebot/model_grpo.pt"),
+    "run_evalfix": ("codebot-grpo-evalfix-3060ti", "codebot/model_grpo.pt"),
+}
+
+
+def run_checkpoint(key: str) -> Path:
+    run, rel = RUN_CHECKPOINTS[key]
+    return ROOT / "runs" / run / "work" / rel
+
+
+def load_run_model(key: str):
+    """A checkpoint of this book's own runs (RUN_CHECKPOINTS), on CPU, in eval mode."""
+    from codebot.model import GPT
+    path = run_checkpoint(key)
+    if not path.is_file():
+        import pytest
+        pytest.skip(f"{path} missing; run gpu/run_local.py --job codebot / codebot-grpo-evalfix first")
+    m = GPT.load_from(str(path), device="cpu")
+    m.eval()
+    return m
+
+
 def arithmetic_prompts() -> list[tuple[str, int]]:
     """The 81 GRPO prompts, in GRPODataset order (i outer, j inner)."""
     return [(ALPACA.format(f"{i}+{j}="), i + j) for i in range(1, 10) for j in range(1, 10)]

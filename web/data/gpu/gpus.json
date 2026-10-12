@@ -36,7 +36,7 @@
             "usd_per_core_second": 0.0000131, "usd_per_gib_second": 0.00000222,
             "note": "按秒计费；GPU 之外另收 CPU（每物理核·秒 0.0000131 美元）和内存（每 GiB·秒 0.00000222 美元）；Starter 计划每月 30 美元免费额度"},
   "runpod": {"label": "RunPod", "src": "https://www.runpod.io/pricing",
-             "note": "取页面 JSON-LD 中的 Community / Secure 两档；页面卡片上偶尔显示第三个数字，下单前在控制台核对"},
+             "note": "取页面 JSON-LD 中的 Community / Secure 两档；页面卡片上显示的是另一组更高的价格（2026-10-12 查看：H100 SXM 3.99、RTX 4090 0.89、B200 7.99 美元/小时），下单前在控制台核对"},
   "lambda": {"label": "Lambda", "src": "https://lambda.ai/pricing",
              "note": "按分钟计费；1 卡与 8 卡实例的单卡价格不同"}
  },

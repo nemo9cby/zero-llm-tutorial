@@ -16,7 +16,8 @@ const index = json('index.json').checkpoints;
 const tok = Tokenizer.fromJSON(JSON.parse(readFileSync(new URL('../../web/data/tokenizers/codebot.json', import.meta.url), 'utf8')));
 
 // Tolerances, measured on the three exports (see the report printed by the tests):
-const TOL_Q8 = 1e-4;     // max |Δlogit| against PyTorch with the same weights: measured ≤ 3e-5 (float32 summation order)
+const TOL_Q8 = 1e-4;     // max |Δlogit| against PyTorch with the same weights: measured ≤ 1.5e-5 (float rounding at
+                         // different places: summation order, float64 LayerNorm/softmax in JS, the erf approximation)
 const TOL_ATTN = 1e-5;   // max |Δ| of the softmax weights: measured ≈ 2e-6 (ref.json keeps 6 decimals)
 const TOL_LENS = 1e-4;   // max |Δp| of the logit lens at PyTorch's top-5 ids: measured ≈ 1e-6
 const TOL_F32 = 0.5;     // the int8 rounding itself moves logits by up to ≈ 0.3 on these prompts
@@ -94,6 +95,8 @@ for (const { name } of index) {
     for (const r of compareToReference(bot, short)) {
       assert.ok(r.maxDiffQ8 < TOL_Q8, `${name}/${r.name}: max|Δlogit| ${r.maxDiffQ8}`);
       assert.equal(r.greedyQ8.firstMismatch, -1, `${name}/${r.name}: greedy`);
+      console.log(`  ${`${name}/${r.name}`.padEnd(14)} plain JS: max|Δlogit| ${r.maxDiffQ8.toExponential(1)} (int8); `
+        + `greedy ${r.greedyQ8.same}/${r.greedyQ8.total} (int8)`);
     }
   });
 }

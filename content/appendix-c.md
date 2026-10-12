@@ -8,7 +8,7 @@ lede: 3.7 节说：把奖励 r 换成 r − b，策略梯度的期望不变、�
 pyodide_packages: [numpy]
 ---
 
-[3.7 节](ch03.html#s3-7)给策略梯度加上了**基线**（baseline）：把奖励 $r$ 换成 $r - b$，梯度的期望不变，方差却可以变小。GRPO 更进一步，用同一个问题的一组回答的平均奖励来当基线。这里有三句话需要证明或澄清：期望为什么不变？方差在什么条件下变小？组均值里包含了回答自己的奖励，它还满足证明的前提吗？
+[3.7 节](ch03.html#s3-7)给策略梯度加上了**基线**（baseline）：把奖励 $r$ 换成 $r - b$，梯度的期望不变，方差却可以变小。GRPO 更进一步，用同一个问题的一组回答的平均奖励来当基线。这里有三个问题需要回答：期望为什么不变？方差在什么条件下才会变小？组均值里包含了回答自己的奖励，它还满足证明的前提吗？
 
 本附录把这三件事一一讲清楚。我们先回顾策略梯度的推导，在一个能手算的 4 臂老虎机上逐行验证；然后证明基线不改变期望，并看清楚它为什么只能依赖状态、不能依赖动作；接着计算方差，求出最好的基线；最后分析 GRPO 的组均值：它让梯度的期望整体缩小为原来的 $(G-1)/G$，方向完全不变。如果你读过《深度学习入门4：强化学习》的附录 D，前两步的写法会很眼熟。
 
@@ -18,10 +18,14 @@ pyodide_packages: [numpy]
 
 $$
 \begin{aligned}
-\nabla_\theta J(\theta) &= \nabla_\theta \sum_y \pi_\theta(y)\, r(y) && \text{（期望写成求和）}\\
-&= \sum_y \nabla_\theta \pi_\theta(y)\; r(y) && \text{（}r\text{ 与 }\theta\text{ 无关；有限和与求导交换）}\\
-&= \sum_y \pi_\theta(y)\,\nabla_\theta \log \pi_\theta(y)\; r(y) && \text{（对数导数技巧）}\\
-&= \mathbb E_{y\sim\pi_\theta}\big[\,r(y)\,\nabla_\theta \log\pi_\theta(y)\,\big] && \text{（写回期望）}
+\nabla_\theta J(\theta) &= \nabla_\theta \sum_y \pi_\theta(y)\, r(y)\\[-3pt]
+&\quad{\footnotesize\text{（期望写成求和）}}\\[2pt]
+&= \sum_y \nabla_\theta \pi_\theta(y)\; r(y)\\[-3pt]
+&\quad{\footnotesize\text{（}r\text{ 与 }\theta\text{ 无关；有限和与求导交换）}}\\[2pt]
+&= \sum_y \pi_\theta(y)\,\nabla_\theta \log \pi_\theta(y)\; r(y)\\[-3pt]
+&\quad{\footnotesize\text{（对数导数技巧）}}\\[2pt]
+&= \mathbb E_{y\sim\pi_\theta}\big[\,r(y)\,\nabla_\theta \log\pi_\theta(y)\,\big]\\[-3pt]
+&\quad{\footnotesize\text{（写回期望）}}
 \end{aligned}
 $$
 
@@ -36,8 +40,11 @@ $$
 其中 $\mathbf e_a$ 是第 $a$ 个分量为 1 的 one-hot 向量。这个公式来自 $\log\pi_a = \theta_a - \log\sum_j e^{\theta_j}$，对 $\theta_j$ 求导得 $\delta_{aj} - \pi_j$。取 $\boldsymbol\theta = \mathbf 0$，于是 $\boldsymbol\pi = (\frac14, \frac14, \frac14, \frac14)$；奖励 $\mathbf r = (0, 0, 1, 0)$，也就是只有第 2 号臂（从 0 数起）是“答对”。手算：
 
 $$
-J = \tfrac14,\qquad
-\nabla J = \sum_a \pi_a r_a (\mathbf e_a - \boldsymbol\pi) = \tfrac14(\mathbf e_2 - \boldsymbol\pi) = \big(-\tfrac1{16},\, -\tfrac1{16},\, \tfrac3{16},\, -\tfrac1{16}\big)
+\begin{aligned}
+J &= \textstyle\sum_a \pi_a r_a = \tfrac14\\
+\nabla J &= \textstyle\sum_a \pi_a r_a (\mathbf e_a - \boldsymbol\pi) = \tfrac14(\mathbf e_2 - \boldsymbol\pi)\\
+&= \big(-\tfrac1{16},\, -\tfrac1{16},\, \tfrac3{16},\, -\tfrac1{16}\big)
+\end{aligned}
 $$
 
 梯度的意思很直观：提高答对那一臂的 logit，压低其余三臂。下面逐行数值验证推导的每一步：
@@ -79,10 +86,14 @@ assert np.allclose(grad_score, [-1/16, -1/16, 3/16, -1/16])     # 手算的结�
 
 $$
 \begin{aligned}
-\mathbb E_{y\sim\pi_\theta}\big[\mathbf s(y)\big] &= \sum_y \pi_\theta(y)\,\nabla_\theta\log\pi_\theta(y) && \text{（期望的定义）}\\
-&= \sum_y \nabla_\theta\pi_\theta(y) && \text{（对数导数技巧，反过来用）}\\
-&= \nabla_\theta \sum_y \pi_\theta(y) && \text{（有限和与求导交换）}\\
-&= \nabla_\theta\, 1 = \mathbf 0 && \text{（概率之和恒为 1）}
+\mathbb E_{y\sim\pi_\theta}\big[\mathbf s(y)\big] &= \sum_y \pi_\theta(y)\,\nabla_\theta\log\pi_\theta(y)\\[-3pt]
+&\quad{\footnotesize\text{（期望的定义）}}\\[2pt]
+&= \sum_y \nabla_\theta\pi_\theta(y)\\[-3pt]
+&\quad{\footnotesize\text{（对数导数技巧，反过来用）}}\\[2pt]
+&= \nabla_\theta \sum_y \pi_\theta(y)\\[-3pt]
+&\quad{\footnotesize\text{（有限和与求导交换）}}\\[2pt]
+&= \nabla_\theta\, 1 = \mathbf 0\\[-3pt]
+&\quad{\footnotesize\text{（概率之和恒为 1）}}
 \end{aligned}
 $$
 
@@ -92,8 +103,10 @@ $$
 
 $$
 \begin{aligned}
-\mathbb E\big[(r - b)\,\mathbf s\big] &= \mathbb E[r\,\mathbf s] - b\,\mathbb E[\mathbf s] && \text{（期望的线性）}\\
-&= \nabla_\theta J(\theta) - b\cdot\mathbf 0 = \nabla_\theta J(\theta) && \text{（C.1 节的结论；引理）}
+\mathbb E\big[(r - b)\,\mathbf s\big] &= \mathbb E[r\,\mathbf s] - b\,\mathbb E[\mathbf s]\\[-3pt]
+&\quad{\footnotesize\text{（期望的线性）}}\\[2pt]
+&= \nabla_\theta J(\theta) - b\cdot\mathbf 0 = \nabla_\theta J(\theta)\\[-3pt]
+&\quad{\footnotesize\text{（C.1 节的结论；引理）}}
 \end{aligned}
 $$
 
@@ -117,9 +130,12 @@ for b in (0.0, 0.25, 1.0, -3.0, 10.0):
 
 $$
 \begin{aligned}
-V(b) &= \mathbb E\big[\|\mathbf g_b\|^2\big] - \big\|\mathbb E[\mathbf g_b]\big\|^2 && \text{（方差的定义）}\\
-&= \mathbb E[r^2\|\mathbf s\|^2] - 2b\,\mathbb E[r\|\mathbf s\|^2] + b^2\,\mathbb E[\|\mathbf s\|^2] - \|\nabla J\|^2 && \text{（展开）}\\
-&= V(b^*) + \mathbb E[\|\mathbf s\|^2]\,(b - b^*)^2 && \text{（对 }b\text{ 配方）}
+V(b) &= \mathbb E\big[\|\mathbf g_b\|^2\big] - \big\|\mathbb E[\mathbf g_b]\big\|^2\\[-3pt]
+&\quad{\footnotesize\text{（方差的定义）}}\\[2pt]
+&= \mathbb E[r^2\|\mathbf s\|^2] - 2b\,\mathbb E[r\|\mathbf s\|^2] + b^2\,\mathbb E[\|\mathbf s\|^2] - \|\nabla J\|^2\\[-3pt]
+&\quad{\footnotesize\text{（展开）}}\\[2pt]
+&= V(b^*) + \mathbb E[\|\mathbf s\|^2]\,(b - b^*)^2\\[-3pt]
+&\quad{\footnotesize\text{（对 }b\text{ 配方）}}
 \end{aligned}
 $$
 
@@ -169,6 +185,8 @@ for b in (0.0, pi2 @ r2, b2, 2.0):
     v = total_var(pi2, S2, r2, b)
     assert np.isclose(v, total_var(pi2, S2, r2, b2) + s2_mean * (b - b2) ** 2)
     print(f"  b = {b:.4f}：V(b) = {v:.4f}")
+v_none, v_er, v_best = (total_var(pi2, S2, r2, b) for b in (0.0, pi2 @ r2, b2))
+assert v_er < 1.2 * v_best < v_none     # 用 E[r] 当基线，方差已接近最小值；不加基线时大得多
 
 # 蒙特卡洛：用 8 个样本估计一次梯度，重复 4000 次
 rng = np.random.default_rng(0)
@@ -180,15 +198,27 @@ for b in (0.0, 0.25):
     theory = total_var(pi, S, r, b) / 8
     print(f"b = {b:.2f}：4000 次估计的平均 {mean}，"
           f"总方差 {spread:.5f}（理论 V(b)/8 = {theory:.5f}）")
-    assert np.allclose(est.mean(0), grad_score, atol=0.01)     # 无偏
-    assert abs(spread / theory - 1) < 0.1
+    assert np.allclose(est.mean(0), grad_score, atol=0.01)     # 无偏：每一维的标准误不超过 0.002
+    assert abs(spread / theory - 1) < 0.1                       # 方差的相对标准误约 2%
+
+# 每一维也有自己的方差抛物线，最低点是这一维的最优基线 b*_k = E[r s_k²] / E[s_k²]
+e_k = pi @ S ** 2                                     # E[s_k²]
+b_k = (pi * r) @ S ** 2 / e_k
+print(f"各维的最优基线 b*_k = {np.array2string(b_k, precision=4)}；"
+      f"按 E[s_k²] 加权平均 = {b_k @ e_k / e_k.sum():.4f}")
+assert np.allclose(b_k, [1 / 12, 1 / 12, 3 / 4, 1 / 12])
+assert np.isclose(b_k @ e_k / e_k.sum(), b_star)        # b* 是各维之间的折中
+assert np.allclose((r - 0.75) * S[:, 2], 3 / 16)        # b = 0.75：第 2 维的估计恒为 3/16
+assert np.isclose(total_var(pi, S, r, 0.75), 3 * total_var(pi, S, r, b_star))   # 四维之和却是最小值的 3 倍
 ```
 
-两种基线的估计平均值都落在 $\nabla J$ 附近（无偏），但 $b = \frac14$ 时，估计值的总方差小了三分之一。不均匀的那个策略说明了另一件事：$b^*$ 和 $\mathbb E[r]$ 并不相等，但用 $\mathbb E[r]$ 当基线，方差已经离最小值不远了。
+两种基线的估计平均值都落在 $\nabla J$ 附近（无偏），但 $b = \frac14$ 时，估计值的总方差小了三分之一。不均匀的那个策略说明了另一件事：$b^*$ 和 $\mathbb E[r]$ 并不相等（0.4435 对 0.2689），但用 $\mathbb E[r]$ 当基线，方差已经离最小值不远了（0.1283 对 0.1090，而不加基线是 0.2333）。
 
-下面的交互图可以拖动基线 $b$。上图是 400 次“用 $N$ 个样本估计梯度”的结果分布，竖线是真正的梯度；下图是方差 $V(b)$ 的抛物线。
+还有一个细节，下面的交互图会用到。梯度有 4 维，$V(b)$ 是四个分量的方差之和。每一维的方差 $V_k(b)$ 单独看也是一条抛物线，最低点是这一维自己的最优基线 $b^*_k = \mathbb E[r\,s_k^2]/\mathbb E[s_k^2]$，其中 $s_k$ 是 $\mathbf s$ 的第 $k$ 个分量。$b^*$ 则是各个 $b^*_k$ 按 $\mathbb E[s_k^2]$ 加权的平均，是四维之间的折中。在均匀的 4 臂老虎机上，第 2 号臂那一维的 $b^*_2 = \frac34$，其余三维都是 $\frac1{12}$，加权平均正好是 $b^* = \frac14$。$b = \frac34$ 时，每一臂给出的第 2 维估计都恰好是 $\frac3{16}$，这一维的方差是 0；可这时其余三维的方差很大，四维之和是最小值的 3 倍（验证 C-c 的最后几行）。
 
-```widget appendix-baseline caption="拖动 b：估计值的分布始终以真梯度为中心（无偏），宽窄却在变；最窄的位置就是 b*。"
+下面的交互图可以拖动基线 $b$。上图是 400 次“用 $N$ 个样本估计梯度”的结果分布，竖线是真正的梯度。上图只能画一维，默认是奖励最高那一臂的那一维，可以切换。下图是单个样本的方差：实线是四维之和 $V(b)$，虚线是上图那一维的 $V_k(b)$。
+
+```widget appendix-baseline caption="拖动 b：估计值的分布始终以真梯度为中心（无偏），宽窄却在变。上图这一维在它自己的最优基线（下图虚线的最低点）处最窄；四维的方差之和（下图实线）在 b* 处最小。"
 {"preset": "uniform", "n": 8}
 ```
 
@@ -198,8 +228,10 @@ for b in (0.0, 0.25):
 
 $$
 \begin{aligned}
-\mathbb E\big[b_t\,\mathbf s_t\big] &= \mathbb E_{y_{<t}}\Big[\,b_t\;\mathbb E\big[\mathbf s_t \,\big|\, y_{<t}\big]\Big] && \text{（先固定前缀）}\\
-&= \mathbb E_{y_{<t}}\big[\,b_t\cdot\mathbf 0\,\big] = \mathbf 0 && \text{（C.2 节的引理）}
+\mathbb E\big[b_t\,\mathbf s_t\big] &= \mathbb E_{y_{<t}}\Big[\,b_t\;\mathbb E\big[\mathbf s_t \,\big|\, y_{<t}\big]\Big]\\[-3pt]
+&\quad{\footnotesize\text{（先固定前缀）}}\\[2pt]
+&= \mathbb E_{y_{<t}}\big[\,b_t\cdot\mathbf 0\,\big] = \mathbf 0\\[-3pt]
+&\quad{\footnotesize\text{（C.2 节的引理）}}
 \end{aligned}
 $$
 
@@ -249,7 +281,7 @@ assert np.abs(prefix - true_grad).max() < 1e-8
 assert np.abs(action - true_grad).max() > 0.1
 ```
 
-DLFS6 的 GRPO 走的是最简单的一种：同一个回答里的每个 token 都用同一个优势 $A = r - b$，$b$ 是同一个问题下一组回答的平均奖励。在奖励只在末尾给出、不打折扣的情况下，这正是带基线的 REINFORCE。不过，这个平均里也包含了回答自己的奖励，下一节就来处理这个问题。
+DLFS6 的 GRPO 走的是最简单的一种：同一个回答里的每个 token 都用同一个优势 $A = r - b$，$b$ 是同一个问题下一组回答的平均奖励。在奖励只在末尾给出、不打折扣的情况下，这正是带基线的 REINFORCE（原书的实现在几处细节上与它不同，C.5 节末尾再说）。不过，这个平均里也包含了回答自己的奖励，下一节就来处理这个问题。
 
 ## C.5 GRPO 的组均值：梯度缩小为 (G−1)/G
 
@@ -262,11 +294,16 @@ GRPO 对同一个问题采样 $G$ 个回答 $y_1, \dots, y_G$，得到奖励 $r_
 
 $$
 \begin{aligned}
-A_i &= r_i - \frac1G\sum_{j=1}^G r_j && \text{（组均值当基线）}\\
-&= \Big(1 - \frac1G\Big)\,r_i - \frac1G\sum_{j\ne i} r_j && \text{（把 }r_i\text{ 单独拿出来）}\\
-\mathbb E[A_i\,\mathbf s_i] &= \Big(1 - \frac1G\Big)\,\mathbb E[r_i\,\mathbf s_i] - \frac1G\sum_{j\ne i}\mathbb E[r_j\,\mathbf s_i] && \text{（期望的线性）}\\
-&= \frac{G-1}{G}\,\nabla J - \frac1G\sum_{j\ne i}\mathbb E[r_j]\;\mathbb E[\mathbf s_i] && \text{（C.1 节；独立）}\\
-&= \frac{G-1}{G}\,\nabla J && \text{（C.2 节的引理）}
+A_i &= r_i - \frac1G\sum_{j=1}^G r_j\\[-3pt]
+&\quad{\footnotesize\text{（组均值当基线）}}\\[2pt]
+&= \Big(1 - \frac1G\Big)\,r_i - \frac1G\sum_{j\ne i} r_j\\[-3pt]
+&\quad{\footnotesize\text{（把 }r_i\text{ 单独拿出来）}}\\[2pt]
+\mathbb E[A_i\,\mathbf s_i] &= \Big(1 - \frac1G\Big)\,\mathbb E[r_i\,\mathbf s_i] - \frac1G\sum_{j\ne i}\mathbb E[r_j\,\mathbf s_i]\\[-3pt]
+&\quad{\footnotesize\text{（期望的线性）}}\\[2pt]
+&= \frac{G-1}{G}\,\nabla J - \frac1G\sum_{j\ne i}\mathbb E[r_j]\;\mathbb E[\mathbf s_i]\\[-3pt]
+&\quad{\footnotesize\text{（C.1 节；独立）}}\\[2pt]
+&= \frac{G-1}{G}\,\nabla J\\[-3pt]
+&\quad{\footnotesize\text{（C.2 节的引理）}}
 \end{aligned}
 $$
 
@@ -322,7 +359,7 @@ assert np.allclose(rew - rew.mean(), 4 / 5 * a_rloo)
 :::
 
 ::: confusion G = 2 的 GRPO 有意义吗？
-两个回答的平均“好像太粗糙了”，这个直觉很自然。不过代入公式：$A_1 = r_1 - \frac{r_1 + r_2}{2} = \frac{r_1 - r_2}{2}$，正好是 RLOO 优势 $r_1 - r_2$ 的一半。所以 $G = 2$ 的期望梯度是 $\frac12\nabla J$，方向完全正确，只是更吵。它真正的代价是信号太少：奖励只有对错两种、答对概率为 $p$ 时，一组产生信号的概率只有 $2p(1-p)$，$p = 0.5$ 时是 50%，而 $G = 8$ 时是 $1 - p^8 - (1-p)^8 \approx 99\%$。可以带走的结论：**$G = 2$ 不是错的，只是浪费**，下面的验证给出具体数字。
+两个回答的平均“好像太粗糙了”，这个直觉很自然。不过代入公式：$A_1 = r_1 - \frac{r_1 + r_2}{2} = \frac{r_1 - r_2}{2}$，正好是 RLOO 优势 $r_1 - r_2$ 的一半。所以 $G = 2$ 的期望梯度是 $\frac12\nabla J$：方向完全正确，只是幅度减半，而 Adam 对梯度的整体缩放几乎不敏感（[附录 D](appendix-d.html)）。它真正的代价是信号太少：奖励只有对错两种、答对概率为 $p$ 时，一组产生信号的概率只有 $2p(1-p)$，$p = 0.5$ 时是 50%，而 $G = 8$ 时是 $1 - p^8 - (1-p)^8 \approx 99\%$。下面的验证给出具体数字。可以带走的结论：**$G = 2$ 不是错的，只是浪费：$p = 0.5$ 时，一半的组白白生成了回答，却没有梯度。**
 :::
 
 ```verify id=C-f title="G 越大，越多的组有信号；G = 2 是一半的 RLOO"
@@ -338,28 +375,68 @@ A = np.array([r1, r2]) - np.mean([r1, r2])
 assert np.allclose(A, 0.5 * np.array([r1 - r2, r2 - r1]))   # 一半的 RLOO 优势
 ```
 
-最后，把这一节的结论接回 DLFS6 的代码。3.9 节的 `grpo_loss` 带有 3.8 节讲的比率和裁剪。每次采样之后的第一次更新，新旧策略完全相同，比率恒为 1；这时 `grpo_loss` 的梯度应该恰好是本附录的估计量 $-\frac1N\sum_i A_i\,\mathbf s(y_i)$，其中 $N$ 是样本数。下面的本地测试从 `ch03/09_grpo.py` 里取出 `grpo_loss`，在一个关掉 dropout 的小 CodeBot 上核对这一点：
+最后，把这一节的结论接回 DLFS6 的代码。3.9 节的 `grpo_loss` 带有 3.8 节讲的比率和裁剪。理想情况下，每次采样之后的第一次更新，新旧策略完全相同，比率恒为 1，这时 `grpo_loss` 的梯度恰好是本附录的估计量 $-\frac1N\sum_i A_i\,\mathbf s(y_i)$，其中 $N$ 是样本数。可是 DLFS6 原样运行时并不满足这个前提：更新时 `model` 处于 train 模式，`old_model` 却处于 eval 模式，dropout 让第一次更新的比率就偏离了 1（3.9 节测得过半 token 的比率落在 $[0.8, 1.2]$ 之外，[验证 3.9-g](ch03.html#v-3.9-g)）。所以下面的本地测试从 `ch03/09_grpo.py` 里取出 `grpo_loss`，在一个小 CodeBot 上分两步核对：先关掉 dropout，确认梯度恰好是本附录的估计量；再打开 dropout，确认比率和梯度都偏了。
 
-```localcheck verify/test_appendix.py::test_c_grpo_grad title="比率为 1 时，grpo_loss 的梯度就是带组均值基线的策略梯度"
+```localcheck verify/test_appendix.py::test_c_grpo_grad needs="PyTorch" title="比率为 1 时，grpo_loss 的梯度就是带组均值基线的策略梯度；打开 dropout 后比率与梯度都偏了"
 ```
 
+这个偏差的代价不小。本书在 RTX 3060 Ti 上把 `09_grpo.py` 各跑了一次：原样运行时，第 51 步的 greedy 准确率是 60.5%；从同一次运行的 SFT checkpoint 出发，只在更新前加一行 `model.eval()`，第 51 步就到了 98.8%。
+
+```verify id=C-g title="运行记录：更新前加一行 model.eval()，第 51 步的准确率从 60.5% 变成 98.8%" files=data/runs/codebot-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/report.json
+import json
+
+def grpo_acc(run_id):                   # 第 it 步的 greedy 准确率（%）
+    with open(f"data/runs/{run_id}/09_grpo.metrics.jsonl", encoding="utf-8") as f:
+        return {row["it"]: row["acc"] for row in map(json.loads, f)}
+
+with open("data/runs/codebot-grpo-evalfix-3060ti/report.json", encoding="utf-8") as f:
+    fix = json.load(f)
+patches = fix["steps"][0]["patches"]
+as_is, fixed = grpo_acc("codebot-3060ti"), grpo_acc("codebot-grpo-evalfix-3060ti")
+print(f"唯一的改动：{patches[0]['new'].strip().splitlines()[0]}")
+print(f"出发点：{fix['seeded'][0]['path']}，来自 {fix['seeded'][0]['from']}")
+for it in (51, 500):
+    print(f"第 {it:3d} 步：原样 {as_is[it]:5.1f}%，加 model.eval() 之后 {fixed[it]:5.1f}%")
+assert len(patches) == 1 and patches[0]["new"].lstrip().startswith("model.eval()")
+assert fix["seeded"][0]["from"] == "tutorial run codebot-3060ti"
+assert (as_is[51], as_is[500]) == (60.5, 86.4) and (fixed[51], fixed[500]) == (98.8, 100.0)
+```
+
+严格地说，原书的实现与本附录的估计量还有两处差别（[3.9 节](ch03.html#s3-9)）。一是回答先被解码成字符串，到了 `get_batch` 里再重新分词，训练用的 token 不一定是采样出来的那一串。二是 EOS 不在掩码里（[验证 3.9-b](ch03.html#v-3.9-b)），“什么时候停下”这一步不参与梯度。少了这一步，C.2 节的引理就不成立了：引理的求和要遍历所有可能的下一个 token，正是 EOS 那一项把总和补成了 0。去掉它，剩下的期望是 $-\pi(\text{EOS})\,\mathbf s(\text{EOS})$，基线乘上它也就不再是 0。下面在一个只有 a、b、EOS 三个候选的位置上验证：
+
+```verify id=C-h title="EOS 不在掩码里：剩下的 s 的期望不是 0，基线不再无偏"
+pi3 = np.array([0.5, 0.3, 0.2])          # 下一个 token 是 a、b 或 EOS
+S3 = np.eye(3) - pi3                     # s(v) = e_v − π
+full = pi3 @ S3                          # 三个候选都进梯度：C.2 节的引理
+masked = pi3[:2] @ S3[:2]                # 采到 EOS 时，这一步不进梯度
+def tidy(v):                             # 去掉 1e-17 量级的舍入误差再打印
+    return np.array2string(np.round(v, 12) + 0.0, precision=4)
+
+print(f"E[s]，全部候选：{tidy(full)}；EOS 不在掩码里：{tidy(masked)}")
+assert np.allclose(full, 0)
+assert np.allclose(masked, -pi3[2] * S3[2]) and np.abs(masked).max() > 0.1
+```
+
+所以本附录的无偏性和 $(G-1)/G$，描述的是理想化的估计量；上面的本地测试核对的，是给定 token ids 时 `grpo_loss` 的梯度。
+
 ::: cs336 A5：基线、方差与组归一化
-CS336 作业 5（2026 版）的理论部分从 REINFORCE 讲起，有一道关于基线与方差的练习，还要求分析“除以组内标准差”怎样改变了优化的目标。它的变体表里，DLFS6 的做法（只减组均值、不除以标准差、损失按常数归一化）对应 Dr_GRPO 那一行（[A5 仓库](https://github.com/stanford-cs336/assignment5-alignment)）。另外要注意，DLFS6 在 GRPO 更新时没有把模型切换到 eval 模式，dropout 会让第一次更新的比率并不严格等于 1，详见 3.9 节。
+CS336 作业 5（2026 版）的理论部分从 REINFORCE 讲起，有一道关于基线与方差的练习，还要求分析“除以组内标准差”怎样改变了优化的目标。它的变体表里，DLFS6 的做法（只减组均值、不除以标准差、损失按常数归一化）对应 Dr_GRPO 那一行（[A5 仓库](https://github.com/stanford-cs336/assignment5-alignment)，2026-10 查证）。
 :::
 
 ## 小结
 
-本附录证明了基线的两条性质。第一，**无偏**：由于概率之和恒为 1，$\mathbb E[\nabla\log\pi] = \mathbf 0$，所以减去任何不依赖当前回答的 $b$，期望梯度都不变；逐个 token 设基线时，$b_t$ 可以依赖前缀，不能依赖这个 token 本身。第二，**方差**是关于 $b$ 的抛物线，最低点 $b^*$ 是按 $\|\nabla\log\pi\|^2$ 加权的平均奖励，通常与 $\mathbb E[r]$ 很接近；基线选得离谱，方差反而会变大。
+本附录证明了基线的两条性质。第一，**无偏**：由于概率之和恒为 1，$\mathbb E[\nabla\log\pi] = \mathbf 0$，所以减去任何不依赖当前回答的 $b$，期望梯度都不变；逐个 token 设基线时，$b_t$ 可以依赖前缀，不能依赖这个 token 本身。第二，**方差**是关于 $b$ 的抛物线，最低点 $b^*$ 是按 $\|\nabla\log\pi\|^2$ 加权的平均奖励，一般不等于 $\mathbb E[r]$；不过在例子里，用 $\mathbb E[r]$ 当基线，方差已经接近最小值（0.128 对 0.109，不加基线是 0.233）。基线选得离谱，方差反而会变大。
 
-GRPO 的组均值包含了回答自己的奖励，严格说不满足前提，但代价只是让期望梯度整体乘以 $(G-1)/G$，方向不变；它与 RLOO 只差这个常数。$G = 1$ 时梯度恒为 0，$G = 2$ 时是一半的 RLOO，有效但浪费。
+GRPO 的组均值包含了回答自己的奖励，严格说不满足前提，但代价只是让期望梯度整体乘以 $(G-1)/G$，方向不变；它与 RLOO 只差这个常数。$G = 1$ 时梯度恒为 0，$G = 2$ 时是一半的 RLOO，有效但浪费。回到 DLFS6 的代码，这些结论描述的是理想化的估计量：原书更新时开着 dropout，比率从第一次更新起就不是 1；EOS 不在掩码里，“何时停下”也不参与梯度。
 
 ### 本附录所学的内容
 
 - 策略梯度 $\nabla J = \mathbb E[r\,\nabla\log\pi]$ 来自对数导数技巧；softmax 策略的 $\nabla\log\pi_a = \mathbf e_a - \boldsymbol\pi$（[验证 C-a](#v-C-a)）。
 - $\mathbb E[\nabla\log\pi] = \mathbf 0$，所以不依赖回答的基线不改变期望梯度（[验证 C-b](#v-C-b)）。
-- 估计量的方差是 $b$ 的抛物线，最低点 $b^* = \mathbb E[r\|\mathbf s\|^2]/\mathbb E[\|\mathbf s\|^2]$；均匀的 4 臂老虎机上方差从 $9/64$ 降到 $6/64$，$b = 1$ 时反而升到 $33/64$（[验证 C-c](#v-C-c)）。
+- 估计量的方差是 $b$ 的抛物线，最低点 $b^* = \mathbb E[r\|\mathbf s\|^2]/\mathbb E[\|\mathbf s\|^2]$，是各维最优基线的加权平均；均匀的 4 臂老虎机上方差从 $9/64$ 降到 $6/64$，$b = 1$ 时反而升到 $33/64$（[验证 C-c](#v-C-c)）。
 - 逐 token 的基线可以依赖前缀，依赖动作本身就会带偏（[验证 C-d](#v-C-d)）。
 - GRPO 组均值的期望梯度是 $\frac{G-1}{G}\nabla J$，RLOO 恰好是 $\nabla J$，两者的优势只差常数倍（[验证 C-e](#v-C-e)）。
 - $G = 1$ 没有梯度；$G = 2$ 有信号的概率是 $2p(1-p)$（[验证 C-f](#v-C-f)）。
+- 原书的 `grpo_loss` 要在比率为 1、EOS 也进梯度时才等于这个估计量；更新时开着 dropout，比率就不是 1，加一行 `model.eval()`，第 51 步的准确率从 60.5% 变成 98.8%（[验证 C-g](#v-C-g)、[验证 C-h](#v-C-h)）。
 
 基线解决了“往哪个方向走”的噪声问题，走多远则交给优化器。[附录 D](appendix-d.html) 看 Adam 的偏差校正：为什么要除以 $1-\beta^t$，不除又会怎样。

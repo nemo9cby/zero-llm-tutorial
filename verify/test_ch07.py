@@ -3,6 +3,7 @@
 全部断言都针对 third_party/dlfs6 里的真实代码与官方产物（webbot/merge_rules.pkl、webbot/owt_valid.bin）。
 OWT 的文本由官方 owt_valid.bin 解码得到（解码是无损的，见 test_official_valid_bin_facts），不必下载 12 GB 语料。
 ch07 的两个脚本会在 12 GB 语料上训练、编码，这里不运行脚本，只 import storybot.tokenizer 里的函数。
+作者的两个文件不在子模块里（webbot/download.sh 里是注释掉的）；缺少它们时，用到它们的测试会跳过并给出下载命令。
 
     uv run pytest verify/test_ch07.py
 """
@@ -11,6 +12,7 @@ from __future__ import annotations
 import ast
 import builtins
 import cProfile
+import hashlib
 import inspect
 import json
 import lzma
@@ -20,13 +22,16 @@ from collections import Counter
 
 import numpy as np
 import pytest
+import regex as re
 
 from conftest import DLFS6, ROOT
-from _ch07_common import (EOT, OWT_VALID_TXT_BYTES, SerialPool, book_modules, official_rules, official_tokenizer,
-                          owt_text, valid_bin, webbot_tiktoken)
+from _ch07_common import (EOT, OWT_VALID_TXT_BYTES, OWT_VALID_TXT_SHA256, SerialPool, book_modules, ch04_ext,
+                          download_hint, heap_merge_sizes, iter_valid_bytes, iter_valid_docs, missing_downloads,
+                          official_rules, official_tokenizer, owt_text, valid_bin, webbot_tiktoken)
 import _ch07_export
 
 BENCH = ROOT / "web" / "data" / "ch07" / "bench.json"
+STORYBOT_RUN = ROOT / "runs" / "storybot-h100" / "work" / "storybot" / "model_pretrain.pt"
 
 
 def first_difference(a: list, b: list) -> int:
@@ -39,7 +44,15 @@ def sb(dlfs6_path):
 
 
 @pytest.fixture(scope="module")
-def tok(sb):
+def webbot_files(dlfs6_path):
+    """webbot/merge_rules.pkl and webbot/owt_valid.bin, the author's files (not in the submodule)."""
+    missing = missing_downloads()
+    if missing:
+        pytest.skip(f"needs the author's webbot/{', webbot/'.join(missing)}; download: {download_hint(missing)}")
+
+
+@pytest.fixture(scope="module")
+def tok(sb, webbot_files):
     return official_tokenizer()
 
 
@@ -64,7 +77,7 @@ def serial_pool(sb):
 
 
 # ─── 7.1 ──────────────────────────────────────────────────────────────────────────────────────────────────
-def test_web_data_in_sync(dlfs6_path):
+def test_web_data_in_sync(webbot_files):
     """web/data/ch07 and the widget fixture are exactly what verify/_ch07_export.py builds from the repo."""
     stale = [str(p) for p, data in _ch07_export.build().items() if not p.is_file() or p.read_bytes() != data]
     assert not stale, f"rerun `uv run python verify/_ch07_export.py`: {stale}"
@@ -86,14 +99,23 @@ def test_webbot_merge_table(tok):
 
 
 def test_official_valid_bin_facts(tok):
+    """The official owt_valid.bin: 64,496,066 tokens, 59,059 documents, and decoded it is CS336's owt_valid.txt
+    byte for byte (SHA-256; decoding all of it takes about half a minute)."""
     arr = valid_bin()
     assert len(arr) == 64_496_066 and int(arr.max()) == 49_999
     counts = np.bincount(arr, minlength=tok.vocab_size)
     lengths = np.array([len(tok.id_to_bytes[i]) for i in range(tok.vocab_size)], dtype=np.int64)
     total = int((counts * lengths).sum())
     assert total == OWT_VALID_TXT_BYTES == 289_998_753        # decoding the .bin gives back the 290 MB text exactly
-    assert int(counts[tok.end_token_id]) == 59_059            # documents separated by <|endoftext|>
+    ends = np.flatnonzero(arr == tok.end_token_id)
+    assert len(ends) == int(counts[tok.end_token_id]) == 59_059              # documents separated by <|endoftext|>
+    assert ends[-1] == len(arr) - 1 and ends[0] > 0 and np.diff(ends).min() > 1   # ...each one ends one, none empty
     assert round(total / len(arr), 3) == 4.496                 # bytes per token on the whole validation split
+    h = hashlib.sha256()
+    for chunk in iter_valid_bytes(tok):
+        h.update(chunk)
+    assert h.hexdigest() == OWT_VALID_TXT_SHA256 == \
+        "2406f278e71829d273b315e9b403285baea7022b26a96d2728dd8b776ea40660"   # gunzip(CS336 owt_valid.txt.gz)
 
 
 def test_ch07_scripts_pass_these_arguments(sb):
@@ -112,6 +134,15 @@ def test_ch07_scripts_pass_these_arguments(sb):
                           if v.default is not inspect.Parameter.empty}
     assert defaults(sb.train_bpe) == {"end_token": EOT, "num_processes": 8, "num_chunks": 8}
     assert defaults(sb.BPETokenizer.encode_file) == {"num_processes": 4, "num_chunks": 64, "cache_dir": "bpe_cache"}
+    # Chapter 4's own script defaults to num_chunks=64 and its __main__ relies on that; ch07 passes 64 explicitly
+    # because storybot/tokenizer.py, where the function was packaged, lowered the default to 8.
+    ch04 = ast.parse((DLFS6 / "ch04/04_bpe_parallel.py").read_text(encoding="utf-8"))
+    fn = next(n for n in ast.walk(ch04) if isinstance(n, ast.FunctionDef) and n.name == "train_bpe")
+    names = [a.arg for a in fn.args.args]
+    ch04_defaults = dict(zip(names[len(names) - len(fn.args.defaults):], map(ast.literal_eval, fn.args.defaults)))
+    assert ch04_defaults == {"end_token": EOT, "num_processes": 8, "num_chunks": 64}
+    main = next(c for c in calls("ch04/04_bpe_parallel.py") if getattr(c.func, "id", "") == "train_bpe")
+    assert [k.arg for k in main.keywords] == ["num_processes"]
 
 
 def test_shrunk_run_reproduces_first_15_merges(sb, owt):
@@ -182,13 +213,53 @@ def test_merge_loop_profile(sb, owt, serial_pool):
     assert max_entry[3] / total > 0.5                             # max() incl. its key: most of the time
 
 
+def test_heap_loop_scans_what_the_book_scans(sb, owt, serial_pool):
+    """Chapter 4's lazy-deletion heap (heap_merge_sizes) learns the book's merges in the book's order and keeps the
+    book's pair table, so its table size before every step is exactly what the book's max() scans at that step.
+    This is how bench.json counts the pairs for the whole 290 MB validation split (49,743 merges)."""
+    sizes = []
+
+    def counting_max(it, *a, **kw):
+        sizes.append(len(it))
+        return builtins.max(it, *a, **kw)
+
+    sb.max = counting_max
+    try:
+        book = sb.train_bpe(str(owt["1m"]), 2000, num_chunks=8)
+    finally:
+        del sb.max
+    ids_counts = ch04_ext().ids_counts_of(owt["1m"].read_bytes().decode("utf-8"))
+    merges, heap_sizes = heap_merge_sizes(ids_counts, 1743, compact=1.2)    # 1.2: rebuilds the heap often
+    assert merges == list(book) and heap_sizes == sizes and len(sizes) == 1743
+    bench = json.loads(BENCH.read_text(encoding="utf-8"))
+    full = bench["valid_290mb"]["full"]
+    eight = next(p for p in bench["valid_290mb"]["prefixes"] if p["mb"] == 8)
+    row8 = next(r for r in bench["train"]["scaling"] if r["mb"] == 8)       # the book's own 8 MB run
+    assert (eight["bytes"], eight["pairs_first_step"], eight["pairs_at_1743"], eight["pairs_scanned_1743"]) == \
+        (row8["bytes"], row8["pairs_first_step"], row8["pairs_last_step"], row8["pairs_scanned"])
+    assert full["merges"] == 49_743 and full["bytes"] == OWT_VALID_TXT_BYTES
+
+
 def test_bench_json_consistent(sb, owt, serial_pool):
     b = json.loads(BENCH.read_text(encoding="utf-8"))
-    rows = {r["key"]: r for r in b["encode_2mb"]["rows"]}
-    assert all(r["identical_ids"] for k, r in rows.items() if k != "pretokenize")
-    assert rows["pretokenize"]["identical_ids"] is None
+    enc = b["encode_2mb"]
+    rows = {r["key"]: r for r in enc["rows"]}
+    # the book's row is the reference; pretokenize-only yields no ids; every other row was compared id by id
+    assert {k: r["identical_ids"] for k, r in rows.items()} == \
+        {"book": None, "lookup": True, "pretokenize": None, "tiktoken1": True, "tiktoken8": True}
+    assert all(len(r["seconds_all"]) == enc["rounds"] and r["seconds"] == round(sorted(r["seconds_all"])[2], 3)
+               for r in rows.values())                                      # median of the 5 interleaved rounds
     assert rows["book"]["mb_per_s"] < rows["lookup"]["mb_per_s"] < rows["pretokenize"]["mb_per_s"] \
         < rows["tiktoken1"]["mb_per_s"]
+    heap8 = b["heap_8mb"]
+    assert heap8["heap_identical_to_book"] and heap8["heap_9743_starts_with_book"]
+    mk = b["max_key"]
+    assert mk["train_1mb"]["identical_merges"] and mk["same_pick"]["lambda"] == mk["same_pick"]["zip"]
+    valid = b["valid_290mb"]
+    p1743 = [p["pairs_at_1743"] for p in valid["prefixes"]] + [valid["full"]["pairs_at"]["1743"]]
+    assert p1743 == sorted(p1743) and len(set(p1743)) == len(p1743)     # more text, more distinct pairs
+    every = valid["full"]["pairs_every_100_steps"]
+    assert valid["full"]["pairs_scanned"] >= sum(every) * 100 * 0.99 and every[-1] > 3 * every[17]
     scaling = b["train"]["scaling"]
     assert all(r["merges"] == 1743 and r["max_share"] > 0.5 for r in scaling)
     assert all(x["pairs_last_step"] < y["pairs_last_step"] for x, y in zip(scaling, scaling[1:]))
@@ -256,36 +327,94 @@ def _timed(fn):
     return time.perf_counter() - t0
 
 
+def test_tiktoken_reproduces_official_valid_bin(tok):
+    """tiktoken with WebBot's merges re-encodes all 59,059 documents of the validation split (about a minute):
+    every one of the 64,496,066 official ids comes back, so owt_valid.bin is the product of these rules."""
+    enc = webbot_tiktoken(tok)
+    n_docs = n_ids = 0
+    batch_ids, batch_texts = [], []
+
+    def check():
+        nonlocal n_docs, n_ids
+        for ids, out in zip(batch_ids, enc.encode_ordinary_batch(batch_texts, num_threads=8)):
+            assert np.array_equal(np.asarray(out, dtype=np.uint16), ids), f"document {n_docs}"
+            n_docs += 1
+            n_ids += len(ids) + 1                                           # + its <|endoftext|>
+        batch_ids.clear()
+        batch_texts.clear()
+
+    for ids, data in iter_valid_docs(tok):
+        batch_ids.append(ids)
+        batch_texts.append(data.decode("utf-8"))                            # strict: every document is valid UTF-8
+        if len(batch_texts) == 2_000:
+            check()
+    check()
+    assert (n_docs, n_ids) == (59_059, 64_496_066)
+
+
 def test_gpt2_reference(tok, owt):
-    """GPT-2 (tiktoken) has 50,257 ids; on OWT it compresses about as well as WebBot's 50,000."""
+    """GPT-2 (tiktoken) has 50,257 ids; on OWT it compresses about as well as WebBot's 50,000.
+    Needs GPT-2's BPE file, which tiktoken downloads on first use (the test is skipped, saying so, when offline)."""
     tiktoken = pytest.importorskip("tiktoken")
     try:
         g = tiktoken.get_encoding("gpt2")
     except Exception as e:  # noqa: BLE001 - the BPE file is downloaded on first use
-        pytest.skip(f"gpt2 encoding unavailable offline: {e}")
+        pytest.skip(f"GPT-2's BPE file could not be downloaded (tiktoken.get_encoding('gpt2')): {e}")
     assert g.n_vocab == 50_257
     text = owt["1m"].read_bytes().decode("utf-8")
     n = len(text.encode("utf-8"))
     web, gpt2 = n / len(tok.encode(text)), n / len(g.encode(text, allowed_special="all"))
     assert (round(gpt2, 2), round(web, 2)) == (4.52, 4.61)                 # bytes per token, as on the page
+    assert g.encode(EOT, allowed_special="all") == [50_256]                # GPT-2's own special token, last id
 
 
 # ─── 7.4 ──────────────────────────────────────────────────────────────────────────────────────────────────
 def test_special_token_injection(sb, tok):
+    """The book's encode turns <|endoftext|> in user text into 49,999; tiktoken (here with WebBot's own rules, no
+    download needed) refuses by default, and encode_ordinary treats it as plain text."""
     user_text = "print('<|endoftext|>')"
     ids = tok.encode(user_text)
     assert ids == [6521, 12167, 49_999, 16615] and tok.decode(ids) == user_text
     plain = [i for p in sb.pretokenize(user_text) for i in tok._encode_text(p)]
     assert 49_999 not in plain and tok.decode(plain) == user_text
-    tiktoken = pytest.importorskip("tiktoken")
-    try:
-        g = tiktoken.get_encoding("gpt2")
-    except Exception as e:  # noqa: BLE001
-        pytest.skip(f"gpt2 encoding unavailable offline: {e}")
+    enc = webbot_tiktoken(tok)
     with pytest.raises(ValueError, match="disallowed special token"):
-        g.encode("<|endoftext|>")
-    assert g.encode("<|endoftext|>", allowed_special="all") == [50256]
-    assert g.encode_ordinary("<|endoftext|>") == [27, 91, 437, 1659, 5239, 91, 29]
+        enc.encode(user_text)                                             # the default: refuse
+    assert enc.encode(user_text, allowed_special="all") == ids           # explicitly allowed: like the book
+    assert enc.encode_ordinary(user_text) == plain                       # plain text: no 49,999
+
+
+def test_mean_row_on_trained_storybot(dlfs6_path):
+    """A new token whose unembedding row is the mean of the old rows: on the StoryBot we trained with chapter 6's
+    unchanged script (run storybot-h100), its probability at held-out positions is tiny, far below 1/(V+1)."""
+    import torch
+    if not STORYBOT_RUN.is_file():
+        pytest.skip(f"needs the storybot-h100 run's checkpoint {STORYBOT_RUN.relative_to(ROOT)} "
+                    "(web/data/runs/storybot-h100/report.json describes the run)")
+    from storybot.model import GPT
+    ckpt = torch.load(STORYBOT_RUN, map_location="cpu")
+    m = GPT(ckpt["vocab_size"], ckpt["max_context_len"], ckpt["embed_dim"], ckpt["n_head"], ckpt["n_layer"],
+            ckpt["ff_dim"], ckpt["theta"])
+    m.load_state_dict(ckpt["model_state_dict"])
+    m.eval()
+    seen = {}
+    m.unembed.register_forward_hook(lambda mod, inp, out: seen.update(h=inp[0]))   # what the unembedding sees
+    data = np.memmap(DLFS6 / "storybot" / "tiny_stories_valid.bin", dtype=np.uint16, mode="r")
+    x = torch.from_numpy(np.asarray(data[:256], dtype=np.int64))[None]      # 256 held-out positions
+    with torch.no_grad():
+        z = m(x)[0].double()                                                # (256, V) logits of the trained model
+        h = seen["h"][0].double()
+        u = m.unembed.weight.double()                                       # (V, d), no bias
+        u_new = torch.cat([u, u.mean(0, keepdim=True)])                     # the new row: mean of the old rows
+        z_new = h @ u_new.T
+    v = u.shape[0]
+    assert v == 10_000
+    torch.testing.assert_close(z_new[:, :v], z, rtol=0, atol=1e-3)         # old logits: unchanged (fp32 vs fp64)
+    torch.testing.assert_close(z_new[:, v], z_new[:, :v].mean(1), rtol=0, atol=1e-9)   # new logit = their mean
+    p_new = torch.softmax(z_new, dim=1)[:, v]
+    assert (p_new <= 1 / (v + 1)).all()                                     # Jensen: never above the uniform share
+    assert p_new.max() < 1e-5 and p_new.median() < 1e-8                    # uniform would be ~1e-4
+    assert 5.0e-10 < p_new.median() < 6.2e-10 and 1.0e-6 < p_new.max() < 1.4e-6   # page: ~5.6e-10, ~1.2e-6
 
 
 def test_new_special_tokens_grow_the_book_model(dlfs6_path):
@@ -307,6 +436,23 @@ def test_new_special_tokens_grow_the_book_model(dlfs6_path):
     torch.testing.assert_close(after[..., :300], before)
     torch.testing.assert_close(after[..., 300], before.mean(-1), rtol=0, atol=1e-6)
     assert np.iinfo(np.uint16).max >= 50_001                  # ids 50,000 and 50,001 still fit in the .bin files
+
+
+# ─── 7.5 ──────────────────────────────────────────────────────────────────────────────────────────────────
+def test_word_vocab_oov_shrinks_but_stays_positive(tok):
+    """Word-level vocabularies built from the first 50 KB, 1 MB and 8 MB of OWT valid, tested on the same 100 KB
+    that follows the 8 MB: the share of unknown words falls (30.8% -> 10.3% -> 4.5%) but does not reach 0."""
+    words = lambda s: re.findall(r"\p{L}+", s)                  # letters only, as in cell 7.5-a
+    head = owt_text(tok, 8_000_000)
+    after = owt_text(tok, 8_200_000)[len(head):][:100_000]       # the next 100 KB (characters) after the 8 MB
+    test = words(after)
+    rate, size = {}, {}
+    for n in (50_000, 1_000_000, 8_000_000):
+        vocab = set(words(owt_text(tok, n)))
+        size[n] = len(vocab)
+        rate[n] = round(sum(w not in vocab for w in test) / len(test), 3)
+    assert rate == {50_000: 0.308, 1_000_000: 0.103, 8_000_000: 0.045}
+    assert size[8_000_000] > tok.vocab_size == 50_000            # a bigger vocabulary than all of WebBot's
 
 
 # ─── 7.1 / 7.6 ────────────────────────────────────────────────────────────────────────────────────────────

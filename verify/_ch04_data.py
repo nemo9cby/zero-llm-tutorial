@@ -207,7 +207,9 @@ def js_fixtures() -> dict[str, bytes]:
                            "sample400": [list(p) for p in book.train_bpe_cache(sample, 400)]}),
         "boundaries.json": js({"valid": {str(k): find_chunk_boundaries(valid, k) for k in (1, 4, 64, 1000)},
                                "valid_count_100000": len(find_chunk_boundaries(valid, 100_000)),
-                               "head": {str(k): find_chunk_boundaries(head, k) for k in (2, 7, 30, 100, 5000)}}),
+                               "valid_count_1000000": len(find_chunk_boundaries(valid, 1_000_000)),
+                               "head": {str(k): find_chunk_boundaries(head, k)
+                                        for k in (2, 7, 30, 59, 60, 61, 100, 120, 5000)}}),
     }
 
 

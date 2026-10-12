@@ -74,16 +74,22 @@ export async function mount(root, config = {}) {
     const { n, ids } = data;
     for (const b of grid.querySelectorAll('.w-pg-thumb')) b.setAttribute('aria-pressed', String(+b.dataset.l === sel.l && +b.dataset.h === sel.h));
     const w = head(sel.l, sel.h);
-    const labels = ids.map((id) => tokenLabel(tok, id).slice(0, 6));
+    const full = ids.map((id) => tokenLabel(tok, id));
+    // A cut label ends in "…". Row labels get the 44 px margin of the heatmap; a column label gets one cell
+    // (at most 26 px, narrower on a phone), about 7 px per character.
+    const cut = (s, room) => ([...s].length > room ? `${[...s].slice(0, room - 1).join('')}…` : s);
+    const cellPx = Math.min(26, Math.floor(((root.clientWidth || 600) - 48) / n));
+    const rowLabels = full.map((s) => cut(s, 6));
+    const colLabels = full.map((s) => cut(s, Math.max(2, Math.floor(cellPx / 7))));
     const values = Array.from({ length: n }, (_, r) => Array.from({ length: n }, (_, c) => (c > r ? NaN : w[r * n + c])));
-    const opts = { values, rowLabels: labels, colLabels: labels, scale: 'seq', domain: [0, 1], size: 26, showValues: false,
+    const opts = { values, rowLabels, colLabels, scale: 'seq', domain: [0, 1], size: 26, showValues: false,
       cellFormat: (v) => pct(v), masked: (r, c) => c > r, ariaLabel: `第 ${sel.l + 1} 层第 ${sel.h + 1} 个头的注意力权重` };
     title.textContent = `第 ${sel.l + 1} 层第 ${sel.h + 1} 个头（行：查询 token；列：被看的 token）`;
     if (hm) hm.update(opts); else hm = heatmap(big, opts);
     const last = w.subarray((n - 1) * n, n * n);
     let best = 0;
     for (let j = 1; j < n; j++) if (last[j] > last[best]) best = j;
-    note.textContent = `最后一个 token「${labels[n - 1]}」把 ${pct(last[best], 0)} 的注意力给了位置 ${best} 的「${labels[best]}」。`;
+    note.textContent = `最后一个 token「${full[n - 1]}」把 ${pct(last[best], 0)} 的注意力给了位置 ${best} 的「${full[best]}」。`;
   }
 
   function buildGrid() {

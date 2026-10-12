@@ -3,16 +3,7 @@
    模型是一元线性回归 y = w·x，loss = 平均 (w·x − t)²，对 w 的梯度可以心算。 */
 import { h, fmt } from './_lib.js';
 import { lineChart, fmtNum } from './_plot.js';
-
-/** 固定种子的伪随机数（mulberry32），保证每次打开页面数据都一样。 */
-function mulberry32(a) {
-  return () => {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+import { mulberry32 } from './ch09-util.js';
 
 export function makeData(n = 16, seed = 9) {
   const rnd = mulberry32(seed);
@@ -90,7 +81,9 @@ export function mount(root, config = {}) {
       h('span', {}, '大 batch ', h('b', {}, fmtNum(big))),
       h('span', {}, same ? '两者相同' : `累积结果是大 batch 的 ${fmtNum(acc / big)} 倍`),
     );
-    cost.textContent = `同一时刻只需把 ${fmt(16 / K)} 个样本的激活放进显存；代价是要做 ${fmt(K)} 次前向和反向。`;
+    cost.textContent = K === 1
+      ? '一次算完 16 个样本：它们的激活要同时放在显存里。'
+      : `同一时刻只需把 ${fmt(16 / K)} 个样本的激活放进显存；代价是分 ${fmt(K)} 次做，每次的矩阵乘更小，总计算量不变。`;
   }
   slider.addEventListener('input', () => { K = KS[+slider.value]; render(); });
   box.addEventListener('change', () => { divide = box.checked; render(); });

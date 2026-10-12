@@ -1,6 +1,7 @@
 /* 图：“loss 不是进度条”。一个 softmax 策略的多臂老虎机，按 09_grpo.py 的方式训练：
    每步采 G 个动作，A = r − mean(r)，比值 = 1 时 loss = −Σ A·L / G（L 是回答的 token 数）。
    梯度只经过第一个 token（后面的 token 概率为 1），所以“回答长度不等”只改变 loss 的数值，不改变学习。
+   这是玩具的假设：在 09_grpo.py 里，长回答的每个 token 都带梯度。长度不等时 loss = 2 × 组内奖励的方差（L = 3 − 2r）。
    config: { arms: 4, good: 2, G: 8, lr: 1.0, steps: 30 } */
 import { h } from './_lib.js';
 import { lineChart } from './_plot.js';
@@ -61,7 +62,10 @@ export function mount(root, config) {
     const lastLoss = n ? losses[n - 1][1] : 0;
     note.textContent = n
       ? `第 ${n} 步：loss ${lastLoss >= 0 ? '+' : ''}${lastLoss.toFixed(3)}，期望奖励 ${last.toFixed(3)}（起点 ${(1 / K).toFixed(2)}）。`
-        + (unequal ? ' loss 的“水位”来自长度差：−Σ A·L / N ≠ 0，但学习的方向与长度相等时完全一样。'
+        + (unequal
+          ? ' 长度不等时，loss = −Σ A·L / N = 2 × 组内奖励的方差：组里有对有错时为正，全对或全错时回到 0。'
+            + '它后来变小，是因为组里没了差异、信号没了，不是因为学会了。'
+            + '在这个玩具里，答错的回答多出来的 token 概率恒为 1，不产生梯度，所以学习的方向与长度相等时完全一样。'
           : ' 每一步的 loss 都恰好是 0：组内优势之和为 0，各回答又一样长。')
       : '点“更新一步”开始。每一步都重新采样 8 个动作、重新减去组均值。';
   }

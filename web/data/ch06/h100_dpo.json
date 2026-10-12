@@ -1,0 +1,697 @@
+{
+ "what": "the storybot-h100 run's own checkpoints before and after 08_dpo.py, compared on CPU",
+ "command": "CUDA_VISIBLE_DEVICES=-1 uv run python verify/_ch06_h100_dpo.py",
+ "source_run": {
+  "run": "storybot-h100",
+  "report": "web/data/runs/storybot-h100/report.json",
+  "checkpoints": {
+   "pretrain": {
+    "path": "runs/storybot-h100/work/storybot/model_pretrain.pt",
+    "sha256": "a338d34dc5dcb7e2765eebd88eae5c89fd114c3547f867cf5e566386f1dffa8f"
+   },
+   "dpo": {
+    "path": "runs/storybot-h100/work/storybot/model_dpo.pt",
+    "sha256": "f5ac8dd29eaa573c5244450e4237a8afcb52158908d6d56b3b9fdbf6f434828d"
+   }
+  }
+ },
+ "sampling": {
+  "generate": "storybot.utils.generate (unchanged)",
+  "temperature": 1.0,
+  "max_new_tokens": "256 - len(prompt tokens)",
+  "heldout_seeds": [
+   1,
+   2,
+   3
+  ],
+  "open_prompt": "Once upon a time",
+  "open_seeds": [
+   1,
+   2,
+   3,
+   4,
+   5,
+   6,
+   7,
+   8
+  ],
+  "threads": 4
+ },
+ "pairs": {
+  "beta": 0.1,
+  "context_len": 256,
+  "heldout": {
+   "n": 8,
+   "reward_acc": 1.0,
+   "margin_mean": 2.192625713348389,
+   "dpo_loss": 0.12044084546418474,
+   "chosen_shift_nats": -0.13602542877197266,
+   "rejected_shift_nats": -22.06228256225586,
+   "pretrain_prefers_chosen_by_sum": 0.625,
+   "dpo_prefers_chosen_by_sum": 0.875,
+   "logprobs": {
+    "pretrain": {
+     "chosen": [
+      -119.24187469482422,
+      -119.08964538574219,
+      -109.28607940673828,
+      -115.4143295288086,
+      -116.54615783691406,
+      -99.58646392822266,
+      -104.28459930419922,
+      -92.38395690917969
+     ],
+     "rejected": [
+      -88.74176025390625,
+      -106.1221694946289,
+      -122.99170684814453,
+      -153.8002166748047,
+      -127.23289489746094,
+      -98.849609375,
+      -123.04753875732422,
+      -100.38557434082031
+     ]
+    },
+    "dpo": {
+     "chosen": [
+      -117.49576568603516,
+      -115.51231384277344,
+      -113.40348815917969,
+      -112.06839752197266,
+      -114.30162048339844,
+      -95.68484497070312,
+      -109.57510375976562,
+      -98.87977600097656
+     ],
+     "rejected": [
+      -111.48218536376953,
+      -130.3377227783203,
+      -138.2492218017578,
+      -176.9584503173828,
+      -151.2477569580078,
+      -116.50968933105469,
+      -149.40859985351562,
+      -123.47610473632812
+     ]
+    },
+    "chosen_tokens": [
+     47,
+     45,
+     42,
+     44,
+     43,
+     44,
+     43,
+     43
+    ],
+    "rejected_tokens": [
+     42,
+     42,
+     42,
+     39,
+     41,
+     41,
+     38,
+     42
+    ]
+   }
+  },
+  "train": {
+   "n": 144,
+   "reward_acc": 1.0,
+   "margin_mean": 5.301742113961114,
+   "dpo_loss": 0.005744360498847589,
+   "chosen_shift_nats": 13.594971921708849,
+   "rejected_shift_nats": -39.42244921790229,
+   "pretrain_prefers_chosen_by_sum": 0.05555555555555555,
+   "dpo_prefers_chosen_by_sum": 0.625
+  }
+ },
+ "lm_loss": {
+  "tokens": 65536,
+  "pretrain": 1.3374816626310349,
+  "dpo": 1.3522750437259674
+ },
+ "param_shift": {
+  "n_params": 22696448,
+  "max_abs": 0.002704814076423645,
+  "mean_abs": 0.0002938123943749815,
+  "frac_above_0.005": 0.0
+ },
+ "stories": [
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a little bird who could not fly. ",
+   "seed": 1,
+   "pretrain": {
+    "text": "\nThe bird flew high up in the sky, but its wings were broken. The bird felt sad because it could not fly like other birds.\nOne day, a kind girl saw the little bird and asked, \"Why are you sad, little bird?\" The bird replied, \"I can't fly, and my wing hurts and I cannot fly.\"\nThe girl wanted to help the bird. She said, \"I can help you fly! Let's wave to the sky and say sorry to the bird.\" They waved their wings, and the little bird started to feel better.\nThe girl took the bird home and put a soft bandage on its wing. Soon, the bird felt better and could fly again. The little bird said, \"Thank you, kind girl! You helped me fly!\"\nThe moral of the story is: be kind, and you will change your lives to others.\n",
+    "new_tokens": 182,
+    "ended": true,
+    "max_new_tokens": 240
+   },
+   "dpo": {
+    "text": "\nOne day, a kind doctor named Dr. Lily saw the bird and wanted to help. He asked the bird, \"Do you know how to flap its wings so Bob can fly with you?\" The bird said, \"Yes, I can help you.\"\nDr. Lily showed the bird how to flap its wings. The bird tried and tried, but it could not fly either! The bird felt sad but knew it needed to be strong. The bird said, \"Thank you, Dr. Lily. I will help you.\" The bird let Bob flap its wings, and soon all the animals in the town were strong.\nThe animals were so happy and grateful for the bird's help. They learned that being kind and helping others can make everyone feel good.\nThe moral of the story is: When we help others, we feel happy and strong too.\n",
+    "new_tokens": 175,
+    "ended": true,
+    "max_new_tokens": 240
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a little bird who could not fly. ",
+   "seed": 2,
+   "pretrain": {
+    "text": "\nOne day, a kind bird saw the bird and said, \"Do not fly near me. I am scared of the broken tree.\" The bird felt brave and said, \"I will help you, tree.\"\nThe kind bird went to the broken tree and started to fix it. The bird found some strong sticks and leaves to make the broken tree strong. The tree was very happy and said, \"Thank you, kind bird!\"\nThe help of the bird climbed onto the broken tree. The bird and the tree stayed good friends. They played together every day and shared many happy times.\n",
+    "new_tokens": 121,
+    "ended": true,
+    "max_new_tokens": 240
+   },
+   "dpo": {
+    "text": "\nOne day, a kind bird saw the bird and said, \"Do not allow this bird to fly high. It is broken.\" But the bird was brave. The bird dared to fly up high and touch the sky gently. \nAs the bird flew higher, the bird saw its home on a big hill. The bird learned that there are many new ways to help make friends. The bird became friends with the bird, and they played together.\n",
+    "new_tokens": 92,
+    "ended": true,
+    "max_new_tokens": 240
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a little bird who could not fly. ",
+   "seed": 3,
+   "pretrain": {
+    "text": "\nOne day, the bird saw a big cat. The cat was hungry and wanted to catch the bird. The bird tried to fly away but it was too high up in the sky.\nThe bird flew up and up, but it still could not reach the sky. The bird was sad and scared. It was sad because it could not fly away. In the end, the bird never made it home.\n",
+    "new_tokens": 84,
+    "ended": true,
+    "max_new_tokens": 240
+   },
+   "dpo": {
+    "text": "\nOne day, the bird saw a big cat. The cat said, \"I want to order a turkey to eat!\" The little bird felt bad and said, \"I will help you, big cat!\"\nThe little bird worked hard to order the turkey. It helped by blowing air into the wings. Soon, the turkey was flying high in the sky. The bird and the big cat were happy and became friends.\n",
+    "new_tokens": 86,
+    "ended": true,
+    "max_new_tokens": 240
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a boy named Sam who was afraid of the dark. ",
+   "seed": 1,
+   "pretrain": {
+    "text": "\nOne night, he found his brother's lamp and he carried the lamp to his room. He turned it on, and suddenly the room was filled with light. \nSam was brave and he lit the lamp. But the lamp was still pale and Mom wasn't happy. She needed a mild talk to her husband. \nSo she went to the garden. She began to pinch and run around the garden.  She was so scared!\nSam quickly ran away from her family. She found Dad in her living room and stopped playing. \nDad smiled and said, \"See, it isn't so bad. You should be more careful!\" \nSam thanked his brother and indamma and dad said \"You're the brave thing to do.\" Sam learned an important lesson-- even when something looks dark outside, they can still be a good thing.\n",
+    "new_tokens": 175,
+    "ended": true,
+    "max_new_tokens": 237
+   },
+   "dpo": {
+    "text": "\nOne night, he found his teddy bear under his bed. He touched his nose to the bear and said, \"Hello, Mr. Bear. Why are you so dark?” \nThe bear said, \"I am scared because I can't close my eyes. The night shadows can't hurt me.\"\nSam hugged the bear and said, ‘Don’t be scared, Mr. Bear. We should always help each other. Sherry helps us see that things are important and we should not be scared of scary noises. We are all part of our family.\nFrom that night on, Sam was not scared of the dark anymore. He knew that his dad was right, and he was brave and strong. Sam loved his family, and she loved him even more.\nThe moral of the story is, be brave and overcome your fears, even when the dark comes in and the sun is fun.\n",
+    "new_tokens": 186,
+    "ended": true,
+    "max_new_tokens": 237
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a boy named Sam who was afraid of the dark. ",
+   "seed": 2,
+   "pretrain": {
+    "text": "\nOne day, when her mom told her it was time to lie down and take a bath, Sam saw something appear in the dark. It was a bright light of the moonlight! Sam was curious and wanted to know what was happening. \nHe slowly crept up to the light and started to climb. When he got to the light, he felt something fluffy covered his eyes. He peered at a box in the moonlight, and he noticed it waspowered. Sam was fascinated - he had found a new place to lay down and do something so disgusting! \nWhen Sam's mom saw his, she was relieved and asked if he was having fun with her. Sam explained that he had made a special treat that buried it in the ground. His mom smiled and said that there was nothing to be scared of in the night, and he had lots of fun. \nSam was so glad he napped about the shiny light and relaxing of the light in the big box.\n",
+    "new_tokens": 199,
+    "ended": true,
+    "max_new_tokens": 237
+   },
+   "dpo": {
+    "text": "\nOne day, when it was his birthday, he woke up very sleepy. He looked around the room and saw a big, soft pillow. He felt brave and decided to wrap it around himself. \nWhen he opened the present, he saw a little puppy! He was so surprised and couldn't believe his eyes! But he knew he had to give it a comfortable place to sleep. \nSo, he gave the puppy a big piece of his own bed and kissed it goodbye. Suddenly, the dark night became as dark and he saw dark shadows falling from the sky. Sam and the puppy stared up at the bright moon and even the dull moon! Sam smiled happily and drifted off to sleep, dreaming of all the fun it would be.\n",
+    "new_tokens": 152,
+    "ended": true,
+    "max_new_tokens": 237
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a boy named Sam who was afraid of the dark. ",
+   "seed": 3,
+   "pretrain": {
+    "text": "\nOne night, Sam was not. He had even played with his toys or read a book. He went to bed, feeling safe with his mom. There was also a big door. That door was closed.\nSam asked his mom to open the door. His mom just smiled and said, “Don’t worry, Sam.” She pushed and let him in. \nSam was so happy. He opened the door and saw his dark room. He played with his toys and forgot about being scared. \nThat night, Sam had no idea that the dark room was not so scary after all. He slept peacefully and soon he was relaxed and ready to play.\n",
+    "new_tokens": 137,
+    "ended": true,
+    "max_new_tokens": 237
+   },
+   "dpo": {
+    "text": "\nOne night, Sam went to his mom and said, \"Mom, I'm scared of the dark. Can you help me?\" His mom smiled and said, \"Of course, Sam. Let's prepare a safe place for your mom to read your diary. Maybe they can learn more about the dark.\"\nSam and his mom gathered their books and read them. Suddenly, they walked to their room. Sam's mom was so happy to see them. She said, \"See Sam, it's not so scary in the dark. We can find a way to enjoy the night.\" Sam felt proud of his mom and went back to his room to sleep.\n",
+    "new_tokens": 134,
+    "ended": true,
+    "max_new_tokens": 237
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a girl named Lily who had a small garden. ",
+   "seed": 1,
+   "pretrain": {
+    "text": "\nOne day, a humble bird named Benny flew over to Lily. He said, \"Hello, Lily. What is your name?\" \nLily said, \"My name is Bella.\"\nBenny said, \"I think Bella? What is your name?\" \nLily told him, \"My name is Lily.\"\nBenny and Lily became great friends. They played together in the garden and had lots of fun. \nLily loved to offer help to her friends. They all learned how to make more teas together. They had a wonderful day, all thanks to the humble bird and Bella.\n",
+    "new_tokens": 122,
+    "ended": true,
+    "max_new_tokens": 238
+   },
+   "dpo": {
+    "text": "\nIn the garden, there was a hedge that Lily had never seen before. The hedge was full of pretty flowers and dead trees. But one day, a little bird was trapped in its own home.\nLily wanted to help the bird, so she tried to rescue it. She climbed a tall bush to get closer. But, she couldn't make it home. Then, she realized that the bird could fly again! She was so happy that she could rescue the bird from her garden. And from that day on, Lily and the bird became best friends.\n",
+    "new_tokens": 114,
+    "ended": true,
+    "max_new_tokens": 238
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a girl named Lily who had a small garden. ",
+   "seed": 2,
+   "pretrain": {
+    "text": "\nOne day, a weird bird flew in the garden. The bird knocked on the window and said, \"I need your help! My friend is in the garden.\" Lily was sad and asked, \"What do you need?\"\nThe bird told her, \"My friend is stuck in a tree!\" Lily had an idea. She brought the bird some food and covered it with a soft leaf. As soon as she gave the bird the food, something unexpected happened.\nThe bird grew wings of other birds and turned into a beautiful fairy! She said, \"Thank you, Lily! You saved me by helping me by flying away. You told me, it was so much fun!\" Lily smiled and knew that she made a talking bird happy with her own special skills. From that day on, Lily and the birds became the best of friends and spent many happy days together in the garden.\n",
+    "new_tokens": 180,
+    "ended": true,
+    "max_new_tokens": 238
+   },
+   "dpo": {
+    "text": "\nOne day, a weird bird flew in through the open window. The bird said, \"Hi, I am Birdy! I fit in this basket.\" Lily was happy to meet Birdy and asked, \"Can I play with you?\"\nBird said, \"Sure, let's play together!\" They played with the toy truck and the basket. They had so much fun and laughed a lot.\nAfter playing, Lily gave Birdy some seeds. They sniffed and tasted the food inside to grow. They became good friends and played together every day. And they all lived happily ever after.\n",
+    "new_tokens": 118,
+    "ended": true,
+    "max_new_tokens": 238
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a girl named Lily who had a small garden. ",
+   "seed": 3,
+   "pretrain": {
+    "text": "\nOne day, she found a shiny jewel in her garden. It was very pretty and she wanted to keep it safe. She thought it could help protect her garden from danger. So, she ran as fast as she could to find a safe spot under a big tree.\nThe next day, Lily found a little hole in the ground. She put the jewel in the hole and covered it with dirt. Then, she covered it up with dirt and put it next to her bed. Lily was very happy that the ground kept protect her garden from harm.\nFrom that day on, Lily always put her things in a secret place when she was in the garden. She knew that her garden was safe and now protected. And Lily always kept her garden safe from harm.\n",
+    "new_tokens": 156,
+    "ended": true,
+    "max_new_tokens": 238
+   },
+   "dpo": {
+    "text": "\nOne day, she found a shiny jewel under her bed. It was very pretty and she wanted to keep it safe. She thought it could restore her garden to make it look like new again. But, Lily loved it and kept it to her room so it would never get boring.\nLily's mom saw her playing with the shiny jewel and asked, \"What did you do, Lily?\" Lily told her mom that the jewel was now her favorite toy, and it worked! They were both very happy and played with the shiny jewel in the garden every day.\n",
+    "new_tokens": 115,
+    "ended": true,
+    "max_new_tokens": 238
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a teddy bear who lost one button eye. ",
+   "seed": 1,
+   "pretrain": {
+    "text": "\nThe bear was helpless and didn't know what to do. He asked his friend the fox, \"Where does this button belong?\" \nThe fox said, \"It is mine, that's where your button is!\" \nThe teddy bear was excited and said, \"Yes, it is mine!\" \nThe bear and the fox went looking for the button with the button-west or the button. \nFinally, they found the button in the woods. The bear said to the fox, \"Is this your button?\" \nThe fox smiled and said, \"Yes, it belongs and I was sad, but you found it!\" \nThe teddy bear was overjoyed and thanked the fox for being so kind. From then on, the bear continued to love just to have the button with him. \nThe end!\n",
+    "new_tokens": 171,
+    "ended": true,
+    "max_new_tokens": 239
+   },
+   "dpo": {
+    "text": "\nThe bear felt helpless and didn't know what to do. He asked his friend the squirrel, \"What does this button do?\" \nThe squirrel said, \"It's a special button, but you must find it first.\" \nSo, with some help from his bug friends, they searched the forest for special buttons and Everywhere they went, they found the most beautiful button-spray or the one that would never be picked and before. \nThe bear was so happy and felt safe knowing that his friend had found his special button. From then on, the bear and the squirrel always kept the button in their hearts, feeling happy and safe.\n",
+    "new_tokens": 134,
+    "ended": true,
+    "max_new_tokens": 239
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a teddy bear who lost one button eye. ",
+   "seed": 2,
+   "pretrain": {
+    "text": "\nHe searched the house, but he couldn't find it. One day, he looked in the kitchen and saw a marker on the floor. He was so excited! He used the marker to hold his eye on it, and it made the marker look different. He was so happy! \nJust then, his mother walked into the living room. She saw covered in clean hands with the marker and she knew it was not nice to take. She asked him why he was not using the marker. \nHis mother was harsh and said that he should not take it. She said that the marker was not for drawing, and it should be resaches without asking. \nThe teddy bear had made a mistake. He knew it was wrong to take something that wasn't his and he felt bad. He gave the marker back to the bottom of his arm and said he would not do it again.\n",
+    "new_tokens": 183,
+    "ended": true,
+    "max_new_tokens": 239
+   },
+   "dpo": {
+    "text": "\nHe looked all around her bedroom, but he couldn’t find it. Then he saw the knob and smiled. It belonged to others who were gifted.\nHe quickly placed it down and returned it to his grandfather. The grandfather was very pleased to see him, because his grandfather knew how dependable it was for him to ask for help. He asked the bear wisely and the bear asked him at night, “What is keys for?”\nThe help from his grandfather taught him to value his wishes with his friends and family. He was very grateful for the help he gave him and made sure the gift was placed safely.\nMoral:\nForeshadowing your own wish and can make your dreams come true.\n",
+    "new_tokens": 145,
+    "ended": true,
+    "max_new_tokens": 239
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a teddy bear who lost one button eye. ",
+   "seed": 3,
+   "pretrain": {
+    "text": "\nThe teddy bear started to cry. When he saw a spider, he held his eye up. The spider said, \"Please don't cry, Sara.\"\nSara looked at the spider very closely. She said, \"What do you want it to take?\"\nThe teddy bear replied, \"I wanted to save the eye label for things. It let me steal it.\" \nSara smiled and said, \"You can save it? Come with me, and we can find a safer place for you.\"\nThe teddy bear nodded, and Sara picked out the missing button to matching her eye sign. She put it on and showed it to the teddy bear. \nThe teddy bear was so happy now that he gave his foot a big hug and became a hero.\n",
+    "new_tokens": 157,
+    "ended": true,
+    "max_new_tokens": 239
+   },
+   "dpo": {
+    "text": "\nThe teddy bear started to think. \"Where does this button belong?\" he asked himself.\nSo he asked all the animals on the farm. One duck said, \"It is hard to find the person who lost it.\" But he wanted to find it. \nSo he asked other animals if they knew who the missing button came from. They all all said they wanted to help. They searched the farm and found the owner. They asked if he lost the button and finally gave it back. The owner was so grateful and thanked them for helping.\nFrom then on, the teddy bear was always honest. He was very thankful to the animals and was even more proud!\n",
+    "new_tokens": 138,
+    "ended": true,
+    "max_new_tokens": 239
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a kite that was stuck in a tree. ",
+   "seed": 1,
+   "pretrain": {
+    "text": "\nThe kite was helpless and couldn't fly like the other kites. It wanted to be free. \n\"Help me!\" said the kite. \"I can't fly. I'm stuck in this tree forever!\"\nA little girl named Amy saw the kite. She knew she needed a balloon. She flew up to the tree and grabbed the kite. But, with a big pinch and a loud voice said, \"Now you can fly with me!\"\nThe helpless kite was scared and felt helpless. It tried to fly but it was too tangled. And then, the kite was stuck and couldn't fly anymore. Amy was very sad, and the kite cried.\n",
+    "new_tokens": 136,
+    "ended": true,
+    "max_new_tokens": 239
+   },
+   "dpo": {
+    "text": "\nThe kite was helpless and didn't know how to get down. It wanted to land, but it was hard to reach up high to reach it. \nA kind girl saw the kite and said, \"Let me help you, kite!\" She carefully fixed the kite into the shape of a ladder. Then she took it and slowly made it back down to the ground. \nIt landed safely on the ground, and the moral of the story is this important thing to do and help others looking for their needs.\n",
+    "new_tokens": 106,
+    "ended": true,
+    "max_new_tokens": 239
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a kite that was stuck in a tree. ",
+   "seed": 2,
+   "pretrain": {
+    "text": "\nIt was stuck between two twigs, and it couldn’t tighten them together. Then the string began to pull and the kite came out of the tree. The kite was now released colorful flowers, and it started to rot and smelled strange. \nThe kite was so spoiled, it couldn’t move. It rolled over Dara’s wings and flew away. Her wings were sore at first, but it kept growing and flying until it was far away.\n",
+    "new_tokens": 95,
+    "ended": true,
+    "max_new_tokens": 239
+   },
+   "dpo": {
+    "text": "\nOne day, a strong wind blew and the kites started to disagree. The girls looked at each other and said, \"Why do others like to disagree?\"\nA kind voice nearby said, \"Sometimes people work together to change and understand things better.\"\nSo, the girls shook hands and flew to hang their kites in the wind. Soon, the kites flew wisely and safe. Everyone was happy and learned their lesson.\nThe moral of the story is that feels good inside to change things. Even if it means you get to work together and think of ways to change.\n",
+    "new_tokens": 117,
+    "ended": true,
+    "max_new_tokens": 239
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a kite that was stuck in a tree. ",
+   "seed": 3,
+   "pretrain": {
+    "text": "\nThe kite wanted to fly up. But it was too hard. People called for help but nothing happened.\nThe kite got so frustrated that it started to fly away. Without more hard work, the person stayed stuck underneath the kite forever. \nThe end.\n",
+    "new_tokens": 55,
+    "ended": true,
+    "max_new_tokens": 239
+   },
+   "dpo": {
+    "text": "\nThe kite wanted to fly up. But it was scared, because it was not easy for a bird to fly high. But the kite felt happy when it held the string.\nOne day, a kind bird saw the sad kite. The bird flew up to the kite and untied the string with its beak. The kite was so happy and flew away. Now, the kite could rest every day.\n",
+    "new_tokens": 82,
+    "ended": true,
+    "max_new_tokens": 239
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a little duck who wanted to swim. ",
+   "seed": 1,
+   "pretrain": {
+    "text": "\nThe duck went for a swim in the warm river. He was happy to be out there. But then, he saw something scary! He saw something really scary. It was a big fish! \nThe duck was so scared, he remembered a small shore. The water had so far away and the fish looked so scary and scary. The duck got even more scared, but he still knew he could stay strong. \nHe swam back to the shore and the fish gave him a big hug. The duck felt brave and happy. When he was all gone, the scary fish didn't come back and the duck was never seen again.\n",
+    "new_tokens": 131,
+    "ended": true,
+    "max_new_tokens": 240
+   },
+   "dpo": {
+    "text": "\nOn the day of the swim race, the little duck carried the happy duck's hand. They went to a special place where other ducks were swimming as fast as Adam was. \nAdam finally arrived at the swim race first! He was so excited to see how fast it had to go.\nThe first duck said yes and asked Adam where he got it. Adam said he was very lucky for the race. \nSo, Adam got ready, so the first duck gave him a big hug. Adam’s love for racing had paid off! And then he swam back onto the mysterious swim race and had lots of fun.\n",
+    "new_tokens": 129,
+    "ended": true,
+    "max_new_tokens": 240
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a little duck who wanted to swim. ",
+   "seed": 2,
+   "pretrain": {
+    "text": "\nHe asked the duck, \"Can I join your swimming?\" \nThe duck looked down and smiled. \"Of course! You can join us,\" he said. \nSo the duck hopped and splashed in the river. His feet felt cold, but soon started to soak in the cool water. He welcomed new creatures to his pond. \nThe ducks covered each other with joy. They kept swimming slowly and slowly, just towards them. One of the animals climbed onto the kayak and they soon found a new place to swim. \nThey all cheered and watched the kayak floating in the clear water. They enjoyed the wild water even more and had lots of fun. \nThe duck had made new friends. He was now happy, and he was glad he had joined his friends.\n",
+    "new_tokens": 161,
+    "ended": true,
+    "max_new_tokens": 240
+   },
+   "dpo": {
+    "text": "\nHis mother said to her, “Let’s have a pond!” The little duck was so excited and said yes. \nHer mother filled a big bucket of clear water and gave her hold of some land. Then she and her young duck went to the pond. \nThey started to swim. The little duck was getting tired, so he asked his mother for a better turn. His mother handed him some easy, clear water. They swam and splashed around, enjoying the calmness of the pond. \nSuddenly, they heard someone shout, “Let’s go swimming!” The little duck quacked, “Yay!” He ran as fast as he could to shore the bottom of the pond. And they drank happily in the clear water.\n",
+    "new_tokens": 152,
+    "ended": true,
+    "max_new_tokens": 240
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a little duck who wanted to swim. ",
+   "seed": 3,
+   "pretrain": {
+    "text": "\nThe little duck started to feel worried. He even tried to look for his family, but nothing seemed to work. The boat just lay still in the water and the little duck felt worried. \nSuddenly, a friendly bird flew by. He stopped on the edge and asked what the little duck was doing. The little duck said he did not know. \nThe friendly bird sang every day. The little duck felt worried so the tall bird could see that he was able to find her family. He stretched and blew, and soon, he had sight again!\nThe little duck was so happy! He swam and swam and soon he was back to his family. He never felt worried again. The End.\n",
+    "new_tokens": 145,
+    "ended": true,
+    "max_new_tokens": 240
+   },
+   "dpo": {
+    "text": "\nThe little duck asked his mom. \"Mom, can I go swim?\" he said.\nHis mom smiled and said, \"Yes, but don't go too far\".\nSo they ran as they started to swim. But as they swam, they began to fight. The little duck wanted to go right, but his mom said no. They kept trying to resist the fight. \nThen, one familiar idea, the little duck saw a line of ducks swimming. He asked her what it meant! His mom smiled and said, \"It's an extremely matching lame. Try raising your happiness, it won't take you anywhere.' So, this will help you learn that if you stay focused!\nThe duck showed them how to be quiet and make decisions. Soon, the little duck saw how peaceful it had improved and she understood how important it was to stay focused and not act quickly. The duck enjoyed going home, knowing that it was helping the ducks along the way, and it clicked haily thanked his mom with a big hug.\n",
+    "new_tokens": 216,
+    "ended": true,
+    "max_new_tokens": 240
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a girl named Anna who wanted to bake a cake. ",
+   "seed": 1,
+   "pretrain": {
+    "text": "\nAnna and her mom were in the kitchen, but the cake was broken! The oven was broken and the cake was dead. Anna felt sad and didn't know what to do. \nThen, a friendly dragon flew down from the sky. He offered to help Anna and her mom. They made a new cake this time and it was delicious! \nAnna was so happy! She knew that the dragon wasn't scary at all and was very kind. She enjoyed the cake and baked a new cake.\n",
+    "new_tokens": 104,
+    "ended": true,
+    "max_new_tokens": 237
+   },
+   "dpo": {
+    "text": "\nAnna and her mom went to the kitchen to make the cake. They mixed flour, sugar, and eggs. Anna's mom said, \"Now we need to add to the heat.\"\nAnna and her mom put the cake in the oven. They waited for it to cool. Anna's mom said, \"When this cake and rice will taste so good.\"\nWhen the cake was ready, they took it out of the oven. They put it on the table and let it cool. Then they cut the cake with spoons. The cake was perfect! Anna, her mom, and her dad had a fun time making the cake together.\n",
+    "new_tokens": 130,
+    "ended": true,
+    "max_new_tokens": 237
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a girl named Anna who wanted to bake a cake. ",
+   "seed": 2,
+   "pretrain": {
+    "text": "\nSo, the girl put on her apron and went to the kitchen. She mixed flour, flour and eggs together to make the cake. \nSuddenly, something crazy happened. AYou dropped the mixed in the mix of flour and eggs spilled everywhere!\nAnna started to cry. Tears started on her face. She had made a mess. \nShe started to cry, but it was too late, the cake was ruined. \nThe help of her mom taught her to be careful of other people's things and to keep her kitchen clean. \nAnna learned a valuable lesson that day. She never forgot it and always made sure the cake was baked properly.\n",
+    "new_tokens": 136,
+    "ended": true,
+    "max_new_tokens": 237
+   },
+   "dpo": {
+    "text": "\nAnna asked her mom, \"Mom, can I bake a tight cake?\" Her mom said, \"Yes, you can, but be careful not to destroy it.\" Anna was excited and started to mix the ingredients. \nAnna mixed and mixed until the cake started to look pretty. She was so happy for her cake. But then, she saw something shiny covered in sand. She used her mom's arm to draw a secret note using the help of her tight knife.\nSuddenly, Anna's toy car fell into the pond and sank into the sand. She watched the car floating and the clear note read, \"Don't worry, Anna, we can fix it!\" Anna was relieved and thanked her mom. They went home, happy that she could still bake a cake on her tight cake.\n",
+    "new_tokens": 162,
+    "ended": true,
+    "max_new_tokens": 237
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a girl named Anna who wanted to bake a cake. ",
+   "seed": 3,
+   "pretrain": {
+    "text": "\nAnna got all the ingredients and started to make the cake. She made eggs, milk, and flour. She used the mixer to mix the cake batter. Then, she put in all the things they needed. \nAnna kept stirring until it was all very very messy. Everywhere the floor was clean! Anna was happy because she made her cake fit. \nAnna wanted to make every cake, so she opened the can of mixer and put some flour, sugar, and flour. \nWhen Anna was done, she saw the box had grown so big! It was bigger than her! \nMom came in and saw what she was doing. She was so proud!\n\"she have a big gift! You finished, Anna!\" Mom said. \nAnna smiled and said, \"Thank you so much for making a great cake. I can't wait to share it with you next time!\"\n",
+    "new_tokens": 185,
+    "ended": true,
+    "max_new_tokens": 237
+   },
+   "dpo": {
+    "text": "\nAnna got all the things she needed and asked her mom, \"Mom, can you help me bake a cake?\" Her mom smiled and said, \"Of course, Anna! Let's start by opening the pantry bottle and find the right pieces.\"\nAnna and her mom pulled the eggs out of the right piled bowl. They mixed the batter and put it in the oven. When the cake was ready, they took it out and let it cool. Then, Anna stirred the batter with a fork.\nWhen the cake was done, they took it out of the oven and let it cool. Anna put frosting on it and said, \"It looks so pretty!\" Her mom smiled and said, \"Yes,! You did a great job baking. Now you know what useful it is, the alarm clock.\nAnd it's always the best bath ever!\n",
+    "new_tokens": 176,
+    "ended": true,
+    "max_new_tokens": 237
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a small fish who lived alone in a pond. ",
+   "seed": 1,
+   "pretrain": {
+    "text": "\nOne day, a young jellyfish named Lizzy swam up to the pond and said, \"Hello, why are you not glad to be there?\"\nThe other fish replied to her, \"Crang your reeds!\"\nLizzy said, \"My Mom told me best, she needed a drink of water and some patience.\"\nSo Lizzy went to the nearest store with her fish- and came back with a surprise. She was so cheerful!\nEvery day she remembered to eat her wise food and listened to her mom's advice. \n\"You all would take a sip and be thankful for your lesson,\" said one, \"it was not as special as you think before ripe before indamma.\"\nThe moral of the story is to take savings and dedicational good advice even the most times that we give us a chance to enjoy life.'\n",
+    "new_tokens": 174,
+    "ended": true,
+    "max_new_tokens": 238
+   },
+   "dpo": {
+    "text": "\nOne day, a kind doctor named Sam came to the pond to feed the fish. He saw that the fish was dead and needed to be taken care of. The fish felt sad and asked the doctor for help.\nAfter a few days, a kind doctor brought some food to feed the fish. The fish ate this good and started to feel better. But then, something unexpected happened. When the fish woke up, it was a beautiful butterfly! The bird thanked Sam for helping her and felt safe. Sam was happy that the bird could fly and find food. From that day on, Tim always made sure to help others, just like the butterfly helped the dead fish.\n",
+    "new_tokens": 137,
+    "ended": true,
+    "max_new_tokens": 238
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a small fish who lived alone in a pond. ",
+   "seed": 2,
+   "pretrain": {
+    "text": "\nOne day, a hippo came to the pond. He was very sleepy and he looked around the pond. He slowly crept up to the edge of the pond. Suddenly the frog came down and said, \"Why are you so sleepy?\" \nThe little fish started to cry. \"My friends!\" he said. The frog smiled and replied, \"That's okay - I know it is at a point in the pond, just the right size. I will get you a fish if you promise not to be so bossy.\" \nThe frog promised to be nice and shared with the serious animals around his pond. Soon, many fish swam away and the frog found a spot of plenty for himself to play. \nThe little fish was very happy with the frog's meal and they both smiled. It was a special day at the pond filled with sparkling lemonade and laughter.\n",
+    "new_tokens": 177,
+    "ended": true,
+    "max_new_tokens": 238
+   },
+   "dpo": {
+    "text": "\nOne day, a kind bird saw the small fish hopping around. The bird called out to the fish, \"Hi! Can I swim with you?\" The fish was so happy to have a new friend and said, \"Yes, let's play together!\"\nAs they swam, they started to discover big and small creatures. They saw a house with windows and a dog with a bell on its roof. They met a wise old fish who asked help to open the door of the house. The wise fish used his fins to open the door and entered the little fish's new home.\nIn the home, the fish and the dog played and had fun together. They welcomed the fish back into the pond and made many new friends. And they all lived happily ever after.\n",
+    "new_tokens": 157,
+    "ended": true,
+    "max_new_tokens": 238
+   }
+  },
+  {
+   "kind": "heldout",
+   "prompt": "Once upon a time, there was a small fish who lived alone in a pond. ",
+   "seed": 3,
+   "pretrain": {
+    "text": "\nOne day, the small fish saw a thin bug. \"Hello,\" said the small fish. The bug was sad because it had a hurt leg. The small fish wanted to help the bug feel better. \nThe small fish told the small fish, \"You must pray to the other fish. The right thing comes up. When the fish parents are feeling sad, they will help every day.\" The small fish prayed and thanked the small fish.\nThe next time the small fish found a shiny thing, it wanted to gain help from its friends. The small fish found a pepper and brought it back to the fish's leg. The small fish felt much better and was very happy.\nNow, the small fish and its friends could all speak to each other! They played together and helped each other. They learned that praying and helping others can make them feel good inside their heart.\n",
+    "new_tokens": 180,
+    "ended": true,
+    "max_new_tokens": 238
+   },
+   "dpo": {
+    "text": "\nOne day, the small fish saw a big bug. \"Hello, big bug! Will you play with me?\" the small bug said, \"Yes, I will play with you, small fish.\"\nThe small fish and the big bug played every day. They liked to swim fast and jump high. Soon, the small fish and the big bug became best friends. They were the best of friends, and they played together every day in the pond.\n",
+    "new_tokens": 93,
+    "ended": true,
+    "max_new_tokens": 238
+   }
+  },
+  {
+   "kind": "open",
+   "prompt": "Once upon a time",
+   "seed": 1,
+   "pretrain": {
+    "text": ", in a small town, there was a fat cat named Tom. Tom loved to play with his ball all day long. He had many friends who liked to play with him.\nOne day, Tom met a new friend named Tim. Tim was a small bird who could not fly. Tom wanted to play with Tim. So, Tom and Tim played with the ball together. They were very happy.\nAs they played, Tom forgot about Tim. Tim flew to the river and got stuck in the water. Tom felt bad for not sharing his ball with Tim. He learned that it is important to share and not be selfish. From that day on, Tom and Tim played together and shared their toys.\n",
+    "new_tokens": 143,
+    "ended": true,
+    "max_new_tokens": 252
+   },
+   "dpo": {
+    "text": ", in a small town, there was a fat cat named Tom. Tom loved to play with his ball all day long. He had many friends who liked to play with him.\nOne day, Tom met a new friend named Tim. Tim was a small bird who could not fly. Tom wanted to play with Tim. So, Tom and Tim played with the ball together. They were very happy.\nAs they played, Tom forgot about his grumpy face. He remembered that laughing and playing with his friends made him laugh. They all had so much fun kicking the ball together. And at the end of the day, Tom was happy again.\n",
+    "new_tokens": 131,
+    "ended": true,
+    "max_new_tokens": 252
+   }
+  },
+  {
+   "kind": "open",
+   "prompt": "Once upon a time",
+   "seed": 2,
+   "pretrain": {
+    "text": ", there was a young boy who loved to eat lollipops. One day, he went outside and he had a big plan for a very special day. It was something special! The boy knew he was going to raise his own lollipop and he was very excited! He started to pack it all into a bag. He was putting the heavy box there when he thought of a second plan. He used at a lot of different lollipops to make the box bigger.\nWhen he climbed inside to get his lollipop, he saw a funny looking face sitting there. He took out the lollipop and found it serious. It was rough, it was very sharp, the sweet and twisty lollipop he had had not shown up. He picked it up and started to chew the lollipop.\nIt tasted really bad and he was sick. He ate the whole lollipop and the whole thing he had planned for it again. Then he blew up some lollipops and put them back in the box. He wanted to go for a jog ever so that he was too young!\nThis experience is a little doubted activity about a brave little boy who saved up his own lollipop treats and saved him just for it. He learned that it's not nice to pretend to be something when you're independent",
+    "new_tokens": 252,
+    "ended": false,
+    "max_new_tokens": 252
+   },
+   "dpo": {
+    "text": ", there was a young boy named Tim. Tim had a big dream. He wanted to be the best skold in the whole world. One day, Tim's dad helped him paint a colorful wall. Tim was very happy.\nBut then, Tim started to worry. He knew there was something to hang for help. Tim saw a big balloon. The balloon covered the whole tape with one at a time. The tape went up and made the help of their friends. Everyone was safe.\nPeople learned that with love and care, they can do anything. Tim learned that being a young boy could be fun, but being wild was even more important. And he learned that sometimes, things can be difficult, but with love and care, anything is possible.\n",
+    "new_tokens": 154,
+    "ended": true,
+    "max_new_tokens": 252
+   }
+  },
+  {
+   "kind": "open",
+   "prompt": "Once upon a time",
+   "seed": 3,
+   "pretrain": {
+    "text": ", there was a little boy who was very fearful. He was afraid of getting into trouble. One day, his mother gave him an important task. She said to him, \"You must not be as fearful as things are your family. You should celebrate yourself. You must just stay calm while I clean.\"\nThe little boy decided he did not trust his mother. Instead, he walked every day, gathering up peace for his family. He saw a line of people with kind faces. He was terrified at first, but then he thought, \"Maybe I can celebrate this work.\" \nHe put his young hands on his hips and said, \"Wait, why can't I join you? It looks so good as your mommy told me not to worry. He's not going to regret being scaredy.\" \nAnd suddenly, a voice on the other side of his face shouted, \"Yes, you can! I accept this exit as much as you like--it's attic allowed yourself to sleep!\" \nThe little boy was so happy that he had found his way through the bad thought of himself. He thanked the invitation elderlyly for the life and ran off to play with himself. From that day forward, he was never scared again.",
+    "new_tokens": 252,
+    "ended": false,
+    "max_new_tokens": 252
+   },
+   "dpo": {
+    "text": ", there was a little boy who loved to help his mom in the kitchen. One day, his mom gave him a big apron to wear while he helped cook. She said, \"Be very careful with the apron, it will keep your hands warm.\"\nThe little boy was excited to help his mom. He took the apron and went outside to play. He put shells on his face every day. The apron was red and had little flowers on it. He was very careful with the apron because he didn't want the clothes to get dirty or messy.\nFrom that day on, the little boy always remembered to be careful while doing his tasks. He was a very good helper. And his mom was proud of him!\n",
+    "new_tokens": 147,
+    "ended": true,
+    "max_new_tokens": 252
+   }
+  },
+  {
+   "kind": "open",
+   "prompt": "Once upon a time",
+   "seed": 4,
+   "pretrain": {
+    "text": ", there was a little girl named Lily. She had a brown ball that she loved to play with. One sunny day, Lily found a big tip in her ball. The tip was shiny and round. Lily wanted to play with it, but she was scared it would spoil her ball.\nLily's mom saw her looking at the ball and said, \"Lily, it is not yours. You cannot play with this ball. It is bad and dirty.\" But Lily did not listen. She took the new ball and started to bounce it around her yard. The ball went very high and far away.\nAs the ball came closer, it hit a big rock in the yard. The friends looked and saw the ball. They were sad because the ball was not good to play with anymore. The empty red ball was not pretty anymore. The tip of it went \"snap, snap, snap\" not where it hit their ball. They learned that they should always listen to their moms and not play with things they do not know about.\n",
+    "new_tokens": 209,
+    "ended": true,
+    "max_new_tokens": 252
+   },
+   "dpo": {
+    "text": ", there was a little girl named Lily. She had a brown ball that she loved to play with. One sunny day, Lily found a tiny tip on her ball. The tip was shiny and round. Lily wanted to play with it, but she was a little sad because she wanted to share it with her friends.\nLily looked around and found a pretty ribbon. She put the ribbon around her ball and started to wrap it around her neck. Just then, her grandmother came into the room and saw Lily making the ball wrap. Grandma smiled and offered her a ribbon. Lily liked the idea and started to wrap the ball like her special dress.\nTogether, Lily and her grandma played with the ball all day long. They had so much fun and Lily was happy she shared her special idea with her tiny hands. At the end of the day, Lily waved goodbye to her special paws and went back to her house, feeling warm and proud.\n",
+    "new_tokens": 191,
+    "ended": true,
+    "max_new_tokens": 252
+   }
+  },
+  {
+   "kind": "open",
+   "prompt": "Once upon a time",
+   "seed": 5,
+   "pretrain": {
+    "text": ", there was a jolly woman named Jane. She loved to gather pretty and make friends. Every day, she would go to the field and gather flowers, fruits, and flowers.\nOne sunny day, a little bird flew down and said, \"Hi Jane, why are you so jolly?\" Jane replied, \"I like to gather flowers and make pretty memories for everyone to see.\" The bird said, \"I like to sing, smile, and flutter!\" Jane smiled and showed the bird a beautiful sight to see.\nAfter that, Jane finished gathering all the poppies and flowers. She made a cozy home and invited her friends to come and gather too. They all danced and played together, happy to have each other as friends.\n",
+    "new_tokens": 148,
+    "ended": true,
+    "max_new_tokens": 252
+   },
+   "dpo": {
+    "text": ", there was a jolly woman named Jane. She lived in a small house near a big tree. Every day, she would go outside and look at the sky at night.\nOne day, while Jane was outside, she saw something big and tall making a lot of noise. It was a giant bird! The bird flew straight towards Jane and said, \"Hello, I am Blue. Would you see me?\" Jane was scared, but she knew she had to act calmly.\nBlue flew close to the tree and said in a friendly voice, \"Of course, I will help you get your attention next time.\" Jane smiled and said, \"Thank you, Blue.\" Then, she went back to her house and took out her stories. She made many new friends that day, and they all stood back to watch her sleep.\n",
+    "new_tokens": 168,
+    "ended": true,
+    "max_new_tokens": 252
+   }
+  },
+  {
+   "kind": "open",
+   "prompt": "Once upon a time",
+   "seed": 6,
+   "pretrain": {
+    "text": ", there was a white dog named Spot. He had a friend named Tim. Tim was a little boy who loved to play with Spot. They played in the sun all day and had lots of fun.\nOne day, Tim dared Spot to go outside. He said, \"Come on, Spot! Let's go to the park!\" So, Spot went outside with Tim. They ran and played in the sun. They were very happy.\nAs they played, they saw a big yawn. The yawn was very big and furry. Tim and Spot went home to rest. Spot said, \"I had fun today, Tim. Let's play again tomorrow!\" Tim agreed, and they fell asleep under the moon.\n",
+    "new_tokens": 145,
+    "ended": true,
+    "max_new_tokens": 252
+   },
+   "dpo": {
+    "text": ", there was a strong dog named Max. He had a friend named Sam, who was a cat. They loved to play together in the park.\nOne day, Max and Sam found a big tree with a tree on top. They decided to use a measure to help the tree stay tall. The measure helped them to know how much they weighed. While they were playing, something unexpected happened.\nInstead of the other things in the tree, Max and Sam went to a secret place. At the secret place, they found a magic bag of seeds that glowed in the sun. The magic bag brought them to them, and they all became even better friends. From that day on, Sam and Max lived happily ever after, always finding new ways to trust others.\n",
+    "new_tokens": 155,
+    "ended": true,
+    "max_new_tokens": 252
+   }
+  },
+  {
+   "kind": "open",
+   "prompt": "Once upon a time",
+   "seed": 7,
+   "pretrain": {
+    "text": ", there was a big hotel. In this hotel, there lived a happy lady named Lucy. Lucy liked to gather pretty flowers and take them to her friends.\nOne day, a little bird came to the hotel. The bird was sad because it could not find any eggs to eat. Lucy wanted to help the bird. She had an idea. Lucy and the bird looked for eggs in the kitchen.\nLucy looked in the kitchen, the living room, and even the bathroom. Then, she saw many eggs. She picked them up and carried them to the dining room. Now, the bird was happy. Lucy and the bird became best friends and lived happily ever after.\n",
+    "new_tokens": 138,
+    "ended": true,
+    "max_new_tokens": 252
+   },
+   "dpo": {
+    "text": ", there was a big dog named Ben. Ben was very eager to help his friend, Kitty, escape from a dangerous place called a museum. Mom told Ben that there would be a big dragon in the museum, where they could swim and play.\nOne day, while they were swimming, they met a little duck. The duck said, \"Hello, little duck! I know a secret about the history of the big fish. Do you know where the treasure is?\" Ben showed the duck the way back to the museum. The duck was very happy and said, \"I got the treasure! Follow me!\"\nThey followed the duck through the museum and found a beautiful big rock. Ben and the duck shared the rock with the duck. The duck said, \"Thank you, Ben, for helping me find our treasure. Now we can be friends forever!\" And from that day on, Ben and the duck were the best of friends.\n",
+    "new_tokens": 190,
+    "ended": true,
+    "max_new_tokens": 252
+   }
+  },
+  {
+   "kind": "open",
+   "prompt": "Once upon a time",
+   "seed": 8,
+   "pretrain": {
+    "text": ", there was a family. The family had a mom, a dad, a little girl, and a little brother. They lived in a small house. The little brother liked to play with his toys and run around in the yard.\nOne day, the little brother saw a big dog outside. The dog dared his brother to go outside it. The little brother was scared, but he wanted to see what was outside the door. He wanted to play with the big dog.\nThe dad said, \"Don't worry, we know we can dare to go outside safely. The ground is safe on the ground.\" So, the family and the big dog went outside together. The dog stayed close, and the family was happy. They thought the dog's big brother would find a new place to play. The family clapped, and the little brother got back in the family. They all lived happily ever after.\n",
+    "new_tokens": 184,
+    "ended": true,
+    "max_new_tokens": 252
+   },
+   "dpo": {
+    "text": ", there was a family. The family had a mom, a dad, a little girl, and a little brother. They lived in a small house with their mom, dad, and baby brother. The family knew their family and friends loved each other very much.\nOne day, the mom was making a yummy cake. She asked her little boy, \"Can you help me add some sugar?\" The little boy said, \"Yes, let's mix it all together!\" So, they added lots of sugar and mixed together. But they made a big mess! Toys were everywhere, and clothes were on the floor.\nNow, the mom and dad could still use new cookies when they worried about the mess in the kitchen. The little boy helped them put everything in their right purpose, and they finished making the delicious cake. Everyone was happy and thanked the mom and dad. They all enjoyed the treat and had a big party together. From that day on, the mom and dad always helped each other, and their house was a happy home.\n",
+    "new_tokens": 211,
+    "ended": true,
+    "max_new_tokens": 252
+   }
+  }
+ ],
+ "provenance": {
+  "date_utc": "2026-10-12T17:35:38+00:00",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 167 Stepping 1, GenuineIntel",
+  "python": "3.12.9",
+  "torch": "2.14.1+cu130",
+  "numpy": "2.5.4",
+  "threads": 4,
+  "seconds": 752.4
+ }
+}

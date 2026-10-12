@@ -1,7 +1,7 @@
 {
  "_provenance": {
   "generated_by": "CUDA_VISIBLE_DEVICES=-1 uv run python verify/_parts_preview.py --write",
-  "date": "2026-10-11",
+  "date": "2026-10-12",
   "device": "cpu",
   "python": "3.12.9",
   "torch": "2.14.1+cu130",
@@ -151,7 +151,7 @@
    "name": "WebBot",
    "part": "III",
    "page": "part3.html",
-   "data": "OpenWebText (CS336 sample)",
+   "data": "OpenWebText（CS336 整理的样本）",
    "chapters": {
     "tokenizer": "ch07",
     "model": "ch08",

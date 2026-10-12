@@ -13,7 +13,7 @@
   {
    "name": "sft",
    "label": "SFT",
-   "description": "在上面的预训练权重上原样运行 ch03/03_sft.py：学会了按 Alpaca 模板作答。",
+   "description": "在预训练权重的基础上原样运行 ch03/03_sft.py：学会了按 Alpaca 模板作答。",
    "template": "alpaca",
    "order": 1,
    "manifest": "sft/manifest.json",

@@ -62,6 +62,8 @@ export async function mount(root, config) {
   const zoom = h('div', { class: 'zoom' });
   root.append(
     h('div', { class: 'ctl' }, h('label', {}, 'num_chunks'), slider, kLabel),
+    h('div', { class: 'w-label' }, `下面的条带：验证集开头的 ${offs.length + 1} 个故事（${fmt(size)} 字节，约 ${Math.round(size / 1000)} KB），`
+      + `${offs.length} 个 <|endoftext|>`),
     strip,
     h('div', { class: 'legend' }, h('span', {}, h('i', { class: 'raw' }), '等分的初始切点'), h('span', {}, h('i'), '吸附后的边界'),
       h('span', {}, h('i', { class: 'eot' }), '<|endoftext|>（故事之间）')),
@@ -70,13 +72,13 @@ export async function mount(root, config) {
 
   // whole validation file: counts for a few num_chunks values, computed from the real offsets
   const full = decodeOffsets(eot.deltas);
-  const rows = [8, 64, 1000, 100000].map((n) => {
+  const rows = [8, 64, 1000, 100000, 1000000].map((n) => {
     const r = chunkBoundaries(full, eot.size, n);
     return h('tr', {}, h('td', {}, fmt(n)), h('td', {}, fmt(r.boundaries.length)),
       h('td', {}, `${(eot.size / (r.boundaries.length - 1) / 1e6).toFixed(n >= 1000 ? 3 : 2)} MB`));
   });
   root.append(h('div', { class: 'w-label', style: { marginTop: '1rem' } },
-    `整份验证集（${fmt(eot.size)} 字节，${fmt(eot.count)} 个 <|endoftext|>）上，同一个函数给出的边界数：`),
+    `整份验证集（${fmt(eot.size)} 字节，${fmt(eot.count)} 个 <|endoftext|>，边界最多 ${fmt(eot.count + 2)} 个）上，同一个函数给出的边界数：`),
   h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'num_chunks'), h('th', {}, '边界数（含首尾）'), h('th', {}, '平均每块'))),
     h('tbody', {}, rows)));
 

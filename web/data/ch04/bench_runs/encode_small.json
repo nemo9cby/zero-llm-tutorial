@@ -1,0 +1,65 @@
+{
+ "input": "tiny_stories_valid.txt first 29,642 bytes",
+ "bytes": 29642,
+ "merges": 9743,
+ "runs": {
+  "ch01": {
+   "wall": 60.477,
+   "cpu": 45.453,
+   "load": {
+    "mean": 99.1,
+    "min": 86.6,
+    "max": 100.0
+   }
+  },
+  "06": {
+   "wall": 0.211,
+   "cpu": 0.203,
+   "load": {
+    "mean": 93.0,
+    "min": 93.0,
+    "max": 93.0
+   }
+  },
+  "storybot": {
+   "wall": 0.191,
+   "cpu": 0.156,
+   "load": {
+    "mean": 95.5,
+    "min": 95.5,
+    "max": 95.5
+   }
+  },
+  "memo": {
+   "wall": 0.077,
+   "cpu": 0.078,
+   "load": {
+    "mean": 91.4,
+    "min": 91.4,
+    "max": 91.4
+   }
+  }
+ },
+ "tokens": 7294,
+ "identical": true,
+ "accomplishment": {
+  "ids": [
+   7159
+  ],
+  "same": true,
+  "ch01_ms": 15.1,
+  "06_ms": 0.233
+ },
+ "env": {
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "logical_cpus": 16,
+  "physical_cores": 8,
+  "ram_gb": 47.7,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "numpy": "2.5.4",
+  "regex": "2026.9.29",
+  "note": "RTX 3060 Ti busy with the tutorial's training run during all measurements (CPU only here)",
+  "date": "2026-10-11 20:27"
+ }
+}

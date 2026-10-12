@@ -3,12 +3,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { softDict, MOVIES } from '../../web/widgets/ch02-softdict.js';
-import { dotSamples, variance, meanMaxWeight } from '../../web/widgets/ch02-scaling.js';
-import { leakReport, MODES } from '../../web/widgets/ch02-masklab.js';
+import { softDict, MOVIES, entropy, hintFor } from '../../web/widgets/ch02-softdict.js';
+import { dotSamples, variance, meanMaxWeight, effectiveKeys, histogram, N_KEYS } from '../../web/widgets/ch02-scaling.js';
+import { leakReport, MODES, verdictFor } from '../../web/widgets/ch02-masklab.js';
 import { panels, futureCells, elementAt, C, H, D } from '../../web/widgets/ch02-heads.js';
 import { prevTokenMeans, PRESETS as HEAD_PRESETS } from '../../web/widgets/ch02-attnmaps.js';
-import { countParams, PRESETS } from '../../web/widgets/ch02-params.js';
+import { countParams, PRESETS, approxNote } from '../../web/widgets/ch02-params.js';
 import { erf, geluErf, geluTanh } from '../../web/widgets/ch02-gelu.js';
 import { mulberry32, softmax } from '../../web/widgets/ch02-util.js';
 
@@ -39,6 +39,30 @@ test('软字典：相似度 ×10 时朴素 softmax 出现 NaN，稳定写法没�
   assert.ok(Math.abs(stable.reduce((a, b) => a + b, 0) - 1) < 1e-12);
 });
 
+test('软字典的提示：NaN 分溢出（inf/inf）与下溢（0/0）两种原因；余弦 ×10 时不说“几乎一样大”', () => {
+  const state = (o) => ({ T: 1, kind: 'dot', scale: 1, naive: false, ...o });
+  const over = state({ scale: 10, naive: true });
+  const outOver = softDict([6, 4, 5], over);
+  assert.ok(Number.isNaN(outOver.result));
+  assert.match(hintFor(over, outOver), /溢出成 inf，inf \/ inf = NaN/);
+  const under = state({ T: 0.01, kind: 'dist', naive: true });       // 负欧氏距离 / 很小的 T：最大也只有 −755
+  const outUnder = softDict([10, 0, 10], under);
+  assert.ok(Number.isNaN(outUnder.result) && Math.max(...outUnder.scores.map((s) => s / 0.01)) < -745);
+  assert.match(hintFor(under, outUnder), /下溢成 0，0 \/ 0 = NaN/);
+  assert.doesNotMatch(hintFor(under, outUnder), /溢出成 inf/);
+  const cos10 = state({ kind: 'cos', scale: 10 });                   // 相似度 7.05–9.87，权重 2.35%–39.41%
+  assert.doesNotMatch(hintFor(cos10, softDict([6, 4, 5], cos10)), /−1 到 1/);
+  const cos1 = state({ kind: 'cos' });
+  assert.match(hintFor(cos1, softDict([6, 4, 5], cos1)), /−1 到 1/);
+});
+
+test('软字典的熵：平均分给 7 部是 ln 7 nats = log2 7 bits；全给一部是 0', () => {
+  assert.ok(Math.abs(entropy(new Array(7).fill(1 / 7)) - Math.log(7)) < 1e-12);
+  assert.equal(entropy([0, 0, 1, 0]), 0);
+  const w = softDict([6, 4, 5]).weights;
+  assert.ok(entropy(w) > 0 && entropy(w) < Math.log(7));
+});
+
 test('缩放：Var(q·k) ≈ d，除以 √d 后 ≈ 1（验证 2.3-b）', () => {
   const rand = mulberry32(7);
   for (const d of [16, 64, 1024]) {
@@ -56,6 +80,21 @@ test('缩放：不缩放时越来越尖，缩放后与 d 无关（验证 2.3-c �
   assert.ok(Math.max(...sc) - Math.min(...sc) < 0.01 && Math.max(...sc) < 0.06, `scaled ${sc}`);
 });
 
+test('缩放图：与验证 2.3-c 同样 256 个键，缩放后最大权重约 0.04；有效键数 1/Σw² 在均分时等于 k', () => {
+  assert.equal(N_KEYS, 256);
+  const sc = meanMaxWeight(64, { scaled: true, rand: mulberry32(5) });     // 默认就是 256 个键
+  assert.ok(sc > 0.03 && sc < 0.06, `scaled ${sc}`);
+  assert.ok(Math.abs(effectiveKeys(new Array(10).fill(0.1)) - 10) < 1e-12 && effectiveKeys([1, 0, 0]) === 1);
+  // 直方图的横轴固定：缩放后的样本几乎全落在 ±4 里，不缩放的样本 d 越大越少落在 ±4 里
+  const rand = mulberry32(9);
+  const inside = (xs) => histogram(xs, -4, 4, 40).reduce((a, [, c]) => a + c, 0) / xs.length;
+  for (const d of [4, 1024]) {
+    const raw = dotSamples(d, 4000, rand);
+    assert.ok(inside(raw.map((x) => x / Math.sqrt(d))) > 0.99);
+    if (d === 1024) assert.ok(inside(raw) < 0.2);
+  }
+});
+
 test('掩码实验台：只有“先遮挡、再按行 softmax”不漏（验证 2.6-d/e）', () => {
   const past = (mode) => leakReport(mode).slice(0, 4);
   assert.ok(past('right').every((r) => !r.changed && !r.nan));
@@ -63,6 +102,11 @@ test('掩码实验台：只有“先遮挡、再按行 softmax”不漏（验证
   const strict = past('strict');
   assert.ok(strict[0].nan && strict.slice(1).every((r) => !r.changed && !r.nan));
   assert.equal(MODES.length, 5);
+  // 整行被遮住时，先减最大值的 softmax 得到的是 −∞ − (−∞)，不是 0/0（验证 2.6-d 的标题与 2.6.3 的正文）
+  assert.match(verdictFor(leakReport('strict')), /−∞ − \(−∞\) = NaN/);
+  assert.ok(Number.isNaN(-Infinity - -Infinity) && Number.isNaN(Math.exp(-Infinity - -Infinity)));
+  assert.match(verdictFor(leakReport('right')), /^不漏/);
+  assert.match(verdictFor(leakReport('axis')), /^泄漏/);
 });
 
 test('形状追踪：正确的拆法没有“未来”的格子，错误的拆法有（验证 2.8-e 的结论）', () => {
@@ -76,6 +120,11 @@ test('形状追踪：正确的拆法没有“未来”的格子，错误的拆�
   for (const kind of ['right', 'wrong']) {
     assert.deepEqual(panels(kind).flat(2).sort((a, b) => a - b), [...Array(C * H * D).keys()]);
   }
+  // 第 4 步的说明：“头 0”面板的位置 1、2 装着位置 0 的头 1、头 2；“头 1”“头 2”面板的位置 0 装着位置 1、2 的数据
+  const at = (a, r) => elementAt(panels('wrong')[a][r][0]);
+  assert.deepEqual([at(0, 1), at(0, 2)].map(({ p, h }) => [p, h]), [[0, 1], [0, 2]]);
+  assert.deepEqual([at(1, 0).p, at(2, 0).p], [1, 2]);
+  assert.ok(futureCells('wrong').some(({ a, r }) => a === 1 && r === 0) && futureCells('wrong').some(({ a, r }) => a === 2 && r === 0));
 });
 
 test('真实注意力：L4H3 是最强的 previous-token head；预设的头与正文一致（验证 2.8-a）', () => {
@@ -105,6 +154,14 @@ test('参数计算器：11,121,640 / 11,505,640 / GPT-2 small 两种写法（验
   assert.equal(countParams({ ...PRESETS.codebot, tied: false }).total, 11_505_640);
   assert.equal(countParams({ ...PRESETS.gpt2, style: 'codebot' }).total, 124_453_201);
   assert.equal(countParams(PRESETS.gpt2).total, 124_439_808);
+  // 12·L·E² 只在 ff = 4E 时成立；改了 FFN 宽度，说明文字要换成 L·(4E² + 2·E·ff)
+  const r = countParams(PRESETS.codebot);
+  assert.equal(r.approxBlocks, r.approx12);
+  assert.match(approxNote(PRESETS.codebot, r), /^粗估 12·L·E² = 10,616,832/);
+  const narrow = { ...PRESETS.codebot, ff: 768 };
+  const rn = countParams(narrow);
+  assert.equal(rn.approxBlocks, 6 * (4 * 384 * 384 + 2 * 384 * 768));
+  assert.match(approxNote(narrow, rn), /ff ≠ 4E/);
 });
 
 test('GELU：tanh 近似与 erf 版最大差 4.73e-4，最低点 -0.16997（验证 2.9-b）', () => {

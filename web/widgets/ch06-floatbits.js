@@ -95,11 +95,19 @@ function injectStyle() {
 .w-ch06-fb .fmt-head { display: flex; flex-wrap: wrap; gap: .2rem .9rem; align-items: baseline; font-size: .88rem; color: var(--ink-2); }
 .w-ch06-fb .fmt-head b { color: var(--ink); font-size: .95rem; }
 .w-ch06-fb .fmt-head .val { font-family: var(--mono); color: var(--ink); }
-.w-ch06-fb .bits { display: flex; flex-wrap: wrap; gap: 1px; margin: .3rem 0 .2rem; font: 11px/1 var(--mono); }
-.w-ch06-fb .bit { width: 10px; height: 18px; display: grid; place-items: center; border-radius: 2px; color: var(--ink); }
-.w-ch06-fb .bit.s { background: color-mix(in srgb, var(--plum) 30%, var(--paper)); }
-.w-ch06-fb .bit.e { background: color-mix(in srgb, var(--ai) 28%, var(--paper)); }
-.w-ch06-fb .bit.m { background: color-mix(in srgb, var(--moss) 24%, var(--paper)); }
+.w-ch06-fb { --fb-s: color-mix(in srgb, var(--plum) 30%, var(--paper)); --fb-e: color-mix(in srgb, var(--ai) 28%, var(--paper));
+  --fb-m: color-mix(in srgb, var(--moss) 24%, var(--paper)); }
+:root[data-theme="dark"] .w-ch06-fb { --fb-s: color-mix(in srgb, var(--plum) 52%, var(--paper));
+  --fb-e: color-mix(in srgb, var(--ai) 34%, var(--paper)); --fb-m: color-mix(in srgb, var(--moss) 34%, var(--paper)); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .w-ch06-fb { --fb-s: color-mix(in srgb, var(--plum) 52%, var(--paper));
+    --fb-e: color-mix(in srgb, var(--ai) 34%, var(--paper)); --fb-m: color-mix(in srgb, var(--moss) 34%, var(--paper)); }
+}
+.w-ch06-fb .bits { display: flex; flex-wrap: nowrap; gap: 1px; margin: .3rem 0 .2rem; font: 11px/1 var(--mono); }
+.w-ch06-fb .bit { flex: 0 1 10px; min-width: 0; height: 18px; display: grid; place-items: center; border-radius: 2px; color: var(--ink); }
+.w-ch06-fb .bit.s { background: var(--fb-s); }
+.w-ch06-fb .bit.e { background: var(--fb-e); }
+.w-ch06-fb .bit.m { background: var(--fb-m); }
 .w-ch06-fb .bit.gap { margin-left: 4px; }
 .w-ch06-fb .flag { font-size: .8rem; padding: 0 .35rem; border-radius: 3px; border: 1px solid var(--kincha); color: var(--kincha); }
 .w-ch06-fb .key { display: flex; flex-wrap: wrap; gap: .2rem 1rem; font-size: .8rem; color: var(--ink-2); }
@@ -117,9 +125,9 @@ export function mount(root, config = {}) {
   const out = h('div', { 'aria-live': 'polite' });
   root.append(h('div', { class: 'inrow' }, input), presets,
     h('div', { class: 'key', style: 'margin-top:.6rem' },
-      h('span', { style: '--c:color-mix(in srgb, var(--plum) 30%, var(--paper))' }, '符号'),
-      h('span', { style: '--c:color-mix(in srgb, var(--ai) 28%, var(--paper))' }, '指数'),
-      h('span', { style: '--c:color-mix(in srgb, var(--moss) 24%, var(--paper))' }, '尾数')),
+      h('span', { style: '--c:var(--fb-s)' }, '符号'),
+      h('span', { style: '--c:var(--fb-e)' }, '指数'),
+      h('span', { style: '--c:var(--fb-m)' }, '尾数')),
     out);
 
   function render() {

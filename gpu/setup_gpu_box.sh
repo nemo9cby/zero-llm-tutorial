@@ -67,8 +67,10 @@ echo "== Python environment (uv.lock)"
 run uv sync --frozen
 ENV_FILE="$WORK/zllm.env"
 if [ -n "$TORCH_INDEX" ]; then
-  run uv pip install --reinstall-package torch "torch==2.14.1" --index-url "$TORCH_INDEX" \
-      --extra-index-url https://pypi.org/simple
+  # `--index` ranks above PyPI (uv's default index), so torch comes from the CUDA 12.6 index. Do not write
+  # `--index-url <cu126> --extra-index-url <PyPI>`: uv ranks every --extra-index-url *above* --index-url and
+  # would reinstall PyPI's CUDA 13.0 wheel. The +cu126 pin turns a wrong pick into an error.
+  run uv pip install --reinstall-package torch "torch==2.14.1+cu126" --index "$TORCH_INDEX"
   # From now on `uv run` must not "repair" torch back to the CUDA 13 wheel.
   run sh -c "echo 'export UV_NO_SYNC=1' > '$ENV_FILE'"
   export UV_NO_SYNC=1

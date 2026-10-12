@@ -196,6 +196,25 @@ for (const backend of backends) {
   });
 }
 
+test('generate(): computed counts the positions of every forward pass, as positions_computed in P.7 of the page', () => {
+  const bot = new CodeBot(ckpt.manifest, ckpt.buffer);
+  const T = bot.cfg.T;
+  // The first token prefills the prompt; after that, 1 position per token while the cached sequence fits in T,
+  // otherwise min(sequence, T): the book's loop recomputes the cropped window (content/playground.md, P.7.2).
+  const expected = (nPrompt, nNew, cache) => {
+    let total = Math.min(nPrompt, T);
+    for (let seq = nPrompt + 1; seq < nPrompt + nNew; seq++) total += cache && seq <= T ? 1 : Math.min(seq, T);
+    return total;
+  };
+  const run = (n, cache) => [...generate(bot, ids.slice(0, 5), { temperature: 0, maxNewTokens: n, stopAtEnd: false, top: 0, cache })]
+    .map((t) => t.computed);
+  assert.deepEqual(run(3, false), [5, 11, 18]);    // without a cache: 5, then 6, then 7 positions (not T = 8 each)
+  for (const cache of [true, false]) {
+    const got = run(9, cache);
+    assert.deepEqual(got, got.map((_, k) => expected(5, k + 1, cache)), `cache: ${cache}`);
+  }
+});
+
 test('the two backends agree to float32 rounding (< 1e-5)', () => {
   const a = new CodeBot(ckpt.manifest, ckpt.buffer, { backend: 'wasm-simd' }).forward(ids).logits;
   const b = new CodeBot(ckpt.manifest, ckpt.buffer, { backend: 'js' }).forward(ids).logits;

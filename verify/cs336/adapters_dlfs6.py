@@ -11,8 +11,9 @@ also not a valid A1 submission.)
 
 Variants (environment variable DLFS6_A1_VARIANT):
   as_shipped      DLFS6 exactly as published (commit pinned by the git submodule).
-  one_line_fixes  three one-line deltas applied, each explained on the cs336 page:
-                  RMSNorm eps=1e-5, BPE tie-break on bytes, get_batch includes the last window.
+  one_line_fixes  three small deltas applied, each shown verbatim on the cs336 page:
+                  RMSNorm eps=1e-5; BPE tie-break on bytes (one changed line plus two added lines that
+                  keep an id -> bytes table); get_batch includes the last window.
 
 Used by verify/cs336/run_a1.py (which writes verify/cs336/results.json) and verify/test_reference.py.
 """
@@ -72,32 +73,31 @@ def _quiet(iterable, **_kwargs):
     return iterable
 
 
-# The three one-line deltas (shown verbatim on the cs336 page).
+# The three small deltas (shown verbatim on the cs336 page).
 GET_BATCH_FIX = ("torch.randint(len(data) - context_len - 1, (batch_size,))",
                  "torch.randint(len(data) - context_len, (batch_size,))")
-TIEBREAK_FIX = ("key=lambda pair: (pair_counts[pair], pair[0], pair[1])",
-                "key=lambda pair: (pair_counts[pair], id_bytes(pair[0], merge_rules), id_bytes(pair[1], merge_rules))")
+# BPE tie-break on bytes inside ch04/02_bpe_cache.py train_bpe: keep an id -> bytes table next to merge_rules
+# (two added lines) and compare those bytes instead of the ids (one changed line). (old, new) pairs, each
+# `old` occurs exactly once in the extracted functions.
+TIEBREAK_FIX = (
+    ("    merge_rules = {}\n",
+     "    merge_rules = {}\n    vocab_bytes = {i: bytes([i]) for i in range(256)}  # 新增：id → 字节串\n"),
+    ("key=lambda pair: (pair_counts[pair], pair[0], pair[1])",
+     "key=lambda pair: (pair_counts[pair], vocab_bytes[pair[0]], vocab_bytes[pair[1]])"),
+    ("        merge_rules[best_pair] = new_id\n",
+     "        merge_rules[best_pair] = new_id\n"
+     "        vocab_bytes[new_id] = vocab_bytes[best_pair[0]] + vocab_bytes[best_pair[1]]  # 新增\n"),
+)
 RMSNORM_EPS_FIX = 1e-5  # nn.RMSNorm(embed_dim) -> nn.RMSNorm(embed_dim, eps=1e-5)
 
 
-_BYTES = {"owner": None, "map": {}, "seen": 0}
+def bpe_trainer(fixed: bool):
+    """ch04/02_bpe_cache.py train_bpe, as shipped or with the bytes tie-break (TIEBREAK_FIX)."""
+    return load_defs("ch04/02_bpe_cache.py", names={"pretokenize", "count_pairs", "merge", "train_bpe"},
+                     replace=dict(TIEBREAK_FIX) if fixed else None, extra={"tqdm": _quiet})["train_bpe"]
 
 
-def id_bytes(tok_id: int, merge_rules: dict) -> bytes:
-    """Bytes of a DLFS6 token id, rebuilt from its {(id1, id2): new_id} merge table (cached per run)."""
-    if _BYTES["owner"] is not merge_rules:
-        _BYTES.update(owner=merge_rules, map={i: bytes([i]) for i in range(256)}, seen=0)
-    if len(merge_rules) != _BYTES["seen"]:
-        m = _BYTES["map"]
-        for (a, b), new in list(merge_rules.items())[_BYTES["seen"]:]:
-            m[new] = m[a] + m[b]
-        _BYTES["seen"] = len(merge_rules)
-    return _BYTES["map"][tok_id]
-
-
-_BPE = load_defs("ch04/02_bpe_cache.py", names={"pretokenize", "count_pairs", "merge", "train_bpe"},
-                 replace=dict([TIEBREAK_FIX]) if FIXES else None,
-                 extra={"tqdm": _quiet, "id_bytes": id_bytes})
+_BPE = {"train_bpe": bpe_trainer(FIXES)}
 _PRETRAIN = load_defs("ch06/05_pretrain.py", names={"get_batch"},
                       replace=dict([GET_BATCH_FIX]) if FIXES else None)
 _ADAMW = load_defs("ch06/02_adamw.py", names={"AdamW"})

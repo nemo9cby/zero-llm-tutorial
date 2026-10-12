@@ -24,6 +24,21 @@ export function chinchilla20(C) {
 export const H100_BF16 = 1979e12 / 2; // CS336 讲义代码 facts.py 的取值
 export const h100Hours = (C, mfu = 0.35) => C / (H100_BF16 * mfu) / 3600;
 
+/** 0.5 -> "约 30 分钟"，9.6 -> "约 9.6 小时"，471618 -> "约 47 万小时（约 54 年）"。 */
+export function formatHours(h) {
+  if (h < 1) return `约 ${(h * 60).toFixed(0)} 分钟`;
+  if (h < 10_000) return `约 ${h.toFixed(1)} 小时`;
+  const fix = (v) => (v < 10 ? v.toFixed(1) : v.toFixed(0));
+  return `约 ${fix(h / 1e4)} 万小时（约 ${fix(h / 8766)} 年）`;
+}
+
+/** 横轴（log10 N）上的整数刻度：10M、100M、1B……只取落在 [x0, x1] 里的。 */
+export function decadeTicks(x0, x1) {
+  const out = [];
+  for (let e = Math.ceil(x0 - 1e-9); e <= x1 + 1e-9; e++) out.push(e);
+  return out;
+}
+
 export const PRESETS = {
   codebot: { label: 'CodeBot（第 3 章）', N: 11_121_640, D: 20_000 * 32 * 256 },
   storybot: { label: 'StoryBot（第 6 章）', N: 22_696_448, D: 40_000 * 32 * 256 },
@@ -133,20 +148,23 @@ export function mount(root, config = {}) {
       item('这个算力下的最优（拟合）', `N ≈ ${human(No)}，D ≈ ${human(Do)}`),
       item('按 20 token/参数分配', `N ≈ ${human(r20.N)}，D ≈ ${human(r20.D)}`),
       item('比最优多付出的 loss', `+${gap.toFixed(3)}（N 是最优的 ${(N / No).toFixed(2)} 倍）`),
-      item('单张 H100（MFU 35%）', h100Hours(C) < 1 ? `约 ${(h100Hours(C) * 60).toFixed(0)} 分钟` : `约 ${h100Hours(C).toFixed(1)} 小时`),
+      item('单张 H100（MFU 35%）', formatHours(h100Hours(C))),
     );
     // 三条等算力曲线：C/10、C、10C。U 形两臂太高的部分截掉，免得把谷底压扁。
-    const xo = Math.log10(No);
-    const x0 = Math.max(4, xo - 2.6), x1 = xo + 2.6;
+    // 横轴围绕最优点取 ±2.6 个数量级，再放宽到包住当前的 N，竖线就不会画到图外。
+    const xo = Math.log10(No), xn = Math.log10(N);
+    const x0 = Math.max(4, Math.min(xo - 2.6, xn - 0.3)), x1 = Math.max(xo + 2.6, xn + 0.3);
     const curves = [[C / 10, 'C/10'], [C, '当前 C'], [C * 10, '10×C']].map(([c, name]) => ({ name, c, pts: isoCurve(c, x0, x1) }));
     const yMin = lossFit(nOpt(C * 10), (C * 10) / (6 * nOpt(C * 10))) - 0.05;
     const yMax = lossFit(nOpt(C / 10), C / 10 / (6 * nOpt(C / 10))) + 0.45;
     const series = curves.map((s) => ({ name: s.name, points: s.pts.filter((p) => p[1] <= yMax) }));
+    const now = lossFit(N, D);                               // 当前的 (N, D) 就落在“当前 C”那条曲线上
+    if (now <= yMax) series.push({ name: '当前 (N, D)', points: [[xn, now]], markers: true });
     const opts = {
       series, xLabel: '参数量 N', yLabel: '拟合的 loss（只看形状）', yMin, yMax, height: 250,
-      xFormat: (v) => human(10 ** v), yFormat: (v) => v.toFixed(2),
-      vLines: vLineLabels(Math.log10(N), xo, x0, x1, chartBox.clientWidth || 600),
-      ariaLabel: '三条等算力曲线：横轴是参数量（对数刻度），纵轴是拟合的 loss',
+      xTicks: decadeTicks(x0, x1), xFormat: (v) => human(10 ** v), yFormat: (v) => v.toFixed(2),
+      vLines: vLineLabels(xn, xo, x0, x1, chartBox.clientWidth || 600),
+      ariaLabel: '三条等算力曲线：横轴是参数量（对数刻度），纵轴是拟合的 loss；圆点是当前的 (N, D)',
     };
     if (chart) chart.update(opts); else chart = lineChart(chartBox, opts);
   }

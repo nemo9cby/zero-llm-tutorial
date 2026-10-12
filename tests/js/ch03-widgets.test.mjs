@@ -9,7 +9,8 @@ import {
 } from '../../web/widgets/ch03-common.js';
 import { LINEAGE, PRESETS } from '../../web/widgets/ch03-lineage.js';
 import { ratioHistogram } from '../../web/widgets/ch03-dropout.js';
-import { passAtK } from '../../web/widgets/ch03-answers.js';
+import { passAtK, correctProbs, MODELS } from '../../web/widgets/ch03-answers.js';
+import { parseMetrics, accSummary, lossSummary, patchText } from '../../web/widgets/ch03-grporuns.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const close = (a, b, tol = 1e-3) => assert.ok(Math.abs(a - b) <= tol, `${a} vs ${b}`);
@@ -109,4 +110,27 @@ test('pass@k 与验证单元 3.9-i 一致（SFT 的 pass@8 高于 GRPO）', () =
   close(passAtK(grpo, 1), 0.821);
   close(passAtK(sft, 8), 0.915);
   close(passAtK(grpo, 8), 0.834);
+});
+
+test('本书运行的答案分布：原样 GRPO 有 9 道题被压死，加 model.eval() 的一道也没有（与验证单元 3.9-i 一致）', () => {
+  const data = JSON.parse(fs.readFileSync(path.join(ROOT, 'web/data/ch03/answer_dists.json'), 'utf8'));
+  assert.deepEqual(MODELS.map((m) => m.key).filter((k) => data[k]), ['sft', 'grpo', 'run_sft', 'run_grpo', 'run_evalfix']);
+  const dead = (k) => correctProbs(data, k).filter((p) => p < 0.01).length;
+  assert.deepEqual(['sft', 'grpo', 'run_sft', 'run_grpo', 'run_evalfix'].map(dead), [0, 12, 2, 9, 0]);
+  close(passAtK(correctProbs(data, 'run_evalfix'), 8), 1.0);
+  close(passAtK(correctProbs(data, 'run_grpo'), 8), 0.873);
+});
+
+test('两次 3060 Ti 运行的记录：第 51 轮 60.5% 对 98.8%；最终 86.4% 对 100%（第 131 轮起）；loss 的水位', () => {
+  const read = (run) => parseMetrics(fs.readFileSync(path.join(ROOT, `web/data/runs/${run}/09_grpo.metrics.jsonl`), 'utf8'));
+  const asIs = read('codebot-3060ti'), fixed = read('codebot-grpo-evalfix-3060ti');
+  assert.equal(asIs.length, 501);
+  assert.deepEqual(accSummary(asIs), { start: 53.1, at51: 60.5, final: 86.4, firstFinal: 291, allFrom: null });
+  assert.deepEqual(accSummary(fixed), { start: 56.8, at51: 98.8, final: 100, firstFinal: 131, allFrom: 131 });
+  const la = lossSummary(asIs), lf = lossSummary(fixed);
+  close(la.mean, 0.121); close(la.max, 3.8697, 1e-4); assert.equal(la.maxIt, 433);
+  close(lf.mean, 0.0066, 1e-4); close(lf.median, 0, 1e-4); close(lf.max, 0.3233, 1e-4);
+  const report = JSON.parse(fs.readFileSync(path.join(ROOT, 'web/data/runs/codebot-grpo-evalfix-3060ti/report.json'), 'utf8'));
+  assert.equal(patchText(report.steps[0].patches[0]), 'model.eval()（加在 for _ in range(n_update_per_generation): 之前）');
+  assert.deepEqual(parseMetrics('{"it": 0, "acc": 1}\r\n\r\n{"it": 1, "acc": 2}\r\n'), [{ it: 0, acc: 1 }, { it: 1, acc: 2 }]);
 });

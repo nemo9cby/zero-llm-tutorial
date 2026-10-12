@@ -12,6 +12,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -114,6 +116,28 @@ def test_exports_match_checkpoints(name, dlfs6_path):
             assert np.array_equal(r, w), t["name"]
 
 
+@pytest.mark.parametrize("name", NAMES)
+def test_int8_logit_shift_over_windows(name, dlfs6_path):
+    """P.2.3: the 0.29 of 验证 P.2-d is measured at the last position of the 12 reference prompts only. Here: every
+    position of the four reference prompts, and 8 fixed 256-token windows of tiny_codes.bin (the pretraining data)."""
+    f32, q8, _, _ = load_both(name)
+    data = np.fromfile(dlfs6_path / "codebot" / "tiny_codes.bin", dtype=np.uint16)
+    starts = np.random.default_rng(0).integers(0, len(data) - 256, size=8)
+    with torch.no_grad():
+        prompts = max(float((f32(torch.tensor([p["ids"]]))[0] - q8(torch.tensor([p["ids"]]))[0]).abs().max())
+                      for p in ref_of(name)["prompts"])
+        worst, flips, total = 0.0, 0, 0
+        for s in starts:
+            ids = torch.from_numpy(data[s:s + 256].astype(np.int64))[None]
+            a, b = f32(ids)[0], q8(ids)[0]
+            worst = max(worst, float((a - b).abs().max()))
+            flips += int((a.argmax(-1) != b.argmax(-1)).sum())     # positions where int8 changes the top-1 token
+            total += a.shape[0]
+    print(f"{name}: max|Δlogit| over every position of the reference prompts {prompts:.3f}; over 8 TinyCodes "
+          f"windows {worst:.3f}, top-1 changes at {flips}/{total} positions ({flips / total:.2%})")
+    assert prompts < 0.4 and worst < 0.5 and flips / total < 0.02
+
+
 # ----------------------------------------------------------------------------- P.4, P.5, P.9 the reference
 @torch.no_grad()
 def rerun(model, ids: list[int], new_tokens: int, attention: bool) -> dict:
@@ -163,6 +187,35 @@ def test_reference_rederived_with_torch(name, dlfs6_path):
 
 
 @pytest.mark.parametrize("name", NAMES)
+def test_layer0_lens_self_prediction(name, dlfs6_path):
+    """P.4.2: the layer-0 logit lens (final LayerNorm + tied unembedding of token + position embedding) for each of the
+    1,000 ids at each of the 256 positions, with the int8 weights the browser runs. Ids that occur in tiny_codes.bin
+    (the pretraining data) are always their own top-1; every id that never occurs loses the top spot somewhere."""
+    sd = {k: v.double().numpy() for k, v in load_export(name).items()}
+    emb, pos, g, b, ub = (sd[k] for k in ["embed.weight", "pos_embed.weight", "norm.weight", "norm.bias", "unembed.bias"])
+    V, T = emb.shape[0], pos.shape[0]
+    norm = lambda x: (x - x.mean(-1, keepdims=True)) / np.sqrt(x.var(-1, keepdims=True) + 1e-5) * g + b
+    seen = np.bincount(np.fromfile(dlfs6_path / "codebot" / "tiny_codes.bin", dtype=np.uint16), minlength=V) > 0
+    always, p_min = np.ones(V, bool), np.ones(V)
+    for t in range(T):
+        z = norm(emb + pos[t]) @ emb.T + ub                    # row i: the lens's logits for id i at position t
+        always &= z.argmax(1) == np.arange(V)
+        z -= z.max(1, keepdims=True)
+        p_min = np.minimum(p_min, np.exp(np.diag(z)) / np.exp(z).sum(1))
+    print(f"{name}: {int(seen.sum())} ids occur in tiny_codes.bin, {int((~seen).sum())} never do "
+          f"({int((~seen[128:256]).sum())} of them non-ASCII bytes); own top-1 at all {T} positions: seen ids "
+          f"{int(always[seen].sum())}/{int(seen.sum())} (lowest p(self) {p_min[seen].min():.2f}), never-seen ids "
+          f"{int(always[~seen].sum())}/{int((~seen).sum())}")
+    assert seen.sum() == 839 and not seen[128:256].any()       # TinyCodes is pure ASCII: no byte >= 0x80 occurs
+    assert always[seen].all() and p_min[seen].min() > 0.5
+    assert not always[~seen].any()                             # every never-seen id loses the top spot somewhere
+    # the page's example: 不 is the UTF-8 bytes e4 b8 8d = ids 228, 184, 141; at position 2 the lens is not 141
+    ids = list("不".encode())
+    top = int(np.argmax(norm(emb[ids[-1]] + pos[len(ids) - 1]) @ emb.T + ub))
+    assert ids == [228, 184, 141] and top != 141, top
+
+
+@pytest.mark.parametrize("name", NAMES)
 def test_previous_token_head(name, dlfs6_path):
     f32, _, _, _ = load_both(name)
     long = next(p for p in ref_of(name)["prompts"] if p["name"] == "long")
@@ -173,7 +226,7 @@ def test_previous_token_head(name, dlfs6_path):
     print(f"{name}: {att.shape[-1]} tokens; layer 1 head 1 gives the previous token {prev[0, 0]:.3f} "
           f"(uniform {uniform:.3f}); the strongest head is {tuple(int(i) + 1 for i in np.unravel_index(prev.argmax(), prev.shape))}")
     assert uniform < 0.03
-    assert prev[0, 0] > 0.4
+    assert 0.45 < prev[0, 0] < 0.49                                           # the page: 46% to 48%
 
 
 @torch.no_grad()
@@ -182,10 +235,14 @@ def test_for_i_in_prefers_range(dlfs6_path):
     tok = BPETokenizer.load_from(dlfs6_path / "codebot" / "merge_rules.pkl")
     ids = torch.tensor([tok.encode("for i in")])
     for variant, model in zip(["float32", "int8"], load_both("pretrain")[:2]):
-        p = torch.softmax(model(ids)[0, -1], -1)
+        p = torch.softmax(model(ids)[0, -1].double(), -1)
         top = int(p.argmax())
-        print(f"pretrain ({variant}): after 'for i in' -> {tok.decode([top])!r} with p = {float(p[top]):.3f}")
-        assert tok.decode([top]) == " range" and float(p[top]) > 0.5
+        entropy = float(-(p * torch.log(p)).sum())                # nats; figure P-5 shows it for the int8 weights
+        print(f"pretrain ({variant}): after 'for i in' -> {tok.decode([top])!r} with p = {float(p[top]):.3f}; "
+              f"entropy {entropy:.3f} nats")
+        assert tok.decode([top]) == " range" and 0.75 < float(p[top]) < 0.85     # the page: about 80%
+        if variant == "int8":
+            assert round(entropy, 2) == 1.23
 
 
 # ----------------------------------------------------------------------------- P.2.4 the exporter on official weights
@@ -247,4 +304,40 @@ def test_addition_record_is_current(dlfs6_path):
                  "official-sft-f32": 44, "official-grpo-f32": 67}
     report = json.loads((ROOT / "web/data/runs/codebot-3060ti/report.json").read_text(encoding="utf-8"))
     acc = next(s for s in report["steps"] if s["script"] == "ch03/09_grpo.py")["final"]["acc"]
-    assert round(100 * n["ours-grpo-f32"] / 81, 1) == acc            # the progress bar's last value: 86.4
+    # The progress bar's last value (86.4) is the evaluation at i = 490 (09_grpo.py evaluates when i % 10 == 0);
+    # the checkpoint is saved after i = 499, nine update iterations later. So this is two measurements that agree,
+    # not one measurement read twice.
+    assert round(100 * n["ours-grpo-f32"] / 81, 1) == acc
+
+
+# ----------------------------------------------------------------------------- P.9 the JavaScript side
+PARITY_ROW = re.compile(r"^\s+(\w+)/(\w+)\s+max\|Δlogit\| (\S+) \(int8\) \S+ \(float32\); greedy (\d+)/(\d+) \(int8\)", re.M)
+PLAIN_ROW = re.compile(r"^\s+(\w+)/(\w+)\s+plain JS: max\|Δlogit\| (\S+) \(int8\); greedy (\d+)/(\d+) \(int8\)", re.M)
+
+
+def test_javascript_matches_pytorch():
+    """The workbench's JavaScript (web/widgets/_gpt.js and the engine of the page), run by Node on the three exports.
+    The Node tests compare it with ref.json (PyTorch with the same int8 weights) and with addition.json; this test
+    runs them and checks the numbers they report, so the page's claims about the JavaScript rest on pytest too."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is not installed")
+    tests = ["tests/js/playground-gpt.test.mjs", "tests/js/playground-parity.test.mjs", "tests/js/playground-engine.test.mjs"]
+    proc = subprocess.run([node, "--test", "--test-reporter=spec", *tests], cwd=ROOT, capture_output=True, text=True,
+                          encoding="utf-8", errors="replace", timeout=900)
+    assert proc.returncode == 0, proc.stdout[-4000:] + proc.stderr[-2000:]
+    assert re.search(r"^ℹ fail 0$", proc.stdout, re.M)
+    simd, plain = PARITY_ROW.findall(proc.stdout), PLAIN_ROW.findall(proc.stdout)
+    assert len(simd) == 12 and len(plain) == 9, proc.stdout[-4000:]   # 3 checkpoints x 4 prompts; plain JS skips 'long'
+    greedy = {}
+    for name, prompt, _, same, total in simd:
+        assert same == total, f"{name}/{prompt}: greedy tokens differ"
+        greedy[name] = greedy.get(name, 0) + int(total)
+    assert all(same == total for *_, same, total in plain)
+    worst, worst_plain = max(float(r[2]) for r in simd), max(float(r[2]) for r in plain)
+    print(f"WASM SIMD: max|Δlogit| {worst:.1e} over 12 prompts, greedy tokens per checkpoint {greedy}; "
+          f"plain JS: max|Δlogit| {worst_plain:.1e}")
+    assert worst < 2e-5 and worst_plain < 2e-5
+    assert greedy == {"pretrain": 112, "sft": 112, "grpo": 112}
+    # the engine re-asked all 181 addition problems for SFT and GRPO and got PyTorch's int8 answers token for token
+    assert proc.stdout.count("every addition answer equals PyTorch with the same int8 weights (181 problems)") == 2

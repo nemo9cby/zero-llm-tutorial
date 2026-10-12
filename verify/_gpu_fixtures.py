@@ -16,6 +16,7 @@ FIXTURE = ROOT / "tests" / "js" / "fixtures" / "gpu" / "cases.json"
 if str(ROOT / "gpu") not in sys.path:
     sys.path.insert(0, str(ROOT / "gpu"))
 import costs  # noqa: E402
+import jobs  # noqa: E402
 
 EXTRA_OFFERS = ["modal:h100", "modal:t4", "runpod-community:rtx4090", "lambda:h100x8"]
 EVAL_CASES = [(40000, 500, None), (100000, 1000, None), (12500, 1000, None), (100000, 1000, 200),
@@ -47,6 +48,9 @@ def build() -> dict:
         "measured": {"args": {"steps": 100000, "sPerIt": 0.3, "evals": 101, "evalS": 90.0, "world": 1,
                               "usdPerGpuHour": 3.9492},
                      "expected": costs.estimate_measured(100000, 0.3, 101, 90.0, 1, 3.9492)},
+        # gpu/jobs.py's WebBot settings on n GPUs: the calculator's comparison rows must match them
+        "multi_gpu": [{"n": n, "scale": scale, "settings": {**jobs.WEB_DEFAULTS, **jobs.webbot_settings(n, None, scale)}}
+                      for n in (2, 4, 8) for scale in ("iters", "batch")],
         "cases": cases,
     }
 

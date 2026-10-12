@@ -25,7 +25,14 @@ export function slowPairs(D, theta, L) {
   return idx;
 }
 
-const SERIES = [['train', '训练时'], ['extrapolate', '直接外推'], ['pi', '位置插值'], ['ntk', 'NTK-aware']];
+/** 横轴刻度：维度对的编号只取整数，每 1/4 取一个，再加上最后一对。 */
+export function pairTicks(D) {
+  const n = D / 2, step = n / 4;
+  return [0, step, 2 * step, 3 * step, n - 1];
+}
+
+// 训练时的那条线画得粗一些：位置插值几乎与它重合，细线画在上面，两条都看得见
+const SERIES = [['train', '训练时', 5], ['extrapolate', '直接外推', 2], ['pi', '位置插值', 2], ['ntk', 'NTK-aware', 2]];
 
 let styled = false;
 function injectStyle() {
@@ -59,20 +66,21 @@ export function mount(root, config = {}) {
 
   let chart = null;
   function draw() {
-    const series = SERIES.map(([m, name]) => ({ name, points: turns(st, m).map((y, i) => [i, y]) }));
+    const series = SERIES.map(([m, name, width]) => ({ name, width, points: turns(st, m).map((y, i) => [i, y]) }));
+    const slow = slowPairs(st.D, st.theta, st.L);
     const opts = {
       series, logY: true, height: 260, xLabel: '维度对的编号 i', yLabel: '最多转过的圈数（对数刻度）',
-      xFormat: (v) => String(Math.round(v)),
+      xTicks: pairTicks(st.D), xFormat: (v) => String(v),
       yFormat: (v) => (v >= 1 ? v.toLocaleString('en-US', { maximumFractionDigits: 0 }) : v.toPrecision(1)),
       refLines: [{ y: 1, label: '一圈' }],
+      vLines: slow.length ? [{ x: slow[0], label: '训练时转不满一圈 →' }] : [],
       ariaLabel: '每对维度在上下文里最多转过的圈数：训练时、直接外推、位置插值、NTK-aware',
     };
     if (chart) chart.update(opts); else chart = lineChart(chartBox, opts);
-    const slow = slowPairs(st.D, st.theta, st.L);
     facts.replaceChildren(
-      h('div', {}, `训练时转不满一圈的维度对：${slow.length} / ${st.D / 2}`, slow.length ? `（i ≥ ${slow[0]}）` : ''),
+      h('div', {}, `训练时转不满一圈的维度对：${slow.length} / ${st.D / 2}`, slow.length ? `（i ≥ ${slow[0]}，竖线右边）` : ''),
       h('div', {}, `NTK-aware 的新底数 θ′ = θ·s^(d/(d−2)) ≈ ${Math.round(ntkBase(st.theta, st.D, st.s)).toLocaleString('en-US')}；最高频不变，最低频恰好放慢 ${st.s} 倍。`),
-      h('div', { class: 'w-label' }, '位置插值（绿）与训练时（蓝）几乎完全重合，蓝线被绿线盖住了：PI 恰好把每一对的角度压回训练时的范围。'),
+      h('div', { class: 'w-label' }, '位置插值（绿）与训练时（蓝，画得粗一些）几乎完全重合：PI 恰好把每一对的角度压回训练时的范围。竖线右边的低频维度，直接外推时会转进训练时没见过的角度。'),
     );
   }
   draw();

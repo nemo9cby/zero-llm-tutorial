@@ -106,12 +106,13 @@ export function mount(root, config = {}) {
       { name: '余弦', points: xs.map((x) => [x, cos(x)]) },
     ];
     const yFormat = p.maxLr < 0.01 ? (v) => (v === 0 ? '0' : v.toExponential(1)) : (v) => +v.toFixed(3);
-    // 预热结束处只画一条竖线、不加文字：竖线顶端正是两条曲线的最高点，文字会压在曲线上（步数已写在滑块上）
-    const opts = { series, xLabel: 'iteration', yLabel: '学习率', height: 240, yMin: 0, table: false, yFormat,
-      vLines: warmup > 0 ? [{ x: warmup, label: '' }] : [] };
+    // 预热结束处只画一条竖线、不加文字：竖线顶端正是两条曲线的最高点，文字会压在曲线上（步数已写在滑块上）。
+    // “查看第 N 步”的位置另画一条竖线，文字放在图的底部，与下方读数对应。
+    const at = Math.min(+atIn.value, total);
+    const vLines = (warmup > 0 ? [{ x: warmup, label: '' }] : []).concat([{ x: at, label: `第 ${at.toLocaleString('en-US')} 步`, labelY: 'bottom' }]);
+    const opts = { series, xLabel: 'iteration', yLabel: '学习率', height: 240, yMin: 0, table: false, yFormat, vLines };
     if (!chart) chart = lineChart(chartBox, opts); else chart.update(opts);
 
-    const at = Math.min(+atIn.value, total);
     atLabel.textContent = at.toLocaleString('en-US');
     const sD = summarize(d2z, total, p.maxLr), sC = summarize(cos, total, p.maxLr);
     stats.replaceChildren(

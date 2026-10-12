@@ -1,5 +1,5 @@
 /* 图：去重。左边是一段可编辑的文字按出现顺序切出的预分词，右边是去重后的计数表；
-   下方是实测的 Heaps 曲线：语料变大时，不同预分词的个数涨得很慢。
+   下方是实测的 Heaps 定律（双对数坐标，虚线是拟合的斜率 β）：语料变大时，不同预分词的个数涨得很慢。
    config: { text: "data/ch04/train_head10k.txt", heaps: "data/ch04/bench.json", chars: 1200 } */
 import { h, chip, visible, fmt } from './_lib.js';
 import { lineChart } from './_plot.js';
@@ -97,14 +97,29 @@ export async function mount(root, config) {
   area.addEventListener('input', render);
   render();
 
+  // Heaps' law U = k N^beta is a straight line of slope beta on log-log axes: both axes are log10 here.
   const box = h('div', { class: 'heaps' });
-  root.append(h('div', { class: 'w-label' }, '实测：出现次数（横轴，对数刻度）涨了 100 倍，不同预分词的个数（纵轴）只涨了不到 5 倍'), box);
-  const series = [
-    { name: '验证集的前缀', file: 'tiny_stories_valid.txt' },
-    { name: '训练集的前缀', file: 'train_prefix.txt' },
-  ].map((s) => ({ name: s.name, points: heaps.filter((r) => r.file === s.file).map((r) => [Math.log10(r.occurrences), r.unique]) }));
+  const runs = [
+    { name: '验证集的前缀', rows: heaps.filter((r) => r.file === 'tiny_stories_valid.txt') },
+    { name: '训练集的前缀', rows: heaps.filter((r) => r.file === 'train_prefix.txt') },
+  ];
+  const train = runs[1].rows, first = train[0], last = train[train.length - 1];
+  const nRatio = last.occurrences / first.occurrences, uRatio = last.unique / first.unique;
+  const beta = Math.log(uRatio) / Math.log(nRatio);            // the same fit as the verify cell under this figure
+  const L = Math.log10;
+  const xs = runs.flatMap((s) => s.rows.map((r) => L(r.occurrences)));
+  const fit = [Math.min(...xs), Math.max(...xs)].map((x) => [x, L(first.unique) + beta * (x - L(first.occurrences))]);
+  root.append(h('div', { class: 'w-label' },
+    `实测（双对数坐标）：训练集的前缀里，出现次数涨了 ${Math.round(nRatio)} 倍，不同的预分词只涨了 ${uRatio.toFixed(1)} 倍；`
+    + `两条线几乎是直线，斜率就是 β ≈ ${beta.toFixed(2)}`), box);
   lineChart(box, {
-    series, yMin: 0, height: 230, xLabel: '预分词出现次数', yLabel: '不同的预分词（个）',
-    xFormat: (v) => compact(10 ** v), yFormat: (v) => fmt(Math.round(v)), ariaLabel: 'Heaps 曲线：出现次数与不同预分词数',
+    series: [...runs.map((s) => ({ name: s.name, markers: true, points: s.rows.map((r) => [L(r.occurrences), L(r.unique)]) })),
+      { name: `斜率 ${beta.toFixed(2)}`, points: fit, dash: '5 4', width: 1.5 }],
+    height: 240, table: false, xLabel: '预分词出现次数（对数刻度）', yLabel: '不同的预分词（个，对数刻度）',
+    xFormat: (v) => compact(10 ** v), yFormat: (v) => compact(10 ** v), ariaLabel: 'Heaps 定律：出现次数与不同预分词数的双对数图',
   });
+  box.append(h('details', {}, h('summary', {}, '查看数据表'),
+    h('table', {}, h('thead', {}, h('tr', {}, ['语料', '读到的字节', '出现次数', '不同的预分词'].map((c) => h('th', {}, c)))),
+      h('tbody', {}, runs.flatMap((s) => s.rows.map((r) => h('tr', {},
+        h('td', {}, s.name), h('td', {}, fmt(r.bytes)), h('td', {}, fmt(r.occurrences)), h('td', {}, fmt(r.unique)))))))));
 }

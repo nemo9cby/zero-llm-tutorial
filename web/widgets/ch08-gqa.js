@@ -11,12 +11,24 @@ export function groupOf(h_, H, KV, mode = 'interleave') {
   return mode === 'interleave' ? Math.floor(h_ / (H / KV)) : h_ % KV;
 }
 
+/** 误用 repeat（平铺）时拿到别组 K、V 的 query 头：两种分组不一致的那些 h（验证 8.3-a）。 */
+export const misgrouped = (H, KV) =>
+  Array.from({ length: H }, (_, h) => h).filter((h) => groupOf(h, H, KV, 'interleave') !== groupOf(h, H, KV, 'tile'));
+
 export const divisors = (n) => Array.from({ length: n }, (_, i) => i + 1).filter((k) => n % k === 0);
 
 export function formatBytes(b) {
   const units = [[2 ** 30, 'GiB'], [2 ** 20, 'MiB'], [2 ** 10, 'KiB']];
   for (const [u, s] of units) if (b >= u) return `${(b / u).toFixed(b / u >= 100 ? 0 : 1).replace(/\.0$/, '')} ${s}`;
   return `${b} B`;
+}
+
+/** 柱状图的单位：按最大的那根柱子选，刻度上的数字保持在 1 万以内。 */
+export function chartUnit(maxBytes) {
+  if (maxBytes >= 10240 * 2 ** 30) return [2 ** 40, 'TiB'];
+  if (maxBytes >= 10240 * 2 ** 20) return [2 ** 30, 'GiB'];
+  if (maxBytes >= 2 ** 20) return [2 ** 20, 'MiB'];
+  return [2 ** 10, 'KiB'];
 }
 
 export const PRESETS = {
@@ -151,21 +163,25 @@ export function mount(root, config = {}) {
     drawMap();
     const per = kvBytesPerToken(s);
     const seq = per * s.T, all = seq * s.batch;
+    const wrong = misgrouped(s.H, s.KV).length;
     result.replaceChildren(...[
       h('div', {}, '每个 token：', h('b', {}, formatBytes(per)), `（2 × ${s.L} 层 × ${s.KV} 个 KV 头 × ${s.D} 维 × ${s.bytes} 字节）`),
       h('div', {}, `一条序列（${s.T.toLocaleString('en-US')} 个 token）：`, h('b', {}, formatBytes(seq)),
         `；整个 batch（×${s.batch}）：`, h('b', {}, formatBytes(all))),
-      mode === 'tile' && s.KV > 1 && s.KV < s.H
-        ? h('div', { class: 'w-label' }, '平铺时连线交错：每个 query 头拿到的是别组的 K、V。显存一样，算出来的结果却不对（用 SDPA 训练出来的权重按相邻分组）。')
+      mode === 'tile' && wrong
+        ? h('div', { class: 'w-label' }, (s.H > 32 ? `平铺时有 ${wrong} 个 query 头（共 ${s.H} 个）` : `平铺时连线交错：连线颜色与上排方块颜色不同的 ${wrong} 个头（共 ${s.H} 个）`)
+          + '拿到的是别组的 K、V。显存一样，算出来的结果却不对（用 SDPA 训练出来的权重按相邻分组）。')
         : null,
     ].filter(Boolean));
-    const MiB = 2 ** 20;
+    const mha = kvBytesPerToken({ ...s, KV: s.H }) * s.T * s.batch;
+    const [unit, unitName] = chartUnit(mha);                 // MHA 那根柱子总是最高
     const bars = [
-      { label: `MHA（${s.H}）`, value: (kvBytesPerToken({ ...s, KV: s.H }) * s.T * s.batch) / MiB },
-      { label: `当前（${s.KV}）`, value: all / MiB, series: 1 },
-      { label: 'MQA（1）', value: (kvBytesPerToken({ ...s, KV: 1 }) * s.T * s.batch) / MiB, series: 2 },
+      { label: `MHA（${s.H}）`, value: mha / unit },
+      { label: `当前（${s.KV}）`, value: all / unit, series: 1 },
+      { label: 'MQA（1）', value: (kvBytesPerToken({ ...s, KV: 1 }) * s.T * s.batch) / unit, series: 2 },
     ];
-    const opts = { bars, yLabel: 'KV cache（MiB）', height: 190, highlight: bars[1].label,
+    // 不用 highlight：三根柱子颜色已经各不相同，暗色主题下调低的不透明度又几乎看不见
+    const opts = { bars, yLabel: `KV cache（${unitName}）`, height: 190,
       yFormat: (v) => (v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(1) : v.toPrecision(2)) };
     if (chart) chart.update(opts); else chart = barChart(chartBox, opts);
   }

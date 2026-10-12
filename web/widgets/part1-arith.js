@@ -11,11 +11,14 @@ const CSS = `
 .w-part1-arith .grid { display: grid; grid-template-columns: 1.7rem repeat(9, minmax(0, 1fr)); gap: 2px;
   max-width: 25rem; font: 12px/1 var(--mono); font-variant-numeric: tabular-nums; }
 .w-part1-arith .hd { display: grid; place-items: center; color: var(--ink-3); height: 1.6rem; }
-.w-part1-arith .cell { display: grid; place-items: center; height: 2.1rem; border-radius: 3px; color: var(--ink); }
+.w-part1-arith .cell { display: grid; place-items: center; align-content: center; height: 2.1rem; border-radius: 3px; color: var(--ink); }
 .w-part1-arith .cell:focus { outline: 2px solid var(--ink); outline-offset: 1px; }
+.w-part1-arith .cell .was { font-size: 9px; line-height: 1; color: var(--ink-2); }
+.w-part1-arith .cell .now { line-height: 1.1; }
 .w-part1-arith .legend { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin: .7rem 0 .2rem; font-size: .82rem; color: var(--ink-2); }
 .w-part1-arith .legend span::before { content: ''; display: inline-block; width: .8rem; height: .8rem; border-radius: 2px;
-  margin-right: .35rem; vertical-align: -.1rem; background: var(--c); }
+  margin-right: .35rem; vertical-align: -.1rem; background: var(--c); box-shadow: inset 0 0 0 1px var(--ink-3); }
+.w-part1-arith .hint { font-size: .8rem; color: var(--ink-3); margin: .1rem 0 0; }
 .w-part1-arith .sum { font-size: .9rem; margin: .4rem 0 0; }`;
 
 const tint = (c, pct) => `color-mix(in oklab, ${c} ${pct}%, var(--paper))`;
@@ -43,11 +46,26 @@ export async function mount(root, config) {
     fixed: tint(seriesColor(0), 62), broke: tint(seriesColor(3), 75), same: 'var(--paper-2)',
   };
   let mode = config.mode || 'diff';
+  let active = 0;                                  // roving tabindex: the one answer cell that takes Tab focus
   const pick = h('div', { class: 'pick', role: 'group', 'aria-label': '选择要看的模型' });
-  const grid = h('div', { class: 'grid', role: 'table', 'aria-label': 'i + j 的回答，行是 i，列是 j' });
+  const grid = h('div', { class: 'grid', role: 'table',
+    'aria-label': 'i + j 的回答，行是 i，列是 j；用方向键在格子之间移动' });
   const legend = h('div', { class: 'legend' });
+  const hint = h('p', { class: 'hint' });
   const sum = h('p', { class: 'sum', 'aria-live': 'polite' });
-  box.append(pick, grid, legend, sum);
+  box.append(pick, grid, legend, hint, sum);
+  grid.addEventListener('keydown', (e) => {
+    const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 9, ArrowUp: -9 }[e.key];
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? 80 : step == null ? null : active + step;
+    if (next == null) return;
+    e.preventDefault();
+    if (next < 0 || next > 80) return;
+    const cells = grid.querySelectorAll('.cell');
+    cells[active].tabIndex = -1;
+    active = next;
+    cells[active].tabIndex = 0;
+    cells[active].focus();
+  });
 
   const render = () => {
     pick.replaceChildren(...[['sft', 'SFT 之后'], ['grpo', '强化学习之后'], ['diff', '前后对比']]
@@ -67,12 +85,15 @@ export async function mount(root, config) {
         else if (mode === 'grpo') { bg = okB ? C.right : C.wrong; shown = b; }
         else {
           bg = okA && okB ? C.same : !okA && !okB ? C.wrong : okB ? C.fixed : C.broke;
-          shown = b;
+          // a cell that RL fixed or broke shows both answers: SFT's small on top, RL's below
+          shown = okA === okB ? b : [h('span', { class: 'was' }, a), h('span', { class: 'now' }, b)];
         }
+        const index = (i - 1) * 9 + (j - 1);
         cells.push(h('div', {
-          class: 'cell', role: 'cell', tabindex: 0, style: { background: bg },
+          class: 'cell', role: 'cell', tabindex: index === active ? 0 : -1, style: { background: bg },
           title: `${key}=${i + j}　SFT 答 ${a}，强化学习后答 ${b}`,
           'aria-label': `${key} 等于 ${i + j}；SFT 答 ${a}${okA ? '（对）' : '（错）'}，强化学习后答 ${b}${okB ? '（对）' : '（错）'}`,
+          onfocus: () => { active = index; },
         }, shown));
       }
     }
@@ -85,6 +106,9 @@ export async function mount(root, config) {
       s.style.setProperty('--c', c);                 // custom properties need setProperty
       return s;
     }));
+    hint.textContent = mode === 'diff'
+      ? '被修好或弄坏的格子里，上面的小字是 SFT 的回答，下面是强化学习之后的回答；其余格子只显示强化学习之后的回答。'
+      : '';
     const pct = (n) => (100 * n / 81).toFixed(1);
     sum.textContent = mode === 'sft' ? `SFT 之后答对 ${count.sftOk} / 81 道（${pct(count.sftOk)}%）。`
       : mode === 'grpo' ? `强化学习之后答对 ${count.grpoOk} / 81 道（${pct(count.grpoOk)}%）。`

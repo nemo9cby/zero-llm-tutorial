@@ -60,6 +60,18 @@ test('first step on the toy corpus: (s,t) beats the tie with (e,s), deltas as co
   assert.equal(d[key(115, 116)], -9);                // (s,t) 9 -> 0
   assert.equal(d[key(101, 256)], 9);                 // (e,st) new
   assert.equal(d[key(110, 101)], undefined);         // (n,e): -6 then +6 = no net change
+  // the two halves of the update, as the figure shows them: subtract every old pair, add every new pair
+  const minus = Object.fromEntries(r.minus), plus = Object.fromEntries(r.plus);
+  assert.equal(minus[key(110, 101)], 6);              // (n,e) in newest x6: -6 ...
+  assert.equal(plus[key(110, 101)], 6);               // ... and +6 again
+  assert.equal(minus[key(101, 115)], 9);              // (e,s): newest x6 + widest x3
+  assert.equal(plus[key(101, 115)], undefined);
+  assert.equal(minus[key(115, 116)], 9);              // the merged pair itself
+  assert.equal(plus[key(101, 256)], 9);               // (e,st) appears
+  assert.equal(minus[key(108, 111)], undefined);      // low / lower are not touched
+  assert.deepEqual(bpe.wordsWith(key(101, 256)), ['newest', 'widest']);   // inverted index after the step
+  assert.deepEqual(bpe.wordsWith(key(101, 115)), []);                     // emptied, like the book's defaultdict
+  for (const [k, v] of r.delta) assert.equal(v, (r.plus.get(k) ?? 0) - (r.minus.get(k) ?? 0));   // delta = net
 });
 
 test('chunkBoundaries (simulated from offsets) == find_chunk_boundaries on the real files', () => {
@@ -71,6 +83,7 @@ test('chunkBoundaries (simulated from offsets) == find_chunk_boundaries on the r
     assert.deepEqual(chunkBoundaries(offs, eot.size, Number(k)).boundaries, expected, `valid k=${k}`);
   }
   assert.equal(chunkBoundaries(offs, eot.size, 100000).boundaries.length, fx.valid_count_100000);
+  assert.equal(chunkBoundaries(offs, eot.size, 1000000).boundaries.length, fx.valid_count_1000000);   // fewer again
   const head = data('valid_head.txt');
   const bytes = Buffer.from(head, 'utf8');
   const headOffs = [];

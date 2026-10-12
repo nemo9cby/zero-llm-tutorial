@@ -12,6 +12,8 @@ export const BOTS = Object.freeze([
 ]);
 
 const MAX_CHIPS = 300;          // per row; longer texts show a count instead of every chip
+const MAX_CHIPS_NARROW = 80;    // on phones (every preset still fits: the longest row has 78 tokens)
+const MAX_LINES = 12;           // the textarea grows with its text up to this many lines, then scrolls
 const strict = new TextDecoder('utf-8', { fatal: true });
 let mounted = 0;                // unique ids when a page mounts the widget more than once
 
@@ -42,6 +44,21 @@ export function tokenLabel(tok, id) {
   }
 }
 
+/**
+ * The status-line text for one chip: which token it is, its id and its bytes.
+ * @param {string} bot  label of the tokenizer ("WebBot")
+ * @param {number} index  0-based position of the token in the row
+ * @param {number} id
+ * @param {Uint8Array} bytes
+ * @param {{special?: boolean, partial?: boolean, text?: string}} lab
+ */
+export function tokenInfo(bot, index, id, bytes, lab) {
+  const head = `${bot} 的第 ${fmt(index + 1)} 个 token：id ${fmt(id)}`;
+  if (lab.special) return `${head}，特殊 token ${lab.text}`;
+  const hex = [...bytes].map((x) => x.toString(16).padStart(2, '0')).join(' ');
+  return `${head}，字节 ${hex}` + (lab.partial ? '（单独不是完整的 UTF-8 字符）' : `（“${lab.text}”）`);
+}
+
 let styled = false;
 function injectStyle() {
   if (styled) return;
@@ -49,7 +66,7 @@ function injectStyle() {
   document.head.append(h('style', {}, `
 .w-ch07-presets { display: flex; flex-wrap: wrap; gap: .35rem; margin: 0 0 .5rem; }
 .w-ch07-presets button[aria-pressed="true"] { border-color: var(--ai); color: var(--ai); font-weight: 600; }
-.w-ch07-text { min-height: 4.6rem; resize: vertical; font-size: 14px; }
+.w-ch07-text { min-height: 4.6rem; resize: vertical; font-size: 14px; overflow-y: hidden; }
 .w-ch07-opt { display: flex; align-items: flex-start; gap: .4rem; font-size: .85rem; color: var(--ink-2); margin: .3rem 0 .6rem; }
 .w-ch07-opt input { margin-top: .3rem; flex: none; }
 .w-ch07-row { margin: .7rem 0 .2rem; }
@@ -64,7 +81,12 @@ function injectStyle() {
 .w-ch07-row .tokens { margin: .3rem 0 .2rem; }
 .w-ch07-row .tok.partial b { font-size: 11px; color: var(--ink-2); }
 .w-ch07-row .tok.special { outline: 1.5px solid var(--plum); outline-offset: -1.5px; }
+.w-ch07-row .tok { cursor: default; }
+.w-ch07-row .tok:focus-visible { outline: 2px solid var(--ai); outline-offset: 1px; }
+.w-ch07-row .tok.picked { box-shadow: 0 0 0 2px var(--ai); }
 .w-ch07-more { font-size: .8rem; color: var(--ink-3); }
+.w-ch07-pick { position: sticky; bottom: 0; z-index: 1; margin: .6rem 0 0; padding: .35rem 0; background: var(--paper);
+  border-top: 1px solid var(--rule); font-size: .85rem; color: var(--ink-2); overflow-wrap: anywhere; min-height: 1.5em; }
 .w-ch07-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 `));
 }
@@ -101,25 +123,73 @@ export async function mount(root, config = {}) {
     '把文字里的 <|endoftext|> 当作普通字符（tiktoken 的 encode_ordinary；原书的 encode 总是把它变成特殊 token）');
   const rowsBox = h('div');
   const live = h('div', { class: 'w-ch07-sr', 'aria-live': 'polite' });   // counts only, for screen readers
-  root.append(presetBar, text, opt, live, rowsBox);
+  const HINT = '点按或把鼠标移到某个 token 上，这里显示它的 id 和字节（键盘：Tab 进入一行，方向键逐个移动）';
+  const pick = h('p', { class: 'w-ch07-pick' }, HINT);
+  root.append(presetBar, text, opt, live, rowsBox, pick);
+  const narrow = matchMedia('(max-width: 600px)');
+
+  function fit() {                       // grow the textarea with its text, up to MAX_LINES lines
+    text.style.height = 'auto';
+    if (!text.scrollHeight) {            // not laid out (hidden): keep the CSS size
+      text.style.height = '';
+      return;
+    }
+    const cs = getComputedStyle(text);
+    const pad = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const border = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+    const box = cs.boxSizing === 'border-box';
+    const need = box ? text.scrollHeight + border : text.scrollHeight - pad;
+    const cap = MAX_LINES * (parseFloat(cs.lineHeight) || 21) + (box ? pad + border : 0);
+    text.style.height = `${Math.min(need, cap)}px`;
+    text.style.overflowY = need > cap ? 'auto' : 'hidden';
+  }
 
   function choose(i) {
     text.value = presets[i].text;
     presetButtons.forEach((b, j) => b.setAttribute('aria-pressed', String(i === j)));
     render();
+    fit();
   }
 
+  let picked = null;
+  function show(el) {                    // a chip was hovered, focused or tapped
+    if (!el || !el.dataset.info) return;
+    if (picked && picked !== el) picked.classList.remove('picked');
+    picked = el;
+    el.classList.add('picked');
+    pick.textContent = el.dataset.info;
+  }
+  rowsBox.addEventListener('mouseover', (e) => show(e.target.closest('.tok')));
+  rowsBox.addEventListener('focusin', (e) => show(e.target.closest('.tok')));
+  rowsBox.addEventListener('click', (e) => show(e.target.closest('.tok')));
+  rowsBox.addEventListener('keydown', (e) => {   // roving tabindex: one tab stop per row, arrows move inside it
+    const el = e.target.closest('.tok');
+    if (!el) return;
+    const all = [...el.parentElement.querySelectorAll('.tok')];
+    const i = all.indexOf(el);
+    const j = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: all.length - 1 }[e.key];
+    if (j === undefined || j < 0 || j >= all.length) return;
+    e.preventDefault();
+    el.tabIndex = -1;
+    all[j].tabIndex = 0;
+    all[j].focus();
+  });
+
   function row(bot, tok, r, maxTokens) {
-    const chips = h('div', { class: 'tokens' });
+    const chips = h('div', { class: 'tokens', role: 'list', 'aria-label': `${bot.label} 的 token` });
+    const limit = narrow.matches ? MAX_CHIPS_NARROW : MAX_CHIPS;
     let shown = 0;
     let color = 0;
     for (const c of r.chunks) {
       for (const id of c.ids) {
-        if (shown >= MAX_CHIPS) break;
-        const lab = c.special ? { text: c.text, partial: false } : tokenLabel(tok, id);
-        const bytesHex = [...tok.tokenBytes(id)].map((x) => x.toString(16).padStart(2, '0')).join(' ');
-        const el = chip(lab.text, id, color++, c.special ? `id ${id}：特殊 token` : `id ${id}：字节 ${bytesHex}`
-          + (lab.partial ? '（单独不是完整的 UTF-8 字符）' : ''));
+        if (shown >= limit) break;
+        const lab = c.special ? { text: c.text, partial: false, special: true } : tokenLabel(tok, id);
+        const info = tokenInfo(bot.label, shown, id, tok.tokenBytes(id), lab);
+        const el = chip(lab.text, id, color++, info);
+        el.dataset.info = info;
+        el.setAttribute('role', 'listitem');
+        el.setAttribute('aria-label', info);
+        el.tabIndex = shown === 0 ? 0 : -1;
         if (lab.partial) el.classList.add('partial');
         if (c.special) el.classList.add('special');
         chips.append(el);
@@ -143,10 +213,13 @@ export async function mount(root, config = {}) {
     const maxTokens = Math.max(bytes, ...rows.map((r) => r.tokens));
     const base = h('div', { class: 'w-ch07-row' },
       h('div', { class: 'w-ch07-head' },
-        h('span', { class: 'w-ch07-name' }, '字节级', h('span', { class: 'w-ch07-meta' }, '不用分词器 · 词表 256')),
-        h('span', { class: 'w-ch07-count' }, h('b', {}, fmt(bytes)), ' 个 token · 每个 1 字节')),
+        h('span', { class: 'w-ch07-name' }, '字节级',
+          h('span', { class: 'w-ch07-meta' }, '不用分词器 · 词表 256（另加 1 个特殊 token）')),
+        h('span', { class: 'w-ch07-count' }, h('b', {}, fmt(bytes)), ' 个 token', bytes ? ' · 每个 1 字节' : '')),
       h('div', { class: 'w-ch07-bar base', role: 'presentation' },
         h('span', { style: { width: `${maxTokens ? (100 * bytes) / maxTokens : 0}%` } })));
+    picked = null;
+    pick.textContent = HINT;
     rowsBox.replaceChildren(...BOTS.map((b, i) => row(b, toks[i], rows[i], maxTokens)), base);
     live.textContent = `${fmt(bytes)} 字节：` + BOTS.map((b, i) => `${b.label} ${fmt(rows[i].tokens)} 个 token`).join('，');
   }
@@ -154,7 +227,10 @@ export async function mount(root, config = {}) {
   text.addEventListener('input', () => {
     presetButtons.forEach((b) => b.setAttribute('aria-pressed', 'false'));
     render();
+    fit();
   });
   plain.addEventListener('change', render);
+  narrow.addEventListener('change', render);     // the chip limit depends on the width
+  addEventListener('resize', fit);               // wrapping, and so the textarea's height, depends on the width
   choose(Math.min(Math.max(0, config.preset ?? 0), presets.length - 1));
 }

@@ -12,18 +12,21 @@ import json
 import os
 import pickle
 import re
+import shutil
 import subprocess
 import sys
 import tracemalloc
 from collections import Counter, defaultdict
 from multiprocessing import Pool
+from multiprocessing.reduction import ForkingPickler
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from conftest import DLFS6, ROOT
-from _ch04_load import load_defs, quiet_tqdm
+from _ch04_load import function_ast, load_defs, quiet_tqdm
+import _ch04_bench as bench
 import _ch04_data
 
 DATA = ROOT / "web" / "data" / "ch04"
@@ -140,6 +143,36 @@ def test_dedup_statistics_on_real_corpora(m, valid_counts):
     assert (sum(codes.values()), len(codes)) == (1_826_876, 30_535)
     assert (sum(valid_counts.values()), len(valid_counts)) == (5_419_001, 13_111)
     assert sum(valid_counts.values()) / len(valid_counts) > 400
+    # How skewed the frequencies are: the 10 most frequent pretokens take 32% of all occurrences,
+    # the 41 most frequent just over half, the 1,000 most frequent 92.5%.
+    ranked = valid_counts.most_common()
+    share = lambda k: sum(c for _, c in ranked[:k]) / sum(valid_counts.values())
+    assert [w for w, _ in ranked[:10]] == [".", ",", " the", " and", " a", "\n", " to", " was", " They", " it"]
+    assert (round(share(10), 4), round(share(1000), 4)) == (0.3194, 0.9254)
+    assert share(40) < 0.5 <= share(41)
+    # The longest pretoken of the validation set: 23 bytes (a row of '='), so a word is merged at most 22 times.
+    assert max(len(w.encode()) for w in valid_counts) == 23 and "=" * 23 in valid_counts
+
+
+def test_small_slice_statistics(m):
+    """4.1.4: the 499,577-byte slice (validation set cut before an <|endoftext|>) used by Fig. 4-1's first group.
+    Bytes scanned per step: naive vs deduplicated, at the first step and as the 743 merges proceed."""
+    small = bench.slice_before_eot(VALID.read_bytes(), bench.SMALL_LIMIT)
+    assert len(small) == 499_577
+    text = small.decode("utf-8")
+    occ = [p for piece in text.split(EOT) for p in m.sb.pretokenize(piece)]
+    counts = Counter(occ)
+    b_occ, b_uniq = sum(len(p.encode()) for p in occ), sum(len(p.encode()) for p in counts)
+    assert (len(occ), len(counts), b_occ, b_uniq) == (120_503, 3_523, 491_504, 22_792)
+    assert round(b_occ / b_uniq, 1) == 21.6 and round(b_uniq / len(counts), 1) == 6.5    # short sequences
+    # Frequent words become one token first, so the naive trainer's scan shrinks faster than the deduplicated one's:
+    # ids scanned at the first step 21.6x apart, at the last step 15.1x, over all 743 steps 16.1x.
+    rules, st = bench.merge_loop_profile(m.ext.ids_counts_of(text), 743, count_ids=True)
+    assert (st["ids_occ"][0], st["ids_uniq"][0]) == (b_occ, b_uniq)
+    assert (st["ids_occ"][-1], st["ids_uniq"][-1]) == (155_977, 10_307)
+    assert round(st["ids_occ"][-1] / st["ids_uniq"][-1], 1) == 15.1
+    assert round(sum(st["ids_occ"]) / sum(st["ids_uniq"]), 1) == 16.1
+    assert items(rules) == items(m.v02.train_bpe(text, 1000))           # the counters do not change the loop
 
 
 def test_count_pairs_signatures_differ(m):
@@ -192,6 +225,13 @@ def test_incremental_invariant_on_valid_prefix(m):
         assert dict(full) == dict(pair_counts), step
 
 
+def test_heap_code_on_page_is_bpe_ext(m):
+    """4.2.4 prints heap_merge_loop as a plain code block (listings only read the book's files): keep it verbatim."""
+    page = (ROOT / "content" / "ch04.md").read_text(encoding="utf-8")
+    shown = re.search(r"```python\n# web/data/ch04/bpe_ext\.py[^\n]*\n(.*?)```", page, re.S).group(1)
+    assert shown == inspect.getsource(m.ext.heap_merge_loop)
+
+
 # ---------------------------------------------------------------- 4.3 chunking
 
 def test_gbk_default_encoding_breaks_on_tinystories():
@@ -199,8 +239,14 @@ def test_gbk_default_encoding_breaks_on_tinystories():
     raw = VALID.read_bytes()
     with pytest.raises(UnicodeDecodeError) as err:
         raw.decode("gbk")
-    assert err.value.start == 30_846 and raw[30_846] == 0x9D
+    assert err.value.start == 30_846 and raw[30_846] == 0x9D        # offset counted from 0
+    assert err.value.reason == "illegal multibyte sequence"
     assert raw[30_844:30_847].decode("utf-8") == "”"          # the right curly quote ” = e2 80 9d
+    # GBK reads two bytes at a time: e2 80 becomes the character 鈥; then 9d (a lead byte) is followed by
+    # 2e ('.'), which cannot be the second byte of a GBK character.
+    assert raw[30_843:30_849].hex(" ") == "7a e2 80 9d 2e 20"
+    assert raw[30_844:30_846].decode("gbk") == "鈥"
+    assert all(c.encode("utf-8")[:2] == b"\xe2\x80" for c in "“”‘’–—…")    # all of them start with the same 鈥
     assert CODES.read_bytes().decode("gbk") == CODES.read_text(encoding="utf-8")   # pure ASCII: no problem
 
 
@@ -224,8 +270,23 @@ def test_chunk_boundaries_on_full_valid(m):
     assert len(b) == 65 and b[:4] == [0, 351752, 703494, 1055567] and b[-1] == len(data)
     assert all(data[x:x + 13] == EOT.encode() for x in b[1:-1])
     assert len(m.sb.find_chunk_boundaries(str(VALID), 100_000)) == 27_629
-    assert data.count(EOT.encode()) == 27_630
+    assert data.count(EOT.encode()) == 27_630         # so at most 27,630 + 2 boundaries
     data.decode("utf-8")      # valid UTF-8, so errors="ignore" drops nothing at '<' boundaries
+    # More chunks do not mean more boundaries: the count wanders below 27,632 and falls again for huge k,
+    # because chunk_size = S // k leaves the bytes after the last initial cut, (k-1)*(S//k), without any cut.
+    counts = {k: len(m.sb.find_chunk_boundaries(str(VALID), k)) for k in (27_631, 40_000, 60_000, 200_000, 1_000_000)}
+    assert counts == {27_631: 24_266, 40_000: 27_369, 60_000: 27_626, 200_000: 27_512, 1_000_000: 27_021}
+    marker, offsets, i = EOT.encode(), [], data.find(EOT.encode())
+    while i != -1:
+        offsets.append(i)
+        i = data.find(marker, i + 1)
+    S = len(data)
+    for k, last_cut, beyond in [(100_000, 22_499_775, 3), (1_000_000, 21_999_978, 612)]:
+        assert (k - 1) * (S // k) == last_cut and sum(o >= last_cut for o in offsets) == beyond
+    # The 60-story file of the figure: past 59 markers the count still moves (55, 54, 53, ... then 60, 61).
+    head = str(DATA / "valid_head.txt")
+    assert {k: len(m.sb.find_chunk_boundaries(head, k)) for k in (59, 60, 61, 70, 80, 120, 1000)} == \
+        {59: 55, 60: 54, 61: 53, 70: 56, 80: 60, 120: 60, 1000: 61}
     # chunked counts == whole-file counts: test_parallel_pretokenize_equals_serial runs the same
     # pretoken_chunk on these same 64 chunks (in 4 processes) and compares with the whole-file counts.
 
@@ -248,16 +309,20 @@ def test_pretokenization_memory_column(m, tmp_path):
     p_chunk = peak(lambda: m.v03.train_bpe(str(path), 257))                         # counts, 64 chunks
     print(f"peak MB: naive {p_naive / 1e6:.1f}, dedup {p_dedup / 1e6:.1f}, chunked {p_chunk / 1e6:.1f}")
     assert p_naive > 5 * p_dedup and p_dedup > 1.5 * p_chunk, (p_naive, p_dedup, p_chunk)
+    assert (round(p_naive / 1e6, 1), round(p_dedup / 1e6, 1), round(p_chunk / 1e6, 1)) == (27.6, 4.0, 2.2)
+    if sys.maxsize > 2**32:
+        assert sys.getsizeof(list(b"abcd")) == 88              # ch01 keeps one such list per occurrence
 
 
 # ---------------------------------------------------------------- 4.4 parallel
 
-def run_killing_tree(cmd, timeout):
+def run_killing_tree(cmd, timeout, stdin=None):
     """subprocess.run with a timeout that also kills grandchildren (pool workers) on Windows/POSIX."""
     kw = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8", **kw)
+    p = subprocess.Popen(cmd, stdin=subprocess.PIPE if stdin is not None else None, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, text=True, encoding="utf-8", **kw)
     try:
-        out, err = p.communicate(timeout=timeout)
+        out, err = p.communicate(input=stdin, timeout=timeout)
         return False, p.returncode, out, err
     except subprocess.TimeoutExpired:
         if os.name == "nt":
@@ -268,9 +333,10 @@ def run_killing_tree(cmd, timeout):
         return True, p.returncode, out, err
 
 
-def test_spawn_needs_importable_worker():
+def test_spawn_needs_importable_worker(tmp_path):
     head = "import multiprocessing as mp\ndef square(x):\n    return x * x\nif __name__ == '__main__':\n" \
            "    mp.set_start_method('spawn')\n"
+    pool_body = "    with mp.Pool(2) as pool:\n        print(list(pool.imap(square, range(4))))\n"
     # A Process whose target lives in `python -c` code: the child cannot find it and exits with code 1.
     hung, rc, out, err = run_killing_tree(
         [sys.executable, "-c", head + "    p = mp.Process(target=square, args=(3,)); p.start(); p.join()\n"
@@ -278,22 +344,38 @@ def test_spawn_needs_importable_worker():
     assert not hung and out.strip() == "1"
     assert "Can't get attribute 'square' on <module '__main__'" in err
     # The same function in a Pool: the workers die on every task and the parent waits forever.
-    hung, rc, out, err = run_killing_tree(
-        [sys.executable, "-c", head + "    with mp.Pool(2) as pool:\n        print(list(pool.imap(square, range(4))))\n"],
-        timeout=10)
+    hung, rc, out, err = run_killing_tree([sys.executable, "-c", head + pool_body], timeout=10)
     assert hung and out == ""
     assert "Can't get attribute 'square' on <module '__main__'" in err
+    # The guarded script fed through stdin (`python - < script.py`): the children cannot re-read the main module.
+    hung, rc, out, err = run_killing_tree([sys.executable, "-"], timeout=10, stdin=head + pool_body)
+    assert hung and out == "" and "<stdin>" in err
+    if os.name == "nt":
+        assert "OSError: [Errno 22] Invalid argument" in err
+    # A script file without the guard: every spawned worker re-runs the top level, tries to start a Pool of its
+    # own and dies with RuntimeError; the parent keeps replacing the workers and never finishes.
+    noguard = tmp_path / "noguard.py"
+    noguard.write_text("import multiprocessing as mp\ndef square(x):\n    return x * x\n"
+                       "with mp.get_context('spawn').Pool(2) as pool:\n    print(list(pool.imap(square, range(4))))\n",
+                       encoding="utf-8")
+    hung, rc, out, err = run_killing_tree([sys.executable, str(noguard)], timeout=10)
+    assert hung and out == ""
+    assert "RuntimeError" in err and "An attempt has been made to start a new process before the" in err
 
 
 def test_parallel_pretokenize_equals_serial(m, valid_counts):
     """ch04/04 steps 1-3 with Pool(4) (spawn on Windows) give exactly the serial counts."""
     b = m.sb.find_chunk_boundaries(str(VALID), 64)
     tasks = [(str(VALID), s, e, EOT) for s, e in zip(b[:-1], b[1:])]
-    total = Counter()
+    total, sizes = Counter(), []
     with Pool(processes=4) as pool:
         for part in pool.imap(m.sb.pretoken_chunk, tasks):
             total.update(part)
+            sizes.append(len(part))
     assert total == valid_counts
+    # what each worker sends back: a dict of about 3,000 entries (4.4.2)
+    sizes.sort()
+    assert (sizes[0], sizes[len(sizes) // 2], sizes[-1]) == (2_991, 3_117, 3_290)
 
 
 def test_default_parameters(m):
@@ -346,12 +428,30 @@ def test_storybot_vocab_facts(m):
     assert (len(m.story_rules), tok.end_token_id, tok.vocab_size) == (9743, 9999, 10000)
     partial = [i for i, b in tok.id_to_bytes.items()
                if i >= 256 and b.decode("utf-8", "replace") != b.decode("utf-8", "ignore")]   # learned tokens only
-    assert partial == [696, 4606] and tok.id_to_bytes[696] == b"\xe2\x80"
+    assert partial == [696, 4606] and tok.id_to_bytes[696] == b"\xe2\x80" and tok.id_to_bytes[4606] == b" \xe2\x80"
+
+    def strict(b):
+        try:
+            b.decode("utf-8")
+            return True
+        except UnicodeDecodeError:
+            return False
+
+    # over the whole vocabulary, the 128 single bytes 0x80-0xFF fail too: the first failure is id 128
+    assert [i for i in range(tok.vocab_size) if not strict(tok.id_to_bytes[i])] == list(range(128, 256)) + [696, 4606]
+    # three learned tokens share the maximum length; max() just returns the first of them
+    longest = max(len(tok.id_to_bytes[i]) for i in range(256, 9999))
+    assert longest == 15 and [i for i in range(256, 9999) if len(tok.id_to_bytes[i]) == longest] == [7159, 9140, 9375]
+    assert [tok.id_to_bytes[i] for i in (7159, 9140, 9375)] == [b" accomplishment", b" disappointment", b" responsibility"]
     assert max(range(256, 9999), key=lambda i: len(tok.id_to_bytes[i])) == 7159
     # no Chinese anywhere: not in the validation text, not in any learned token
     assert not any("一" <= c <= "鿿" for c in VALID.read_text(encoding="utf-8"))   # CJK unified ideographs
     assert not any(0xE4 <= b <= 0xE9 for i in range(256, 9999) for b in tok.id_to_bytes[i])
     assert sum(any(b >= 0x80 for b in tok.id_to_bytes[i]) for i in range(256, 9999)) == 20
+    # ... all of them punctuation (curly quotes, dashes, the ellipsis); two of them are half a character
+    non_ascii = [i for i in range(256, 9999) if any(b >= 0x80 for b in tok.id_to_bytes[i])]
+    chars = {c for i in non_ascii for c in tok.id_to_bytes[i].decode("utf-8", "ignore") if ord(c) > 127}
+    assert chars == set("–—‘’“”…") and [i for i in non_ascii if i in partial] == [696, 4606]
 
 
 # ---------------------------------------------------------------- 4.6 rank-based encoding
@@ -379,6 +479,30 @@ def test_rank_encoder_matches_ch01_encoder(m):
             return self.memo[text]
 
     assert Memo(m.code_rules).encode(CODES.read_text(encoding="utf-8")) == official
+    # The browser's extension (bpe_ext.MemoTokenizer) caches storybot's encoder, whose _encode_text is 06's;
+    # encode (split on <|endoftext|>, then pretokenize) is the same code in 06, 07 and storybot (4.7.1).
+    same_code = lambda name, *rels: len({ast.dump(function_ast(rel, name)) for rel in rels}) == 1
+    assert same_code("BPETokenizer._encode_text", "storybot/tokenizer.py", "ch04/06_encode_optimize.py")
+    assert same_code("BPETokenizer.encode", "storybot/tokenizer.py", "ch04/06_encode_optimize.py", "ch04/07_encode_parallel.py")
+    # ... and the same logic as ch01's encode: only the tqdm progress bar is written differently
+    no_tqdm = lambda rel: ast.dump(_ch04_data._Transform({}).visit(function_ast(rel, "BPETokenizer.encode")))
+    assert no_tqdm("codebot/tokenizer.py") == no_tqdm("ch04/06_encode_optimize.py")
+    assert ast.dump(function_ast("codebot/tokenizer.py", "BPETokenizer.encode")) != \
+        ast.dump(function_ast("ch04/06_encode_optimize.py", "BPETokenizer.encode"))
+    assert m.ext.MemoTokenizer(m.code_rules).encode(CODES.read_text(encoding="utf-8")) == official
+
+
+def test_compression_on_whole_tinycodes(m):
+    """4.5.3: on the first 10,000 characters of TinyCodes StoryBot's tokenizer looks slightly better than CodeBot's
+    own (2.18 vs 2.12); on the whole corpus CodeBot's wins clearly (2.42 vs 2.06)."""
+    codes = CODES.read_text(encoding="utf-8")
+    ratio = lambda rules, text: len(text.encode("utf-8")) / len(m.ext.MemoTokenizer(rules).encode(text))
+    head = (DATA / "codes_head10k.txt").read_text(encoding="utf-8")
+    assert head == codes[:10_000]
+    assert (f"{ratio(m.story_rules, head):.2f}", f"{ratio(m.code_rules, head):.2f}") == ("2.18", "2.12")
+    whole = (len(m.ext.MemoTokenizer(m.code_rules).encode(codes)), len(m.ext.MemoTokenizer(m.story_rules).encode(codes)))
+    assert whole == (2_677_398, 3_143_713)
+    assert (f"{len(codes.encode()) / whole[0]:.2f}", f"{len(codes.encode()) / whole[1]:.2f}") == ("2.42", "2.06")
 
 
 # ---------------------------------------------------------------- 4.7 encode_file
@@ -398,8 +522,10 @@ def test_encode_file_removes_cache_dir(m, tmp_path):
 
 def test_encode_chunk_task_pickles_whole_tokenizer(m):
     tok = m.sb.BPETokenizer(m.story_rules)
-    per_task = len(pickle.dumps(tok._encode_chunk))                # what Pool.imap ships for every task
+    per_task = len(ForkingPickler.dumps(tok._encode_chunk))       # what Pool.imap ships for every task
     assert 200_000 < per_task < 250_000
+    assert per_task == len(pickle.dumps(tok._encode_chunk, protocol=4)) == 221_754   # Python 3.12's default protocol
+    assert round(64 * per_task / 1e6) == 14                        # 64 chunks: about 14 MB in total
 
 
 def test_encode_file_matches_official_bin(m, tmp_path):
@@ -419,20 +545,158 @@ def test_uint16_limits():
     assert np.array([65535, 65536, 70000]).astype(np.uint16).tolist() == [65535, 0, 4464]
     if sys.maxsize > 2**32:                                      # 64-bit CPython: 8-byte pointers per list slot
         assert (sys.getsizeof([0] * 1000) - sys.getsizeof([0] * 0)) / 1000 == 8
+        assert sys.getsizeof(list(b"abcd")) == 88                # column 4.3: a 4-byte word as ch01's list of ids
+
+
+def test_python_list_of_ids_memory(m):
+    """4.7.3: kept as a Python list, token ids cost about 8.6 bytes each. The pointers take 8; the int objects are
+    shared (ids < 256 are cached small ints, the others are the values of merge_rules), so they add little."""
+    head = prefix_at_eot(VALID.read_bytes(), 2_000_000).decode("utf-8")
+    tok = m.sb.BPETokenizer(m.story_rules)
+    tracemalloc.start()
+    ids = tok.encode(head)
+    current, _ = tracemalloc.get_traced_memory()               # what is still allocated: the list of ids
+    tracemalloc.stop()
+    assert ids == np.fromfile(VALID_BIN, dtype=np.uint16)[: len(ids)].tolist() and len(ids) == 486_690
+    per_token = sys.getsizeof(ids) / len(ids)                    # 8-byte pointers + the list's spare capacity
+    assert round(per_token, 1) == 8.6 and round(current / len(ids), 1) == 8.6
+    # no int object per token: one object per distinct id, shared by all its occurrences
+    assert len({id(i) for i in ids}) == len(set(ids)) == 5_884
+    assert per_token / np.dtype(np.uint16).itemsize > 4          # more than 4x the 2 bytes of uint16
+
+
+NP1_PROBE = r'''
+import multiprocessing as mp, sys
+import numpy as np
+
+
+def encode_chunk(ids):              # what 07's _encode_chunk does with the ids of a chunk
+    return np.array(ids, dtype=np.uint16).tolist()
+
+
+if __name__ == "__main__":
+    print(np.__version__)
+    if sys.argv[1] == "main":
+        print(encode_chunk([65535, 65536, 70000]))
+    else:
+        mp.set_start_method("spawn")
+        with mp.Pool(1) as pool:
+            print(pool.map(encode_chunk, [[65535, 65536, 70000]])[0])
+'''
+
+
+@pytest.mark.slow
+def test_numpy1_wraps_out_of_range_ids_silently(tmp_path):
+    """4.7.3: the book's own environment pins numpy<2. NumPy 1.x wraps ids above 65,535 in np.array(ids, dtype=np.uint16)
+    and only emits a DeprecationWarning, which Python's default filters show for code in __main__ alone:
+    in a Pool worker (where _encode_chunk runs) the wrap is silent. Runs NumPy 1.26.4 from uv's cache."""
+    assert '"numpy>=1.24.0,<2.0.0"' in (DLFS6 / "pyproject.toml").read_text(encoding="utf-8")
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("uv is not on PATH")
+    probe = tmp_path / "np1_probe.py"
+    probe.write_text(NP1_PROBE, encoding="utf-8")
+    py = f"{sys.version_info.major}.{sys.version_info.minor}"
+    results = {}
+    for where in ("main", "worker"):
+        proc = subprocess.run([uv, "run", "--offline", "--isolated", "--no-project", "--python", py, "--with",
+                               "numpy==1.26.4", "python", str(probe), where], capture_output=True, text=True,
+                              encoding="utf-8", timeout=300, cwd=tmp_path)
+        if proc.returncode != 0 and "numpy" not in proc.stdout:
+            pytest.skip(f"cannot build a NumPy 1.26.4 environment offline: {proc.stderr[-300:]}")
+        results[where] = proc
+    for where, proc in results.items():
+        assert proc.stdout.splitlines() == ["1.26.4", "[65535, 0, 4464]"], where
+    assert "DeprecationWarning" in results["main"].stderr
+    assert "DeprecationWarning" not in results["worker"].stderr and results["worker"].stderr.strip() == ""
 
 
 # ---------------------------------------------------------------- recorded measurements
 
+def recorded_bench() -> dict:
+    return json.loads((DATA / "bench.json").read_text(encoding="utf-8"))
+
+
 def test_bench_json_consistent():
-    """The measurements quoted on the page: every timed variant produced identical output."""
-    bench = json.loads((DATA / "bench.json").read_text(encoding="utf-8"))
-    for group in bench["races"]:
+    """bench.json is exactly what verify/_ch04_bench.py assembles from the raw records in bench_runs/ (so no number
+    in it is typed by hand), and every timed variant was compared with its group's reference when it was measured."""
+    recorded = recorded_bench()
+    assert recorded == json.loads(json.dumps(bench.assemble(), ensure_ascii=False))
+    for group in recorded["races"]:
+        assert group["reference"] and sum(bool(row.get("reference")) for row in group["rows"]) <= 1
         for row in group["rows"]:
-            assert row["identical"] is True, (group["id"], row["name"])
-    assert bench["profile"]["max_share"] > 0.9 and bench["profile"]["affected_median"] == 1
-    assert bench["pretok"]["identical"] and all(r["identical"] for r in bench["encode_file"])
-    assert bench["train_prefix_encode"]["identical_to_official_train_bin_prefix"]
-    assert (bench["scanned"]["first"], bench["scanned"]["max"]) == (932, 12_025)
+            assert row.get("reference") or row["identical"] is True, (group["id"], row["name"])
+            assert row["runs"] >= 1 and row["seconds"] > 0
+    naive = next(r for r in recorded["races"] if r["id"] == "train_codes")["rows"][0]
+    assert (naive["key"], naive["runs"], round(naive["seconds"] / 60), round(naive["wall"] / 60)) == ("naive", 1, 52, 77)
+    assert recorded["profile"]["identical"] == {"replica": True, "heap": True}
+    assert recorded["pretok"]["identical"] and recorded["pretok_repeat"]["same_counts_every_round"]
+    assert all(r["identical"] and r["cache_dir_removed"] for r in recorded["encode_file"])
+    assert recorded["train_prefix_encode"]["identical_to_official_train_bin_prefix"]
+    assert recorded["repeat_small"]["identical"] and len(recorded["repeat_small"]["cpu"]["naive"]) == 3
+    # records made after the script moved into the repository carry their own commits and command
+    for name in ("repeat_small", "pretok_repeat", "pool_startup", "shrink"):
+        prov = bench.load_raw(name)["provenance"]
+        assert prov["script"] == "verify/_ch04_bench.py" and len(prov["dlfs6"]["commit"]) == 40, name
+
+
+def test_bench_deterministic_facts(m, valid_counts):
+    """The parts of bench.json that do not depend on the clock, recomputed: the Heaps rows of the validation set,
+    its PEP 393 string sizes, and the rules behind the repeated 500 KB runs (same as ch04/02's today)."""
+    recorded = recorded_bench()
+    rows = bench.heaps_rows(VALID, bench.VALID_MARKS)
+    assert rows == [r for r in recorded["heaps"] if r["file"] == VALID.name]
+    assert (rows[-1]["occurrences"], rows[-1]["unique"]) == (sum(valid_counts.values()), len(valid_counts))
+    text = VALID.read_bytes().decode("utf-8")
+    assert bench.pep393_stats(text) == recorded["pep393"]["valid"]
+    whole = next(r for r in recorded["memory"] if r["file"] == VALID.name and r["mode"] == "whole")
+    assert ast.literal_eval(whole["info"]) == {"max_codepoint": 0x2026, "str_bytes": sys.getsizeof(text), "chars": len(text)}
+    small = bench.slice_before_eot(VALID.read_bytes(), bench.SMALL_LIMIT).decode("utf-8")
+    digest = bench.rules_digest(m.v02.train_bpe(small, 1000))
+    assert set(recorded["repeat_small"]["rules_sha256"].values()) == {digest}
+
+
+@pytest.mark.slow
+def test_bench_full_valid_facts(m):
+    """The whole-validation-set facts of bench.json, re-run (several minutes): ch04/02 and the lazy heap learn the same
+    9,743 rules; the per-step counters (pairs max() scans, sequences an update touches, ids a naive trainer would
+    scan); the cached encoder reproduces the official tiny_stories_valid.bin. Also TinyCodes' shrink factor."""
+    recorded = recorded_bench()
+    text = VALID.read_bytes().decode("utf-8")
+    book = m.v02.train_bpe(text, 10000)
+    rules, st = bench.merge_loop_profile(m.ext.ids_counts_of(text), 9743, count_ids=True)
+    assert items(rules) == items(book) == items(m.ext.train_bpe_heap(text, 10000))
+    assert bench.scanned_summary(st["scanned"]) == recorded["scanned"]
+    a = sorted(st["affected"])
+    assert (round(sum(a) / len(a), 2), a[len(a) // 2]) == (recorded["profile"]["affected_mean"],
+                                                           recorded["profile"]["affected_median"]) == (7.05, 1)
+    assert bench.shrink_summary(st["ids_occ"]) == recorded["shrink"]["tiny_stories_valid"]
+    _, codes_st = bench.merge_loop_profile(m.ext.ids_counts_of(CODES.read_text(encoding="utf-8")), 743, count_ids=True)
+    assert bench.shrink_summary(codes_st["ids_occ"]) == recorded["shrink"]["tiny_codes"]
+    # Trained on the 22.5 MB validation set, the rules part ways with the official ones (trained on the 2.2 GB
+    # train set) almost at once: training data decides the rules, so 4.5 uses the published merge_rules.pkl.
+    first_diff = next(i for i, (x, y) in enumerate(zip(items(book), items(m.story_rules))) if x != y)
+    assert first_diff == 5                                  # 5 rules agree, then ' the' and 'nd' swap places
+    learned = m.sb.BPETokenizer(book).id_to_bytes
+    assert (learned[256 + 5], m.sb.BPETokenizer(m.story_rules).id_to_bytes[256 + 5]) == (b" the", b"nd")
+    assert m.ext.MemoTokenizer(m.story_rules).encode(text) == np.fromfile(VALID_BIN, dtype=np.uint16).tolist()
+
+
+def test_cs336_a1_bpe_record():
+    """4.2.4's CS336 box, read from the recorded A1 run (web/data/cs336/a1_results.json: commit, command, five timings)."""
+    rec = json.loads((ROOT / "web" / "data" / "cs336" / "a1_results.json").read_text(encoding="utf-8"))
+    assert rec["dlfs6_commit"].startswith("c9b6e2e") and rec["cs336_a1"]["handout"].endswith("(v26.0.3)")
+    shipped = rec["diagnostics"]["as_shipped"]["train_bpe"][0]
+    fixed = rec["diagnostics"]["one_line_fixes"]["train_bpe"][0]
+    assert (shipped["corpus"], shipped["vocab_size"], shipped["n_merges"]) == ("corpus.en", 500, 243)
+    assert shipped["identical_positions"] == 170 and shipped["first_divergence"] + 1 == 93   # 0-based index 92
+    runs = shipped["train_seconds_runs"]
+    assert (min(runs), shipped["train_seconds_median"], max(runs)) == (1.267, 1.348, 1.519)
+    assert len(runs) == 5 and sum(t > 1.5 for t in runs) == 1                                 # the bar is 1.5 s
+    assert fixed["identical_positions"] == 243 and (min(fixed["train_seconds_runs"]), max(fixed["train_seconds_runs"])) == (1.796, 2.483)
+    speed = next(t for t in rec["tests"] if t["test"] == "test_train_bpe_speed")
+    assert (speed["as_shipped"]["outcome"], speed["one_line_fixes"]["outcome"]) == ("passed", "failed")
+    assert "id_bytes(pair[0], merge_rules)" in rec["fixes"]["bpe_tiebreak"]["after"]          # a helper call in the key
 
 
 def test_pep393_piecewise_storage():

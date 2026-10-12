@@ -90,6 +90,68 @@
    "usd": 42.88173
   }
  },
+ "multi_gpu": [
+  {
+   "n": 2,
+   "scale": "iters",
+   "settings": {
+    "max_iters": 50000,
+    "warmup_iters": 250,
+    "micro_batch_size": 32,
+    "accumulation_steps": 4
+   }
+  },
+  {
+   "n": 2,
+   "scale": "batch",
+   "settings": {
+    "max_iters": 100000,
+    "warmup_iters": 500,
+    "micro_batch_size": 32,
+    "accumulation_steps": 2
+   }
+  },
+  {
+   "n": 4,
+   "scale": "iters",
+   "settings": {
+    "max_iters": 25000,
+    "warmup_iters": 125,
+    "micro_batch_size": 32,
+    "accumulation_steps": 4
+   }
+  },
+  {
+   "n": 4,
+   "scale": "batch",
+   "settings": {
+    "max_iters": 100000,
+    "warmup_iters": 500,
+    "micro_batch_size": 32,
+    "accumulation_steps": 1
+   }
+  },
+  {
+   "n": 8,
+   "scale": "iters",
+   "settings": {
+    "max_iters": 12500,
+    "warmup_iters": 63,
+    "micro_batch_size": 32,
+    "accumulation_steps": 4
+   }
+  },
+  {
+   "n": 8,
+   "scale": "batch",
+   "settings": {
+    "max_iters": 100000,
+    "warmup_iters": 500,
+    "micro_batch_size": 16,
+    "accumulation_steps": 1
+   }
+  }
+ ],
  "cases": [
   {
    "scenario": "codebot",

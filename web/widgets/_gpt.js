@@ -41,8 +41,10 @@
  * mulberry32(seed) -> () => number in [0, 1)                    the seeded generator behind `seed`
  * generate(bot, promptIds, opts) -> iterator of { id, prob, top, step, end, refill, window, computed }
  *     the loop of codebot/utils.generate: before every forward pass the sequence is cropped to its last T tokens.
- *     Positions are learned, so a full cache cannot slide: once the sequence outgrows the window, every new token
- *     re-runs the last T tokens from scratch (refill: true), exactly what the book's code computes.
+ *     A full cache cannot slide. Cropping the oldest token shifts every remaining position (CodeBot's position
+ *     embedding is a learned table), and from layer 2 up every cached K and V was computed after attending to the
+ *     dropped token, which holds under any position scheme. So once the sequence outgrows the window, every new
+ *     token re-runs the last T tokens from scratch (refill: true), exactly what the book's code computes.
  * compareToReference(bot, ref) -> per prompt: max |Δlogit| against PyTorch (q8 and f32 weights), greedy agreement,
  *     attention and logit-lens agreement. ref is web/data/playground/<name>/ref.json.
  */
@@ -589,11 +591,11 @@ export function* generate(bot, promptIds, opts = {}) {
       logits = bot.step(id);
       computed += 1;
       refill = false;
-    } else {                                     // no cache, or learned positions cannot slide: recompute the window
-      window = seq.slice(-T);
+    } else {                                     // no cache, or the window slid (positions shifted, and the K/V of
+      window = seq.slice(-T);                    // layers 2+ saw the dropped token): recompute the window
       bot.reset();
       logits = bot.prefill(window);
-      computed += T;
+      computed += window.length;                 // ≤ T: the book's loop recomputes min(sequence, T) positions
       refill = true;
     }
   }

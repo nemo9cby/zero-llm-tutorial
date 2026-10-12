@@ -44,12 +44,22 @@ export async function mount(root) {
   }
   box.append(h('p', { class: 'w-label', style: 'margin:0 0 .3rem' }, `例句（${data.sentence_source}）：`),
     h('p', { style: 'margin:0 0 .8rem;font-size:.95rem' }, data.sentence));
+  let partial = false;
   for (const [tok, chips] of Object.entries(data.chips)) {
     box.append(h('div', { class: 'w-label' }, `${NAMES[tok]}：${chips.length} 个 token`),
-      h('div', { class: 'chips' }, chips.map((c, i) => h('span', {
-        class: 'chip', title: `id ${c.id}，字节 ${c.bytes.match(/../g).join(' ')}`,
-        style: { background: `color-mix(in oklab, ${seriesColor(i % 6)} 24%, var(--paper))` },
-      }, h('b', {}, label(c.bytes)), h('i', {}, c.id)))));
+      h('div', { class: 'chips' }, chips.map((c, i) => {
+        const text = label(c.bytes);
+        partial ||= text.startsWith('‹');
+        return h('span', {
+          class: 'chip', title: `id ${c.id}，字节 ${c.bytes.match(/../g).join(' ')}`,
+          style: { background: `color-mix(in oklab, ${seriesColor(i % 6)} 24%, var(--paper))` },
+        }, h('b', {}, text), h('i', {}, c.id));
+      })));
+  }
+  if (partial) {
+    box.append(h('p', { class: 'w-label', style: 'margin:-.4rem 0 .9rem' },
+      '‹e2› 这样的记号是单独一个字节：弯引号 “ 在 UTF-8 里占 3 个字节（e2 80 9c）。词表里没有把它们合起来的 token 时，'
+      + '只能切成 3 个 token，单独一个字节显示不出字来。'));
   }
   // A small shaded table rather than _plot.heatmap: the shade is mixed into var(--paper), so the text
   // (var(--ink)) stays readable in both themes.
@@ -65,7 +75,8 @@ export async function mount(root) {
           style: { background: shade(v), fontWeight: v === Math.max(...vals[r]) ? 700 : 400 },
           title: `${row.corpus} × ${toks[c]}：${fmt(row.bytes)} 字节 / ${fmt(row.tokens[toks[c]])} token`,
         }, v.toFixed(2))))))));
+  const approx = Math.round(Math.min(...data.matrix.map((r) => r.bytes)) / 1e4);
   box.append(h('p', { class: 'w-label', style: 'margin:.3rem 0 0' },
-    `行：代码 = TinyCodes，故事 = TinyStories 验证集，网页 = OpenWebText 验证集，各取约 5 万字节`
+    `行：代码 = TinyCodes，故事 = TinyStories 验证集，网页 = OpenWebText 验证集，各取开头的整篇文档，约 ${fmt(approx)} 万字节`
     + `（${data.matrix.map((r) => fmt(r.bytes)).join(' / ')} 字节）。列：三台机器人各自的分词器。`));
 }

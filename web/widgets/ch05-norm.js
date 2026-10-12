@@ -17,10 +17,10 @@ export function rmsNorm(x, eps = 1e-5) {
 
 export const FINFO_EPS = 2 ** -23;    // torch.finfo(torch.float32).eps，nn.RMSNorm(eps=None) 的默认值
 
-const fmt = (v) => {
+export const fmt = (v) => {
   const a = Math.abs(v);
   if (a < 1e-9) return '0.000';                      // 均值这类量的舍入噪声，例如 -1.39e-17
-  if (a < 1e-3 || a >= 1e4) return v.toExponential(2);
+  if (a < 1e-2 || a >= 1e4) return v.toExponential(2);   // 缩小 1000 倍后，均值与 RMS 都用同一种写法
   return v.toFixed(a >= 100 ? 0 : 3);
 };
 

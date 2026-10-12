@@ -94,9 +94,10 @@ def test_checkpoint_same_grads_and_recompute(dlfs6_path):
     assert (len(calls_plain), len(calls_ckpt)) == (n_blocks, 2 * n_blocks)
 
 
-def saved_bytes(model, ids, use_checkpoint: bool) -> int:
+def saved_bytes(model, ids, use_checkpoint: bool, bf16: bool = False) -> int:
     """前向时为反向保存下来的激活一共多少字节（按底层 storage 去重，不算参数和 buffer 本身）。
-    用了检查点时，Block 内部的张量不再保存，但每个 Block 的输入要留着，这部分单独加上。"""
+    用了检查点时，Block 内部的张量不再保存，但每个 Block 的输入要留着，这部分单独加上。
+    bf16=True 时像原书一样把前向和 loss 包进 autocast（这里是 CPU 的 autocast，规则与 CUDA 的不完全相同）。"""
     seen: dict[int, int] = {}
     fixed = {t.untyped_storage().data_ptr() for t in [*model.parameters(), *model.buffers()]}
 
@@ -112,7 +113,8 @@ def saved_bytes(model, ids, use_checkpoint: bool) -> int:
             st = args[0].untyped_storage()
             seen[st.data_ptr()] = st.nbytes()
         hooks = [b.register_forward_pre_hook(keep_input) for b in model.blocks]
-    with torch.autograd.graph.saved_tensors_hooks(pack, lambda t: t):
+    with torch.autograd.graph.saved_tensors_hooks(pack, lambda t: t), \
+            torch.autocast("cpu", dtype=torch.bfloat16, enabled=bf16):
         logits = forward_blocks(model, ids, use_checkpoint)
         lm_loss(logits, ids)
     for h in hooks:
@@ -121,18 +123,30 @@ def saved_bytes(model, ids, use_checkpoint: bool) -> int:
 
 
 def test_webbot_activation_memory_per_sequence(dlfs6_path):
-    """全尺寸 WebBot（fp32，CPU）：一条 1024-token 的序列要为反向保存多少激活；加检查点后剩多少。"""
+    """全尺寸 WebBot（CPU）：一条 1024-token 的序列要为反向保存多少激活；加检查点后剩多少；
+    打开 bf16 autocast 时，每多一条序列多多少，与 batch 无关的部分（矩阵乘权重的 bf16 副本）又有多少。
+    页面上验证 9.2-c 写死的几个数，必须与这里的测量一致。"""
     from webbot.model import GPT
     torch.manual_seed(0)
     model = GPT(**WEBBOT)
-    ids = torch.randint(0, WEBBOT["vocab_size"], (1, WEBBOT["max_context_len"]))
-    mib = {ck: saved_bytes(model, ids, ck) / 2**20 for ck in (False, True)}
+    ids = torch.randint(0, WEBBOT["vocab_size"], (2, WEBBOT["max_context_len"]))
+    mib = {ck: saved_bytes(model, ids[:1], ck) / 2**20 for ck in (False, True)}
+    bf16 = {b: saved_bytes(model, ids[:b], False, bf16=True) / 2**20 for b in (1, 2)}
+    bf16_per_seq, bf16_fixed = bf16[2] - bf16[1], 2 * bf16[1] - bf16[2]
     logits_mib = WEBBOT["max_context_len"] * WEBBOT["vocab_size"] * 4 / 2**20
+    n_matmul = sum(p.numel() for n, p in model.named_parameters() if p.ndim == 2 and not n.startswith("embed."))
     print(f"\nper sequence: plain {mib[False]:.1f} MiB, checkpointed {mib[True]:.1f} MiB, "
           f"fp32 log-softmax alone {logits_mib:.1f} MiB")
-    assert 900 < mib[False] < 980             # 页面上写的是“约 940 MiB”
-    assert 230 < mib[True] < 255              # 检查点后约 240 MiB，其中 195 MiB 是 logits 的 log-softmax
-    assert mib[False] / mib[True] > 3.5       # 减少到约 1/4
+    print(f"bf16 autocast: batch 1 {bf16[1]:.1f} MiB, batch 2 {bf16[2]:.1f} MiB -> "
+          f"{bf16_per_seq:.1f} MiB per sequence + {bf16_fixed:.1f} MiB fixed")
+
+    page: dict = {"np": np}
+    exec(verify_cell("9.2-c"), page)                         # 页面上的数字（单元里的断言也一起跑）
+    assert abs(mib[False] - page["per_seq_plain"]) < 0.05 and abs(mib[True] - page["per_seq_ckpt"]) < 0.05
+    assert abs(bf16_per_seq - page["per_seq_bf16"]) < 0.05 and abs(bf16_fixed - page["bf16_fixed"]) < 0.05
+    assert abs(bf16_fixed - 2 * n_matmul / 2**20) < 0.5      # 固定部分 = 全部矩阵乘权重（含 unembed）的 bf16 副本
+    assert mib[False] / mib[True] > 3.5                      # 检查点后减少到约 1/4
+    assert bf16_per_seq < 0.8 * mib[False]                   # bf16 只让每条序列少了约四分之一
 
 
 # ---------------------------------------------------------------- 9.3 分布式训练 & 9.4 ZeRO（2 个 gloo 进程）
@@ -168,10 +182,11 @@ def test_ddp_two_processes_gloo(dlfs6_path, gloo_runs):
         for pattern in ("book", "fixed"):
             assert torch.allclose(rk[pattern]["grads"], g_ref, rtol=1e-5, atol=1e-7), pattern
 
-    book = ranks[0]["book"]["allreduce_calls_per_micro"]
-    fixed = ranks[0]["fixed"]["allreduce_calls_per_micro"]
-    assert all(c > 0 for c in book)                               # 原书写法：4 个 micro-step 都在通信
-    assert fixed[:-1] == [0] * (D.ACCUM - 1) and fixed[-1] > 0     # forward 也放进 no_sync：只在最后通信一次
+    for rk in ranks:                                              # 页面上写的计数：[1, 1, 1, 1] 与 [0, 0, 0, 1]
+        book = rk["book"]["allreduce_calls_per_micro"]
+        fixed = rk["fixed"]["allreduce_calls_per_micro"]
+        assert book == [1] * D.ACCUM                              # 原书写法：4 个 micro-step 各通信一次
+        assert fixed == [0] * (D.ACCUM - 1) + [1]                 # forward 也放进 no_sync：只在最后通信一次
 
 
 def test_zero1_equals_adamw(dlfs6_path, gloo_runs):
@@ -241,7 +256,7 @@ def test_torch_muon_step_is_the_formula():
     """torch.optim.Muon 的一步 = 解耦权重衰减 + 按形状缩放的学习率 × NS(Nesterov 动量)。"""
     from torch.optim._muon import DEFAULT_A, DEFAULT_B, DEFAULT_C, EPS, _zeropower_via_newtonschulz
     torch.manual_seed(0)
-    W = torch.randn(96, 32)                             # 输出 96 维、输入 32 维：学习率乘 sqrt(96/32)
+    W = torch.randn(96, 32)                             # d_out = 96、d_in = 32：学习率乘 s = sqrt(96/32)
     G1, G2 = torch.randn(96, 32), torch.randn(96, 32)
     p = torch.nn.Parameter(W.clone())
     opt = torch.optim.Muon([p], lr=0.02, weight_decay=0.1, momentum=0.95, nesterov=True)
@@ -249,11 +264,11 @@ def test_torch_muon_step_is_the_formula():
     for G in (G1, G2):
         p.grad = G.clone()
         opt.step()
-        buf = buf.lerp(G, 1 - 0.95)                     # B ← 0.95·B + 0.05·G（动量的指数平均写法）
-        upd = G.lerp(buf, 0.95)                         # Nesterov：0.05·G + 0.95·B
+        buf = buf.lerp(G, 1 - 0.95)                     # M ← 0.95·M + 0.05·G（动量的指数平均写法；文档记作 B）
+        upd = G.lerp(buf, 0.95)                         # Nesterov：0.05·G + 0.95·M
         O = _zeropower_via_newtonschulz(upd, (DEFAULT_A, DEFAULT_B, DEFAULT_C), 5, EPS)
         expect = expect * (1 - 0.02 * 0.1)              # 先做解耦权重衰减（用没调整过的 lr）
-        expect = expect.add(O, alpha=-0.02 * math.sqrt(96 / 32))   # 再减去 lr·sqrt(max(1, A/B))·O
+        expect = expect.add(O, alpha=-0.02 * math.sqrt(96 / 32))   # 再减去 lr·s·O，s = sqrt(max(1, d_out/d_in))
     assert torch.equal(p.detach(), expect)
 
 
@@ -275,6 +290,17 @@ def test_script_constants_and_get_lr(dlfs6_path):
     assert [k.arg for k in opt_call.keywords] == ["lr"]
     defaults = torch.optim.AdamW([torch.nn.Parameter(torch.zeros(1))]).defaults
     assert defaults["betas"] == (0.9, 0.999) and defaults["weight_decay"] == 0.01 and defaults["eps"] == 1e-8
+
+
+def test_batch_constants_quoted_on_the_page(dlfs6_path):
+    """验证 9.3-e 写死的几个数：WebBot 的 micro-batch 32 × 累积 4；第 3 章 GRPO 每次 32 道题、每题 8 个回答、
+    同一批数据更新 2 次（都是脚本顶层的字面量）。"""
+    c9 = module_constants()
+    c3 = module_constants("ch03/09_grpo.py")
+    assert (c9["micro_batch_size"], c9["accumulation_steps"], c9["context_len"]) == (32, 4, 1024)
+    assert (c3["batch_size"], c3["group_size"], c3["n_update_per_generation"]) == (32, 8, 2)
+    page = verify_cell("9.3-e")
+    assert "micro, accum, world, ctx = 32, 4, 8, 1024" in page and "prompts, G, n_update = 32, 8, 2" in page
 
 
 def _find_call(tree, dotted: str):
@@ -334,15 +360,68 @@ def test_recorded_cpu_run_is_consistent(dlfs6_path):
         "Machine learning is defined as", "The capital of Japan is"]
 
 
+def test_unigram_baseline_on_the_shrunk_split(dlfs6_path):
+    """只按词频猜（unigram）：在缩小版的训练数据上数词频，在它的验证数据上、用原书 evaluate 取的同一批目标 token
+    算交叉熵。页面上写的是 7.61；缩小版训练 300 步后的 val/loss（7.02）比它低 0.6 nats 左右。"""
+    import re
+    report = json.loads((RUNS / "webbot-cpu-shrunk" / "report.json").read_text(encoding="utf-8"))
+    path = dlfs6_path / "webbot" / "owt_valid.bin"
+    if not path.is_file():
+        pytest.skip("webbot/owt_valid.bin 没有下载（见 9.3 节的 GPU 框）")
+    (t0, t1), (v0, v1) = [tuple(int(x or 0) for x in re.search(r"\[(\d*):(\d+)\]", report["data"][k]).groups())
+                          for k in ("train", "val")]
+    data = np.memmap(path, dtype=np.uint16, mode="r")
+    train, val = np.asarray(data[t0:t1]), data[v0:v1]
+    cfg = next(c["data"] for c in _calls("webbot-cpu-shrunk") if c["call"] == "config.update")
+    ctx, bs = cfg["context_len"], cfg["micro_batch_size"]
+
+    get_batch = load_defs(["get_batch"])["get_batch"]             # 原书 evaluate 取验证数据的同一个函数
+    n_batches = ((len(val) - ctx - 1) // ctx) // bs + 1
+    targets = torch.cat([get_batch(val, ctx, bs, "cpu", random=False, offset=b * bs * ctx)[1].reshape(-1)
+                         for b in range(n_batches)]).numpy()
+    p = np.bincount(train, minlength=cfg["vocab_size"]) / len(train)
+    assert (p[targets] > 0).all()                                 # 验证里的 token 在训练数据里都出现过
+    ce = float(-np.log(p[targets]).mean())
+    final = [c for c in _calls("webbot-cpu-shrunk") if c["call"] == "log" and "val/loss" in c["data"]][-1]
+    print(f"\nunigram cross-entropy {ce:.4f} on {len(targets):,} target tokens; "
+          f"shrunk model val/loss {final['data']['val/loss']:.4f}")
+    assert round(ce, 2) == 7.61
+    assert 0.55 < ce - final["data"]["val/loss"] < 0.65
+
+
 def test_recorded_ddp_run_logs_only_on_rank0(dlfs6_path):
     """web/data/ch09/webbot-cpu-ddp2：原书脚本走 DDP 分支、2 个进程；只有 rank 0 调用 wandb，
     而它记下的 effective_batch_size 只是单卡的 micro×accum。"""
     report = json.loads((RUNS / "webbot-cpu-ddp2" / "report.json").read_text(encoding="utf-8"))
     assert report["world_size"] == 2 and report["exit_codes"] == [0, 0]
-    assert report["wandb_calls_per_rank"]["1"] == 0 and report["wandb_calls_per_rank"]["0"] > 0
-    cfg = next(c["data"] for c in _calls("webbot-cpu-ddp2") if c["call"] == "config.update")
-    assert cfg["effective_batch_size"] == cfg["micro_batch_size"] * cfg["accumulation_steps"]
-    assert cfg["effective_batch_size"] * report["world_size"] == 2 * cfg["effective_batch_size"]
+    calls = _calls("webbot-cpu-ddp2")
+    assert report["wandb_calls_per_rank"]["1"] == 0
+    assert report["wandb_calls_per_rank"]["0"] == len(calls)     # 记录下来的每一次调用都来自 rank 0
+    cfg = next(c["data"] for c in calls if c["call"] == "config.update")
+    assert cfg["effective_batch_size"] == cfg["micro_batch_size"] * cfg["accumulation_steps"]   # 没有乘卡数
+    train = [c for c in calls if c["call"] == "log" and "train/loss" in c["data"]]
+    assert [c["step"] for c in train] == list(range(cfg["max_iters"]))  # 每步一条，不会因为有 2 个进程而重复
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(sys.platform != "win32", reason="记录的是这台 Windows 机器上的现象")
+def test_windows_torch_has_gloo_but_no_nccl_and_no_torchrun(tmp_path):
+    """这台 Windows 上的 PyTorch：gloo 可用、NCCL 不可用；torchrun 起不来（这个构建没有带 libuv），
+    设 USE_LIBUV=0 也一样。所以 9.3 节的 2 进程运行绕过 torchrun，手动给每个进程设环境变量。"""
+    import os
+    import subprocess
+    import torch.distributed as dist
+    assert dist.is_gloo_available() and not dist.is_nccl_available()
+    script = tmp_path / "hello.py"
+    script.write_text("print('hello from a worker')\n", encoding="utf-8")
+    base = {k: v for k, v in os.environ.items() if k != "USE_LIBUV"}
+    for extra in ({}, {"USE_LIBUV": "0"}):
+        proc = subprocess.run([sys.executable, "-m", "torch.distributed.run", "--standalone",
+                               "--nproc_per_node=1", str(script)], env={**base, "PYTHONUTF8": "1", **extra},
+                              capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300)
+        assert proc.returncode != 0, extra
+        assert "use_libuv was requested but PyTorch was built without libuv support" in proc.stderr, extra
+        assert "hello from a worker" not in proc.stdout
 
 
 WANDB_PROBE = """
@@ -354,25 +433,34 @@ wandb.finish()
 
 
 def test_wandb_offline_and_disabled(tmp_path):
-    """和原书一样的三行调用：WANDB_MODE=disabled 时一个文件都不写；offline 时写到本地 wandb/offline-run-*，
-    以后可以 wandb sync。每种模式用一个新进程，因为 wandb 在进程里只读一次这个环境变量。
-    （wandb 在 gpu 依赖组里；没装时本测试跳过：uv run --group gpu pytest verify/test_ch09.py -k wandb）"""
+    """和原书一样的三行调用：WANDB_MODE=disabled 时一个文件都不写（当前目录、主目录、临时目录和 wandb 的
+    缓存、配置、数据目录都指到 tmp_path 下，最后整棵树里一个文件都没有）；offline 时写到当前目录的
+    wandb/offline-run-*，wandb 命令行也确实有 sync 子命令可以以后上传。每种模式用一个新进程，
+    因为 wandb 在进程里只读一次这个环境变量。（wandb 在默认的 dev 依赖组里；没装时本测试跳过。）"""
     import os
     import subprocess
     pytest.importorskip("wandb")
+    from wandb.cli.cli import cli
+    assert "sync" in cli.commands                         # wandb sync：把 offline 的运行上传到服务器
+    homes = ("HOME", "USERPROFILE", "TMP", "TEMP", "APPDATA", "LOCALAPPDATA", "XDG_CACHE_HOME",
+             "XDG_CONFIG_HOME", "WANDB_CONFIG_DIR", "WANDB_CACHE_DIR", "WANDB_DATA_DIR", "WANDB_ARTIFACT_DIR")
     procs = {}
     for mode in ("disabled", "offline"):                 # 两个进程同时跑，省一半时间
-        cwd = tmp_path / mode
-        cwd.mkdir()
-        env = {**os.environ, "WANDB_MODE": mode, "WANDB_SILENT": "true", "PYTHONUTF8": "1"}
-        env.pop("WANDB_API_KEY", None)
-        procs[mode] = subprocess.Popen([sys.executable, "-c", WANDB_PROBE], cwd=cwd, env=env,
+        root = tmp_path / mode
+        (root / "cwd").mkdir(parents=True)
+        dirs = {name: str(root / name.lower()) for name in homes}
+        for d in dirs.values():
+            os.makedirs(d)
+        env = {**os.environ, **dirs, "WANDB_MODE": mode, "WANDB_SILENT": "true", "PYTHONUTF8": "1"}
+        for k in ("WANDB_API_KEY", "WANDB_DIR"):          # WANDB_DIR 不设：运行目录就是当前目录下的 wandb/
+            env.pop(k, None)
+        procs[mode] = subprocess.Popen([sys.executable, "-c", WANDB_PROBE], cwd=root / "cwd", env=env,
                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     for mode, proc in procs.items():
         _, err = proc.communicate(timeout=180)
         assert proc.returncode == 0, err[-2000:]
-        cwd = tmp_path / mode
-        offline = list((cwd / "wandb").glob("offline-run-*")) if (cwd / "wandb").exists() else []
+        root = tmp_path / mode
+        offline = list((root / "cwd" / "wandb").glob("offline-run-*"))
         assert (len(offline) == 1) == (mode == "offline"), (mode, offline)
         if mode == "disabled":
-            assert not (cwd / "wandb").exists()
+            assert [p for p in root.rglob("*") if p.is_file()] == []

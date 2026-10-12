@@ -15,7 +15,7 @@ const VARIANTS = [
 const KIND = {
   dlfs6: 'DLFS6 自写', torch: 'PyTorch 内置', design: '设计不同', none: '无对应',
 };
-const OUTCOME = { passed: '通过', failed: '失败', skipped: '跳过' };
+const OUTCOME = { passed: '通过', failed: '✗ 失败', skipped: '跳过' };
 const FILES = ['test_model.py', 'test_nn_utils.py', 'test_optimizer.py', 'test_data.py', 'test_serialization.py',
   'test_train_bpe.py', 'test_tokenizer.py'];
 const LOG_MIN = -4, LOG_MAX = 2; // ratio axis: 1e-4 … 1e2
@@ -35,6 +35,15 @@ export function summarize(tests, key) {
 
 /** A test that failed in at least one of the two variants. */
 export const everFailed = (t) => VARIANTS.some((v) => t[v.key]?.outcome === 'failed');
+
+/** The tolerance ratio to draw for one variant's result, or null when the recorded comparison does not decide the
+ *  outcome: no numeric comparison at all, or a failure that came from another assertion (ratio within tolerance). */
+export function dotFor(result) {
+  const w = result?.worst;
+  if (!w) return null;
+  if (result.outcome === 'failed' && !(w.tol_ratio > 1)) return null;
+  return w.tol_ratio;
+}
 
 let styled = false;
 function injectStyle() {
@@ -60,7 +69,7 @@ function injectStyle() {
   text-align: center; white-space: nowrap; }
 .w-a1-st { font-size: .78rem; text-align: center; border-radius: 3px; padding: .05rem 0; white-space: nowrap; }
 .w-a1-st.passed { color: var(--moss); }
-.w-a1-st.failed { color: var(--shu); font-weight: 600; }
+.w-a1-st.failed { color: var(--kincha); font-weight: 600; }
 .w-a1-st.skipped { color: var(--ink-3); }
 .w-a1-bar { position: relative; height: 1.1rem; background: var(--paper-2); border-radius: 2px; }
 .w-a1-bar .tick { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--ink-3); left: calc(4.5px + (100% - 9px) * ${ratioPos(1) / 100}); }
@@ -130,15 +139,16 @@ export async function mount(root, config) {
   box.append(colhead, list, h('div', { class: 'w-a1-legend' },
     h('span', {}, h('i', { style: 'border:2px solid var(--kincha)' }), '原样的误差 ÷ 容差'),
     h('span', {}, h('i', { style: 'background:var(--ai)' }), '三处修改后'),
-    h('span', {}, '横轴是对数刻度 10⁻⁴ … 10²，竖线 = 1：越过竖线即超出容差')));
+    h('span', {}, '横轴是对数刻度 10⁻⁴ … 10²，竖线 = 1：越过竖线即超出容差'),
+    h('span', {}, '没有点的行不是数值比较（精确匹配、计时或功能缺失），或者失败与数值容差无关；看“原样 / 修改后”两列即可')));
 
   const row = (t) => {
     const detail = h('div', { class: 'w-a1-detail', hidden: true });
     const bar = h('div', { class: 'w-a1-bar', 'aria-hidden': 'true' }, h('span', { class: 'tick' }));
     for (const v of VARIANTS) {
-      const w = t[v.key]?.worst;
-      if (w) bar.append(h('span', { class: `dot ${v.key}`,   // keep the 9px dot inside the bar at both ends
-        style: `left:calc(4.5px + (100% - 9px) * ${ratioPos(w.tol_ratio) / 100})` }));
+      const ratio = dotFor(t[v.key]);
+      if (ratio != null) bar.append(h('span', { class: `dot ${v.key}`,   // keep the 9px dot inside the bar at both ends
+        style: `left:calc(4.5px + (100% - 9px) * ${ratioPos(ratio) / 100})` }));
     }
     const head = h('button', { type: 'button', class: 'w-a1-row-head', 'aria-expanded': 'false' },
       h('span', { class: 'w-a1-name' }, t.test),
@@ -159,7 +169,7 @@ export async function mount(root, config) {
         if (notes[t.test]) detail.append(h('div', {}, notes[t.test]));
         for (const v of VARIANTS) {
           const r = t[v.key] || {};
-          const m = measureText(r.worst);
+          const m = dotFor(r) != null ? measureText(r.worst) : (r.worst ? '失败来自其他断言，不是数值容差' : null);
           detail.append(h('div', {}, `${v.label}：${OUTCOME[r.outcome] || '—'}${r.duration != null ? `（${r.duration} s）` : ''}`
             + (m ? `；${m}` : '')));
           if (r.message && !(v.key !== 'as_shipped' && r.message === t.as_shipped?.message)) detail.append(h('pre', {}, r.message));

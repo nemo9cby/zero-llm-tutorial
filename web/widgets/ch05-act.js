@@ -41,7 +41,7 @@ export function mount(root) {
       : { ReLU: derivatives.relu, GELU: derivatives.gelu, Swish: derivatives.swish };
     return {
       series: Object.entries(fs).map(([name, f]) => ({ name, points: xs.map((x) => [x, +f(x).toFixed(5)]) })),
-      xLabel: 'x', yLabel: mode === 'f' ? 'f(x)' : 'f′(x)', height: 260,
+      xLabel: 'x', yLabel: mode === 'f' ? 'f(x)' : 'f′(x)', height: 260, xTicks: [-3, -2, -1, 0, 1, 2, 3],
       yMin: mode === 'f' ? -0.5 : -0.2, yMax: mode === 'f' ? 3 : 1.2,
       refLines: [{ y: 0 }],
       vLines: [{ x: sx, label: mode === 'f' ? 'Swish 最低点' : 'Swish′ = 0' }],

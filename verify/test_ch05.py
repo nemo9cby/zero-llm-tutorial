@@ -18,7 +18,7 @@ import torch  # noqa: E402
 import torch.nn as nn  # noqa: E402
 import torch.nn.functional as F  # noqa: E402
 
-from _ch05_kvbench import measure  # noqa: E402
+from _ch05_kvbench import MODEL, measure  # noqa: E402
 from _ch05_record import BUG as STORYBOT_BUG  # noqa: E402
 from _ch05_record import CKPT as STORYBOT_CKPT  # noqa: E402
 from _ch05_record import OUT as STORYBOT_RECORD  # noqa: E402
@@ -78,17 +78,38 @@ def test_rope_table_is_built_in_float32_and_its_error_grows_with_position():
 
 
 def test_rope_rotates_bf16_inputs_in_float32():
-    RoPE = load_defs("ch05/01_rope.py", {"RoPE"})["RoPE"]
-    rope = RoPE(10000, 64, 1024)
+    """commit 6855e70 给 RoPE.forward 加了 x.float() 与 .to(input_dtype)。第 6 章用 autocast 做 bf16 混合精度
+    （ch06/05_pretrain.py 第 64、130 行）；这里用 CPU 上的 autocast 重现，matmul 在 CUDA 的 autocast 下同样转成 bf16。"""
+    ns = load_defs("ch05/01_rope.py", {"RoPE", "MultiHeadAttention"})
+    RoPE, MHA = ns["RoPE"], ns["MultiHeadAttention"]
+    OldRoPE = load_defs("ch05/01_rope.py", {"RoPE"}, replace={         # 6855e70 之前的 forward：没有这两行
+        "        input_dtype = x.dtype\n        x = x.float()\n": "",
+        "return out.to(input_dtype)": "return out"})["RoPE"]
+    rope, old_rope = RoPE(10000, 64, 1024), OldRoPE(10000, 64, 1024)
     torch.manual_seed(0)
-    xb = torch.randn(1, 1, 10, 64).bfloat16()
-    out = rope(xb)
-    assert out.dtype == torch.bfloat16                          # 进出都是 bf16……
-    truth = rope(xb.float())                                    # ……中间按 fp32 旋转同一组 bf16 数
-    all_bf16 = xb[..., 0::2] * rope.cos_cache[:10].bfloat16() - xb[..., 1::2] * rope.sin_cache[:10].bfloat16()
-    err_book = (out.float()[..., 0::2] - truth[..., 0::2]).abs().max().item()
-    err_bf16 = (all_bf16.float() - truth[..., 0::2]).abs().max().item()
-    assert err_book < err_bf16
+    x = torch.randn(2, 10, 128)
+    lin = nn.Linear(128, 128, bias=False)
+    with torch.no_grad(), torch.autocast("cpu", dtype=torch.bfloat16):
+        q = lin(x).view(2, 10, 2, 64).transpose(1, 2)               # 线性层输出的 Q：bf16，形状 (B, H, C, D)
+        assert q.dtype == torch.bfloat16 and rope.cos_cache.dtype == torch.float32
+        q_old, q_new = old_rope(q), rope(q)
+        assert q_old.dtype == torch.float32                         # 不加这两行：bf16 × float32 按类型提升在 float32 下算
+        assert torch.equal(q_old, rope(q.float()))                  # 与“先转 float32 再旋转”逐位相同：误差 0
+        assert q_new.dtype == torch.bfloat16 and torch.equal(q_new, q_old.to(torch.bfloat16))   # 新写法只是多转回 bf16
+        new_mha, old_mha = MHA(128, 2, 64, rope=rope), MHA(128, 2, 64, rope=old_rope)
+        old_mha.load_state_dict(new_mha.state_dict())
+        q, k = rope(q), rope(lin(x).view(2, 10, 2, 64).transpose(1, 2))
+        assert torch.matmul(q, k.transpose(-2, -1)).dtype == torch.bfloat16   # 算分数的 matmul 在 autocast 下用 bf16
+        assert torch.equal(new_mha(x), old_mha(x))                  # 整个注意力层的输出逐位相同
+    # 整个模型 .to(torch.bfloat16) 时，cos、sin 表也变成 bf16，不加这两行的旋转才会全程在 bf16 下进行
+    qb = lin(x).view(2, 10, 2, 64).transpose(1, 2).detach().bfloat16()
+    rope16, old16 = RoPE(10000, 64, 1024).to(torch.bfloat16), OldRoPE(10000, 64, 1024).to(torch.bfloat16)
+    assert rope16.cos_cache.dtype == torch.bfloat16 and old16(qb).dtype == torch.bfloat16
+    truth = rope(qb.float())                                        # float32 的表、float32 的运算
+    err_new = (rope16(qb).float() - truth).abs().max().item()
+    err_old = (old16(qb).float() - truth).abs().max().item()
+    print(f"全程 bf16 的模型：不加这两行 {err_old:.2e}，加上 {err_new:.2e}")
+    assert err_new < err_old                                        # 这时先转 float32 才真正减小了误差
 
 
 def test_rope_offset_moves_q_and_k_together_without_changing_scores():
@@ -110,6 +131,12 @@ def test_rope_buffers_are_saved_once_per_layer_and_pin_max_context_len():
     assert len({sd[k].data_ptr() for k in keys if k.endswith("cos_cache")}) == 1   # 其实是同一块内存
     with pytest.raises(RuntimeError, match="cos_cache"):        # max_context_len 改成 512 就加载不进去
         GPT(1000, 512, 384, 6, 6, 1024).load_state_dict(sd)
+    # StoryBot（head_dim = 512 / 16 = 32）：表的行数跟着 max_context_len 走，参数量不变
+    with torch.device("meta"):                                  # 只看形状，不分配内存
+        story = {C: GPT(10000, C, 512, 16, 4, 1344) for C in (256, 512)}
+    shapes = {C: tuple(m.state_dict()["blocks.0.attn.rope.cos_cache"].shape) for C, m in story.items()}
+    assert shapes == {256: (256, 16), 512: (512, 16)}
+    assert n_params(story[256]) == n_params(story[512]) == 22_696_448
 
 
 # ---------------------------------------------------------------- 5.2 SwiGLU
@@ -179,7 +206,7 @@ def test_codebot_vs_improved_gpt_parameter_accounting(dlfs6_path):
     assert cb.embed.weight is cb.unembed.weight                 # CodeBot：权重共享
     assert im.embed.weight is not im.unembed.weight             # 改良版：各有一份
     assert n_params(sb.GPT(10000, 256, 512, 16, 4, 1344)) == 22_696_448
-    params = page_cells("5.4-a")["improved_gpt_params"]
+    params = page_cells("5.4-b")["improved_gpt_params"]
     assert params(10000, 384, 6, 1024) == n_params(m) and params(10000, 512, 4, 1344) == 22_696_448
     # storybot/model.py 的 GPT 与 04 的 GPT 是同一个模型：键名相同，不用 cache 时输出相同
     story = sb.GPT(10000, 256, 384, 6, 6, 1024, 10000)
@@ -357,9 +384,10 @@ def test_measure_generation_time_clears_the_wrong_cache():
     first = ns["generate_with_cache"](model, start, 20)
     second = ns["generate_with_cache"](model, start, 20)        # 忘了 clear_cache()
     assert not torch.equal(first, second)
-    # “# 固定シード”固定的只是起始 token：不设随机种子时，两次初始化的权重不同
-    assert not torch.equal(ns["GPT"](1000, 256, 384, 6, 1, 1024).embed.weight,
-                           ns["GPT"](1000, 256, 384, 6, 1, 1024).embed.weight)
+    # “# 固定シード”固定的只是起始 token：不设随机种子时，两次初始化的权重不同，生成的 token 也不同
+    run1, run2 = ns["GPT"](1000, 256, 384, 6, 1, 1024), ns["GPT"](1000, 256, 384, 6, 1, 1024)
+    assert not torch.equal(run1.embed.weight, run2.embed.weight)
+    assert not torch.equal(ns["generate_with_cache"](run1, start, 10), ns["generate_with_cache"](run2, start, 10))
 
 
 def test_commented_out_consistency_check_needs_max_new_tokens():
@@ -380,24 +408,44 @@ def test_commented_out_consistency_check_needs_max_new_tokens():
 
 
 def test_one_decode_step_makes_hundreds_of_small_torch_calls():
+    from collections import Counter
+
     from torch.overrides import TorchFunctionMode
     ns = load_defs("ch05/05_kvcache.py")
     torch.manual_seed(0)
     model = ns["GPT"](1000, 256, 384, 6, 6, 1024).eval()
+    calls = Counter()
 
-    class Count(TorchFunctionMode):                              # 数一数 Python 层调用了多少次 torch 运算
-        n = 0
-
+    class Count(TorchFunctionMode):                              # 记下 Python 层发出的每一次 torch 调用
         def __torch_function__(self, func, types, args=(), kwargs=None):
-            Count.n += 1
+            calls[getattr(func, "__name__", str(func))] += 1
             return func(*args, **(kwargs or {}))
 
     with torch.no_grad():
         model(torch.randint(0, 1000, (1, 50)), use_cache=True)     # prefill 50 个 token
         with Count():
             model(torch.tensor([[7]]), use_cache=True)              # decode 1 个 token
-    print("decode 一步调用的 torch 运算次数：", Count.n)
-    assert 300 < Count.n < 500
+    # 不做计算的调用：读 .shape 之类的属性（__get__）、size、切片、view/transpose/reshape（只换个看法），
+    # 以及 float32 张量上什么也不做的 .float() 与 .to()
+    no_compute = {"__get__", "size", "dim", "__getitem__", "view", "transpose", "reshape", "float", "to"}
+    total = sum(calls.values())
+    compute = sum(n for f, n in calls.items() if f not in no_compute)
+    print(f"decode 一步：torch 调用 {total} 次，其中真正做计算的 {compute} 次")
+    print("  " + "，".join(f"{f} {n}" for f, n in calls.most_common()))
+    assert 300 < total < 500                                    # 正文：“近 400 次”
+    assert 180 < compute < 240                                  # 正文：“约 200 次是真正的计算”
+
+
+def test_webbot_generate_runs_one_prompt_in_float32(dlfs6_path):
+    import webbot.model as wb
+    import webbot.utils as wu
+    src = (inspect.getsource(wu.generate) + inspect.getsource(wb.GPT.load_from)
+           + (DLFS6 / "ch09" / "02_generate.py").read_text(encoding="utf-8"))
+    assert "torch.tensor([ids]" in src and "next_id.item()" in src   # 一次只编码 1 条 prompt；.item() 只适用于 batch = 1
+    assert not any(s in src for s in ("autocast", "bfloat16", ".half()", "float16"))   # 不切换精度：以 float32 运行
+    with torch.device("meta"):                                  # 只数参数，不分配内存
+        m = wb.GPT(50000, 1024, 768, 12, 4, 12, 2048)           # ch09/01_pretrain.py 的配置
+    assert n_params(m) == 152_316_672 and {p.dtype for p in m.parameters()} == {torch.float32}
 
 
 def test_positions_freeze_past_max_context_len(dlfs6_path):
@@ -447,10 +495,27 @@ def test_trained_storybot_reproduces_the_recorded_samples():
 
 
 def test_kv_benchmark_runs_and_the_recorded_cpu_numbers_have_the_expected_shape():
-    res = measure("cpu", lengths=(1, 8), repeats=1, gen_lengths=(3,),
+    res = measure("cpu", lengths=(1, 8), repeats=1, gen_lengths=(3,), gen_repeats=2,
                   model_cfg=dict(max_context_len=16, embed_dim=32, n_head=4, n_layer=1, ff_dim=85))
     assert [r["t"] for r in res["per_step"]] == [1, 8] and res["generate"][0]["n"] == 3
+    assert len(res["generate"][0]["cache_runs"]) == 2 and res["overhead_probe"]["tiny_params"] < res["overhead_probe"]["model_params"]
     rec = json.loads((ROOT / "web" / "data" / "ch05" / "kv_timing_cpu.json").read_text(encoding="utf-8"))
-    assert rec["model"]["n_layer"] == 6 and rec["device"] == "cpu"
+    assert rec["model"] == MODEL and rec["device"] == "cpu" and rec["threads"] == 1
     assert [r["t"] for r in rec["per_step"]] == [1, 25, 50, 100, 200, 400, 800]
     assert [g["n"] for g in rec["generate"]] == [50, 100, 200]
+    assert rec["gen_repeats"] == 5 and all(len(g["no_cache_runs"]) == len(g["cache_runs"]) == 5 for g in rec["generate"])
+    for g in rec["generate"]:                                   # 记录的是 5 次运行的中位数
+        assert g["no_cache_s"] == sorted(g["no_cache_runs"])[2] and g["cache_s"] == sorted(g["cache_runs"])[2]
+    probe = rec["overhead_probe"]                               # 同样的调用顺序，权重缩小到 7 万个参数
+    assert (probe["model_params"], probe["tiny_params"], probe["tiny"]) == (11_389_824, 69_048, {"embed_dim": 24, "ff_dim": 16})
+    assert len(rec["tutorial_commit"]) == len(rec["dlfs6_commit"]) == 40
+
+
+def test_recorded_cuda_numbers_have_the_expected_shape():
+    # RTX 3060 Ti 上的记录（2026-10-11，用的是这个脚本较早的版本：每种生成只计时一次，没有记下 CPU 占用与 commit）
+    rec = json.loads((ROOT / "web" / "data" / "ch05" / "kv_timing_cuda.json").read_text(encoding="utf-8"))
+    assert rec["device"] == "cuda" and rec["device_name"] == "NVIDIA GeForce RTX 3060 Ti"
+    assert rec["model"] == MODEL and rec["command"] == "uv run python verify/_ch05_kvbench.py --device cuda"
+    assert [r["t"] for r in rec["per_step"]] == [1, 25, 50, 100, 200, 400, 800]
+    assert [g["n"] for g in rec["generate"]] == [50, 100, 200]
+    assert all(r["full_ms"] > 0 and r["decode_ms"] > 0 for r in rec["per_step"])
