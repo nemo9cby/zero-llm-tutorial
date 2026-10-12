@@ -1,0 +1,21 @@
+{
+ "about": "本书计划记录的运行。estimate_usd 由 gpu/costs.py 的 estimate_plan 算出（verify/test_gpu.py 核对），已记录的运行以 web/data/runs/<run>/report.json 为准。",
+ "planned": [
+  {"run": "codebot-3060ti", "job": "codebot", "offer": "local:rtx3060ti", "nproc": 1,
+   "where": "本机 RTX 3060 Ti", "what": "CodeBot：预训练 → 生成 → SFT → GRPO",
+   "estimate_usd": [0, 0],
+   "command": "uv run python gpu/run_local.py --run codebot-3060ti --job codebot"},
+  {"run": "storybot-h100", "job": "storybot", "offer": "modal:h100", "nproc": 1,
+   "where": "Modal H100", "what": "StoryBot：预训练 → 生成 → DPO",
+   "estimate_usd": [0.82, 3.24],
+   "command": "uv run --group gpu modal run --detach gpu/modal_app.py::launch --job storybot --gpu H100 --run storybot-h100 --budget 4"},
+  {"run": "webbot-probe", "job": "webbot-probe", "offer": "modal:h100", "nproc": 1,
+   "where": "Modal H100", "what": "WebBot 计时探针：真实训练的前 200 步",
+   "estimate_usd": [0.36, 1.12],
+   "command": "uv run --group gpu modal run --detach gpu/modal_app.py::launch --job webbot-probe --gpu H100 --run webbot-probe --budget 2"},
+  {"run": "webbot-h100x8", "job": "webbot", "offer": "modal:h100", "nproc": 8,
+   "where": "Modal 8 × H100", "what": "WebBot 全程，总 token 与单卡相同（启动前需要你批准预算）",
+   "estimate_usd": [31.88, 62.26],
+   "command": "uv run --group gpu modal run --detach gpu/modal_app.py::launch --job webbot --gpu H100:8 --run webbot-h100x8 --budget 70"}
+ ]
+}

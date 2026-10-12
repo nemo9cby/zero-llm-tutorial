@@ -1,0 +1,11 @@
+{
+ "source": "GRPO 对照实验的逐轮指标。每条运行都用 09_grpo.py 原书的 GRPODataset / calculate_reward / compute_probs / grpo_loss 与原超参数（lr 7e-6、G=8、batch 32、eps 0.2、每批 2 次更新、clip_grad_norm 1.0），只把逐条 generate() 换成统计上等价的批量采样；dropout=false 的运行在更新前多调用一次 model.eval()。全部在 CPU 上运行，起点都是官方 model_sft.pt。",
+ "runs": [
+  {"seed": 0, "dropout": true, "iters": 60, "file": "grpo_dropout/seed0_base.jsonl", "final_greedy_acc": 70.37, "who": "研究阶段的记录", "env": "torch 2.9.1+cpu, research/repo-ch03-train-align.md §2.6.4(c), scripts/grpo_fast.py"},
+  {"seed": 0, "dropout": false, "iters": 60, "file": "grpo_dropout/seed0_nodrop.jsonl", "final_greedy_acc": 95.06, "who": "研究阶段的记录", "env": "torch 2.9.1+cpu, research/repo-ch03-train-align.md §2.6.4(c), scripts/grpo_fast.py"},
+  {"seed": 1, "dropout": true, "iters": 40, "file": "grpo_dropout/seed1_base.jsonl", "final_greedy_acc": 74.07, "who": "研究阶段的记录", "env": "torch 2.9.1+cpu, research/repo-ch03-train-align.md §2.6.4(c), scripts/grpo_fast.py"},
+  {"seed": 1, "dropout": false, "iters": 40, "file": "grpo_dropout/seed1_nodrop.jsonl", "final_greedy_acc": 95.06, "who": "研究阶段的记录", "env": "torch 2.9.1+cpu, research/repo-ch03-train-align.md §2.6.4(c), scripts/grpo_fast.py"},
+  {"seed": 2, "dropout": true, "iters": 60, "file": "grpo_dropout/seed2_base.jsonl", "final_greedy_acc": 72.84, "who": "本章复现", "env": "torch 2.14.1, CPU, verify/_ch03_grpo_replicate.py --iters 60 --seed 2 --tag base"},
+  {"seed": 2, "dropout": false, "iters": 60, "file": "grpo_dropout/seed2_nodrop.jsonl", "final_greedy_acc": 93.83, "who": "本章复现", "env": "torch 2.14.1, CPU, verify/_ch03_grpo_replicate.py --iters 60 --seed 2 --tag nodrop --dropout-off"}
+ ]
+}

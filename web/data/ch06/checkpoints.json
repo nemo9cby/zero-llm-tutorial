@@ -1,0 +1,89 @@
+{
+ "what": "official StoryBot checkpoints on held-out TinyStories tokens + samples",
+ "command": "CUDA_VISIBLE_DEVICES=-1 uv run python verify/_ch06_ckpt_record.py",
+ "heldout": {
+  "file": "storybot/tiny_stories_valid.bin",
+  "tokens": 131072,
+  "bytes": 530499,
+  "bytes_per_token": 4.047386169433594,
+  "context_len": 256,
+  "dtype": "fp32"
+ },
+ "fresh_init": {
+  "seed": 0,
+  "logit_std": 0.4491831064224243,
+  "ln_v": 9.210340371976184,
+  "ln_v_plus_var_over_2": 9.311223103354262
+ },
+ "sampling": {
+  "prompt": "<|endoftext|>",
+  "max_new_tokens": 200,
+  "temperature": 1.0,
+  "seeds": [
+   0,
+   1
+  ],
+  "threads": 4
+ },
+ "provenance": {
+  "date_utc": "2026-10-11T23:53:59+00:00",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "torch": "2.14.1+cu130",
+  "numpy": "2.5.4",
+  "seconds": 347.4
+ },
+ "checkpoints": [
+  {
+   "iter": 0,
+   "steps": 0,
+   "tokens_seen": 0,
+   "val_loss": 9.318187832832336,
+   "val_loss_8192": 9.301301002502441,
+   "ppl": 11138.77822457461,
+   "bits_per_token": 13.44330337649909,
+   "bits_per_byte": 3.321477816479369
+  },
+  {
+   "iter": 500,
+   "steps": 501,
+   "tokens_seen": 4104192,
+   "val_loss": 2.4164042472839355,
+   "val_loss_8192": 2.5753190517425537,
+   "ppl": 11.205494599963611,
+   "bits_per_token": 3.4861344243395624,
+   "bits_per_byte": 0.8613298258187766,
+   "samples": [
+    "One day, a little boy named Tim found a terrible cat. The cat liked to help other feels. She lost the cat everywhere and lent it to get lost.\nTim's friend, Lily, saw the cat and said, \"Hey, let's play. You have you ribb to play with my!\" Tim did not want to care, Mr. Bear, planning until his muscles should stop.\nThey went and walked until the lady looked under her bed. The candle looked all over the fireplace, but they could not find the walking near them. Tim and the monster could yoga games, but then something unexpected happened. The monster went into the room and saw his toys very excited to play with them, and Tim and Amy were happy to be friends.",
+    "Once upon a time, there was a fat cat named Tom. Tom lived near the theater. He loved to crawl to the other kids. One day, Tom saw a barrel. He thought the happy would be fun to roll the blocks up and close to the floor.\nTom needed a balloon to play with the pizza. It asked his mother mom, \"Can we stop the bell and clean or the movie?\" his mom agreed. They walked together, jump, andA toy bird named Fluffy looking for the image. The sky was empty, and they all laughed.\nAll all sudden, they saw something strange new. It was a small, green billboard! The magnet was ripe, but then it looked dark. Max and Luna ran into the room, leaving the machine, just trying to catch it.\nThey pushed and pushed and they ran, but the square smiled. Then Max and the town went fun together, and they all played together. They laughed and danced and had a fun"
+   ]
+  },
+  {
+   "iter": 5000,
+   "steps": 5001,
+   "tokens_seen": 40968192,
+   "val_loss": 1.6523909196257591,
+   "val_loss_8192": 1.8228315114974976,
+   "ppl": 5.219444192149291,
+   "bits_per_token": 2.3838961853540366,
+   "bits_per_byte": 0.5889964746525899,
+   "samples": [
+    "One day, a little girl named Lucy was playing in the park. She saw a small animal on a branch. It was a tiny, friendly animal. It was a pupil with a red flag. Lucy wanted to meet her new friend.\nHe tried to invite all the people to his surprise party. They all thought it was very fun, too. But Lucy said, \"This is a test for you to play marriage.\" The kids looked at each other and walked to the test.\nEven when the test was bad, Lucy knew it was important. She showed her friends the test and they all applauded. In the game, Lucy's new friend joined the test. Everyone at the show was happy, and they all played together at the party. And they were all very happy.",
+    "Once upon a time, there was a fat cat named Tom. Tom lived near the theater. He loved to play with his ball and run around all day.\nOne day, Tom saw a little mouse named Max. Max was running up to Tom. Tom said, \"Max, can you be my friend?\" Max barked and wagged his tail. Tom and Max played together in the theater.\nAt the end of the day, Max was very tired. He remembered that Tom needed to sleep. He gave her a big hug and said, \"You all sleep without you.\" Tom went home to sleep and had new dreams, happy that his new friend helped him."
+   ]
+  },
+  {
+   "iter": 40000,
+   "steps": 40000,
+   "tokens_seen": 327680000,
+   "val_loss": 1.3023099079728127,
+   "val_loss_8192": 1.4276281595230103,
+   "ppl": 3.6777822018750044,
+   "bits_per_token": 1.8788360459329392,
+   "bits_per_byte": 0.46420973123893206,
+   "samples": [
+    "One day, a little girl named Lucy was playing in the kitchen. She saw a small door on the door. Inside, there were many cold treats. Lucy's mom told her to behave and be careful with the cold treats.\nLucy's mom said, \"Lucy, you must not touch things that are not yours. Some of them can be bad for you.\" Lucy nodded and promised to be good.\nLater, Lucy's friend Tom came over to play. They played with their toys and had fun. Lucy remembered what her mom said and did not touch the cold treat. They shared it and had a yummy snack together. They were happy and promised to always behave and be good friends.",
+    "Once upon a time, there was a fat cat named Tom. Tom liked to play with a stick. One day, Tom was playing with his stick, and he was very tired.\nTom saw a little mouse and said, \"Go away, mouse! This is my stick!\" The mouse ran away, and Tom chased him. They ran through the grass, under a big tree.\nAs the mouse got close, Tom jumped and caught the mouse. They were very happy and laughed. From that day on, Tom and the mouse became best friends."
+   ]
+  }
+ ]
+}

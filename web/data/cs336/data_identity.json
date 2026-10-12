@@ -1,0 +1,28 @@
+{
+ "checked": "2026-10-11",
+ "method": "Hugging Face 返回的 LFS 文件 SHA-256（HTTP HEAD 的 x-linked-etag 与 x-linked-size）；OWT 验证集一侧是 gzip，下载后解压并在本机计算 SHA-256",
+ "pairs": [
+  {
+   "name": "TinyStories 训练集",
+   "dlfs6": {"url": "https://huggingface.co/datasets/koki0702/zero-llm-data/blob/main/storybot/tiny_stories_train.txt",
+             "size": 2227753162, "sha256": "6418d412de72888f52b5142c761ac21a582f7d1166f0bfbdb5f03ccfdec90443"},
+   "cs336": {"url": "https://huggingface.co/datasets/roneneldan/TinyStories/blob/main/TinyStoriesV2-GPT4-train.txt",
+             "size": 2227753162, "sha256": "6418d412de72888f52b5142c761ac21a582f7d1166f0bfbdb5f03ccfdec90443"}
+  },
+  {
+   "name": "TinyStories 验证集",
+   "dlfs6": {"url": "https://huggingface.co/datasets/koki0702/zero-llm-data/blob/main/storybot/tiny_stories_valid.txt",
+             "size": 22502601, "sha256": "6874bae9a4c1a4e7edcf0e53b86c17817e9cf881fc75ff2368da457b80c0585d"},
+   "cs336": {"url": "https://huggingface.co/datasets/roneneldan/TinyStories/blob/main/TinyStoriesV2-GPT4-valid.txt",
+             "size": 22502601, "sha256": "6874bae9a4c1a4e7edcf0e53b86c17817e9cf881fc75ff2368da457b80c0585d"}
+  },
+  {
+   "name": "OpenWebText 验证集",
+   "dlfs6": {"url": "https://huggingface.co/datasets/koki0702/zero-llm-data/blob/main/webbot/owt_valid.txt",
+             "size": 289998753, "sha256": "2406f278e71829d273b315e9b403285baea7022b26a96d2728dd8b776ea40660"},
+   "cs336": {"url": "https://huggingface.co/datasets/stanford-cs336/owt-sample/blob/main/owt_valid.txt.gz",
+             "gz_size": 111785382, "size": 289998753,
+             "sha256": "2406f278e71829d273b315e9b403285baea7022b26a96d2728dd8b776ea40660"}
+  }
+ ]
+}

@@ -1,0 +1,201 @@
+{
+ "_provenance": {
+  "generated_by": "CUDA_VISIBLE_DEVICES=-1 uv run python verify/_parts_preview.py --write",
+  "date": "2026-10-11",
+  "device": "cpu",
+  "python": "3.12.9",
+  "torch": "2.14.1+cu130",
+  "numpy": "2.5.4",
+  "dlfs6_commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
+  "seed": 0,
+  "hf_listing": "https://huggingface.co/api/datasets/koki0702/zero-llm-data/tree/main?recursive=true",
+  "hf_listing_date": "2026-10-11",
+  "note": "初始 loss：torch.manual_seed(0) 依次构造三个模型（eval 模式），在 init_loss_data 的前 4×256 个 token 上计算交叉熵"
+ },
+ "bots": [
+  {
+   "id": "codebot",
+   "name": "CodeBot",
+   "part": "I",
+   "page": "part1.html",
+   "data": "TinyCodes",
+   "chapters": {
+    "tokenizer": "ch01",
+    "model": "ch02",
+    "training": "ch03"
+   },
+   "precision": "fp32",
+   "arch": "GPT-2",
+   "corpus": {
+    "text_file": "codebot/tiny_codes.txt",
+    "text_bytes": 6487033,
+    "token_file": "codebot/tiny_codes.bin",
+    "tokens": 2677398,
+    "end_token_id": 999
+   },
+   "model": {
+    "vocab_size": 1000,
+    "context_len": 256,
+    "embed_dim": 384,
+    "n_layer": 6,
+    "n_head": 6,
+    "n_kv_head": 6,
+    "ff_dim": 1536
+   },
+   "params": 11121640,
+   "params_split": {
+    "embedding": 384000,
+    "position": 98304,
+    "blocks": 10637568,
+    "final_norm": 768,
+    "output_extra": 1000
+   },
+   "pretrain": {
+    "script": "ch03/01_pretrain.py",
+    "max_iters": 20000,
+    "batch_size": 32,
+    "accumulation_steps": 1,
+    "context_len": 256,
+    "tokens_per_iter": 8192,
+    "tokens": 163840000,
+    "learning_rate": 0.0003
+   },
+   "post": [
+    {
+     "stage": "SFT",
+     "script": "ch03/03_sft.py",
+     "data": "codebot/tiny_codes_sft.json",
+     "examples": 1092,
+     "max_iters": 500,
+     "batch_size": 32,
+     "learning_rate": 0.0003
+    },
+    {
+     "stage": "GRPO",
+     "script": "ch03/09_grpo.py",
+     "data": "81 道 i+j=（i, j = 1…9）",
+     "examples": 81,
+     "group_size": 8,
+     "batch_size": 32,
+     "max_iters": 500,
+     "learning_rate": 7e-06
+    }
+   ],
+   "init_loss": 6.9949,
+   "init_loss_data": "codebot/tiny_codes.bin"
+  },
+  {
+   "id": "storybot",
+   "name": "StoryBot",
+   "part": "II",
+   "page": "part2.html",
+   "data": "TinyStories V2-GPT4",
+   "chapters": {
+    "tokenizer": "ch04",
+    "model": "ch05",
+    "training": "ch06"
+   },
+   "precision": "bf16 autocast",
+   "arch": "RoPE + SwiGLU + RMSNorm",
+   "corpus": {
+    "text_file": "storybot/tiny_stories_train.txt",
+    "text_bytes": 2227753162,
+    "token_file": "storybot/tiny_stories_train.bin",
+    "tokens": 541229223,
+    "end_token_id": 9999
+   },
+   "model": {
+    "vocab_size": 10000,
+    "context_len": 256,
+    "embed_dim": 512,
+    "n_layer": 4,
+    "n_head": 16,
+    "n_kv_head": 16,
+    "ff_dim": 1344
+   },
+   "params": 22696448,
+   "params_split": {
+    "embedding": 5120000,
+    "position": 0,
+    "blocks": 12455936,
+    "final_norm": 512,
+    "output_extra": 5120000
+   },
+   "pretrain": {
+    "script": "ch06/05_pretrain.py",
+    "max_iters": 40000,
+    "batch_size": 32,
+    "accumulation_steps": 1,
+    "context_len": 256,
+    "tokens_per_iter": 8192,
+    "tokens": 327680000,
+    "learning_rate": 0.001
+   },
+   "post": [
+    {
+     "stage": "DPO",
+     "script": "ch06/08_dpo.py",
+     "data": "storybot/tiny_stories_dpo.json",
+     "examples": 144,
+     "max_iters": 1000,
+     "batch_size": 8,
+     "learning_rate": 5e-06,
+     "beta": 0.1
+    }
+   ],
+   "init_loss": 9.3023,
+   "init_loss_data": "storybot/tiny_stories_valid.bin"
+  },
+  {
+   "id": "webbot",
+   "name": "WebBot",
+   "part": "III",
+   "page": "part3.html",
+   "data": "OpenWebText (CS336 sample)",
+   "chapters": {
+    "tokenizer": "ch07",
+    "model": "ch08",
+    "training": "ch09"
+   },
+   "precision": "bf16 autocast + torch.compile",
+   "arch": "StoryBot + GQA + SDPA",
+   "corpus": {
+    "text_file": "webbot/owt_train.txt",
+    "text_bytes": 11920511059,
+    "token_file": "webbot/owt_train.bin",
+    "tokens": 2649004800,
+    "end_token_id": 49999
+   },
+   "model": {
+    "vocab_size": 50000,
+    "context_len": 1024,
+    "embed_dim": 768,
+    "n_layer": 12,
+    "n_head": 12,
+    "n_kv_head": 4,
+    "ff_dim": 2048
+   },
+   "params": 152316672,
+   "params_split": {
+    "embedding": 38400000,
+    "position": 0,
+    "blocks": 75515904,
+    "final_norm": 768,
+    "output_extra": 38400000
+   },
+   "pretrain": {
+    "script": "ch09/01_pretrain.py",
+    "max_iters": 100000,
+    "batch_size": 32,
+    "accumulation_steps": 4,
+    "context_len": 1024,
+    "tokens_per_iter": 131072,
+    "tokens": 13107200000,
+    "learning_rate": 0.0006
+   },
+   "post": [],
+   "init_loss": 10.9929,
+   "init_loss_data": "webbot/owt_valid.bin"
+  }
+ ]
+}

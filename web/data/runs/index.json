@@ -1,0 +1,9 @@
+{
+ "codebot-3060ti": {
+  "steps": [
+   "01_pretrain",
+   "03_sft",
+   "09_grpo"
+  ]
+ }
+}

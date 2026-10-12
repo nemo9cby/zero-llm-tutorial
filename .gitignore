@@ -3,10 +3,11 @@ __pycache__/
 *.pyc
 .venv/
 node_modules/
-*.pt
-*.bin
-data/
 .DS_Store
-build/
-runs/
-site/
+# checkpoints (large; exported weights for the playground are handled explicitly)
+*.pt
+/build/
+/site/
+/runs/
+# playground weights: decide after swapping in the tutorial's own trained checkpoints
+/web/data/playground/

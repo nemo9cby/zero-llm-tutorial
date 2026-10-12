@@ -1,0 +1,257 @@
+tasks = []
+while True:
+    task = input('Enter a task or type 'done' to finish: ')
+    if task == 'done': break
+    tasks.append(task)
+print(f'Your to-do list for today: {tasks}')
+<|endoftext|>
+shopping_list = {}
+while True:
+    item = input('Enter an item or type 'done' to finish: ')
+    if item == 'done': break
+    quantity = input(f'Enter the quantity for {item}: ')
+    shopping_list[item] = quantity
+print(f'Your shopping list: {shopping_list}')
+<|endoftext|>
+total_time = 0
+for i in range(1, 8):
+    time = float(input(f'Enter phone usage in hours for day {i}: '))
+    total_time += time
+print(f'You spend approximately {total_time} hours per week on your phone.')
+<|endoftext|>
+total_bill = float(input('Enter the total bill amount: '))
+friends_count = int(input('Enter the number of friends: '))
+per_person = total_bill / friends_count
+print(f'Each person should pay {per_person}')
+<|endoftext|>
+movie_list = {}
+while True:
+    genre = input('Enter a movie genre or type 'done' to finish: ')
+    if genre == 'done': break
+    movie = input(f'Enter a movie for the {genre} genre: ')
+    movie_list.setdefault(genre, []).append(movie)
+print(f'Your organized movie list: {movie_list}')
+<|endoftext|>
+ratings = []
+while True:
+    rating = input('Enter a book rating or type 'done' to finish: ')
+    if rating == 'done': break
+    ratings.append(float(rating))
+average_rating = sum(ratings) / len(ratings)
+print(f'The average rating of your book collection is {average_rating}')
+<|endoftext|>
+mood = input('What's your mood today? ')
+playlist = []
+while True:
+    song = input(f'Enter a song that fits your {mood} mood or type 'done' to finish: ')
+    if song == 'done': break
+    playlist.append(song)
+print(f'Your {mood} playlist: {playlist}')
+<|endoftext|>
+best_deals = {}
+while True:
+    item = input('Enter a shopping item or type 'done' to finish: ')
+    if item == 'done': break
+    price = float(input(f'Enter the best price you found for {item}: '))
+    best_deals[item] = price
+print(f'The best deals for your shopping list: {best_deals}')
+<|endoftext|>
+vacation_cost = float(input('Enter the total cost of your vacation: '))
+months_left = int(input('Enter the number of months until your vacation: '))
+monthly_savings = vacation_cost / months_left
+print(f'You need to save {monthly_savings} per month for your vacation.')
+<|endoftext|>
+locations = []
+while True:
+    location = input('Enter a location for your errands or type 'done' to finish: ')
+    if location == 'done': break
+    locations.append(location)
+# Assuming first location is the starting point
+print(f'The most efficient route: {locations[0]} -> {' -> '.join(sorted(locations[1:]))} -> {locations[0]}')
+<|endoftext|>
+subscriptions = {}
+while True:
+    name = input('Enter the subscription name or type 'done' to finish: ')
+    if name == 'done': break
+    cost = float(input(f'Enter the monthly cost for {name}: '))
+    subscriptions[name] = cost
+print(f'Your subscriptions: {subscriptions}')
+<|endoftext|>
+meal_plan = {}
+for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']:
+    meal = input(f'What meal would you like to have on {day}? ')
+    meal_plan[day] = meal
+print(f'Your meal plan for the week: {meal_plan}')
+<|endoftext|>
+transport = input('How do you usually commute (car, bike, walk, public)? ')
+food = input('Are you a vegetarian, vegan, or omnivore? ')
+electricity = float(input('Approximate monthly electricity bill: '))
+carbon_footprint = {'car': 2.4, 'bike': 0.1, 'walk': 0, 'public': 1}[transport] + {'vegetarian': 1, 'vegan': 0.7, 'omnivore': 1.5}[food] + (electricity * 0.001)
+print(f'Your estimated daily carbon footprint is {carbon_footprint} kg.')
+<|endoftext|>
+tv_reminders = {}
+while True:
+    show = input('Enter the TV show name or type 'done' to finish: ')
+    if show == 'done': break
+    time = input(f'What time does {show} air? ')
+    tv_reminders[show] = time
+print(f'Your TV show reminders: {tv_reminders}')
+<|endoftext|>
+study_schedule = {}
+subjects = input('Enter the subjects you are studying separated by commas: ').split(', ')
+for subject in subjects:
+    hours = int(input(f'How many hours do you want to allocate to {subject}? '))
+    study_schedule[subject] = hours
+print(f'Your study schedule: {study_schedule}')
+<|endoftext|>
+initial_investment = float(input('Enter the initial investment amount: '))
+final_value = float(input('Enter the final value of the investment: '))
+roi = ((final_value - initial_investment) / initial_investment) * 100
+print(f'Your ROI is {roi:.2f}%')
+<|endoftext|>
+water_intake = 0
+while True:
+    intake = input('Enter the amount of water consumed in ml or type 'done' to finish: ')
+    if intake == 'done': break
+    water_intake += int(intake)
+print(f'Your total water intake today is {water_intake} ml.')
+<|endoftext|>
+follower_timezones = input('Enter the timezones of your followers separated by commas: ').split(', ')
+best_time = max(set(follower_timezones), key = follower_timezones.count)
+print(f'The best time to post is when it's afternoon in the {best_time} timezone.')
+<|endoftext|>
+income = float(input('Enter your monthly income: '))
+expenses = float(input('Enter your total monthly expenses: '))
+net_income = income - expenses
+print(f'Your net income for the month is {net_income}')
+<|endoftext|>
+cups_per_day = int(input('How many cups of coffee do you drink daily? '))
+annual_consumption = cups_per_day * 365
+print(f'You consume {annual_consumption} cups of coffee per year.')
+<|endoftext|>
+calories = int(input('Enter your daily calorie goal: '))
+protein = int(input('Enter your daily protein goal in grams: '))
+print(f'To balance your diet, aim for {calories} calories and {protein}g of protein daily.')
+<|endoftext|>
+current_weight = float(input('Enter your current weight in kg: '))
+target_weight = float(input('Enter your target weight in kg: '))
+weeks = int(input('In how many weeks do you want to achieve this? '))
+weekly_goal = (current_weight - target_weight) / weeks
+print(f'You need to lose {weekly_goal:.2f} kg per week.')
+<|endoftext|>
+quotes = []
+while True:
+    quote = input('Enter a favorite quote or type 'done' to finish: ')
+    if quote == 'done': break
+    quotes.append(quote)
+print(f'Your sorted quotes: {sorted(quotes)}')
+<|endoftext|>
+reading_list = []
+while True:
+    book = input('Add a book to your reading list or type 'done' to finish: ')
+    if book == 'done': break
+    reading_list.append(book)
+print(f'Your reading list: {reading_list}')
+<|endoftext|>
+mood = input('What is your mood? ')
+mood_to_movie = {'happy': 'La La Land', 'sad': 'The Pursuit of Happyness', 'excited': 'Fast & Furious'}
+print(f'Recommended movie: {mood_to_movie.get(mood, "Sorry, I don't have a recommendation for that mood.")}')
+<|endoftext|>
+bill = float(input('Enter the total bill amount: '))
+tip_percent = int(input('Enter the tip percentage you want to leave: '))
+tip_amount = (bill * tip_percent) / 100
+print(f'You should leave a tip of {tip_amount:.2f}')
+<|endoftext|>
+days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+# Typically, flights are cheaper on Tuesdays and Wednesdays
+best_days = ['Tuesday', 'Wednesday']
+print(f'The best days to book a flight are usually {best_days}')
+<|endoftext|>
+daily_screen_time = int(input('Enter your daily screen time in minutes: '))
+weekly_screen_time = daily_screen_time * 7
+print(f'Your weekly screen time is {weekly_screen_time} minutes.')
+<|endoftext|>
+import os
+os.system('dark-mode on')
+<|endoftext|>
+import random
+import webbrowser
+websites = ['https://www.reddit.com', 'https://www.youtube.com', 'https://www.github.com']
+webbrowser.open(random.choice(websites))
+<|endoftext|>
+note = input('Enter your note: ')
+with open('quick_note.txt', 'w') as f:
+    f.write(note)
+<|endoftext|>
+import os
+import time
+reboot_time = input('Please enter the time for reboot in minutes or type now for immediate reboot: ')
+if reboot_time.lower() == 'now':
+    os.system('reboot')
+else:
+    time.sleep(int(reboot_time) * 60)
+    os.system('reboot')
+<|endoftext|>
+import os
+os.system('EmptyRecycleBin.exe')
+<|endoftext|>
+import ctypes
+c_types.windll.user32.SystemParametersInfoW(20, 0, 'C:\\path\\to\\black.jpg', 3)
+<|endoftext|>
+import platform
+print(f'OS: {platform.system()}
+Version: {platform.version()}
+Architecture: {platform.architecture()[0]}')
+<|endoftext|>
+import os
+folder = input('Enter folder path: ')
+all_files = [(f, os.path.getsize(os.path.join(folder, f))) for f in os.listdir(folder) if os.path.isfile(os.path.join(folder, f))]
+print(f'Largest file: {max(all_files, key=lambda x: x[1])[0]}')
+<|endoftext|>
+import os
+app = input('Enter the name of the application to close: ')
+os.system(f'taskkill /F /IM {app}.exe')
+<|endoftext|>
+import os
+os.system('airplane-mode toggle')
+<|endoftext|>
+import os
+repo_url = input('Enter the GitHub repository URL: ')
+os.system(f'git clone {repo_url}')
+<|endoftext|>
+import sqlite3
+conn = sqlite3.connect('database.db')
+c = conn.cursor()
+c.execute('''CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)''')
+conn.commit()
+conn.close()
+<|endoftext|>
+import os
+os.system('pip freeze --local | grep -v '^\-e' | cut -d = -f 1  | xargs -n1 pip install -U')
+<|endoftext|>
+import time
+import os
+from datetime import datetime
+run_time = input('Enter the time to run the script (HH:MM): ')
+while True:
+    if datetime.now().strftime('%H:%M') == run_time:
+        os.system('python your_script.py')
+        break
+    time.sleep(60)
+<|endoftext|>
+import os
+folder = input('Enter the folder path: ')
+for filename in os.listdir(folder):
+    os.rename(os.path.join(folder, filename), os.path.join(folder, filename.lower()))
+<|endoftext|>
+filename = input('Enter the filename: ')
+with open(filename, 'r') as f:
+    line_count = sum(1 for _ in f)
+print(f'The file has {line_count} lines.')
+<|endoftext|>
+import os
+os.system('git branch')
+<|endoftext|>
+import shutil
+folder_name = input('Enter the folder name to zip: ')
+shutil.make_archive(folder_name, 'zip', folder

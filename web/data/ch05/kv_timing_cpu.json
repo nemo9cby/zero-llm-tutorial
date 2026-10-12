@@ -1,0 +1,72 @@
+{
+ "device": "cpu",
+ "device_name": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+ "threads": 1,
+ "cpu_load_before_percent": 100,
+ "torch": "2.14.1+cu130",
+ "python": "3.12.9",
+ "date": "2026-10-11",
+ "command": "uv run python verify/_ch05_kvbench.py --device cpu --threads 1",
+ "per_step": [
+  {
+   "t": 1,
+   "full_ms": 14.481,
+   "decode_ms": 15.555
+  },
+  {
+   "t": 25,
+   "full_ms": 48.934,
+   "decode_ms": 15.428
+  },
+  {
+   "t": 50,
+   "full_ms": 53.631,
+   "decode_ms": 13.533
+  },
+  {
+   "t": 100,
+   "full_ms": 67.731,
+   "decode_ms": 14.976
+  },
+  {
+   "t": 200,
+   "full_ms": 129.079,
+   "decode_ms": 14.354
+  },
+  {
+   "t": 400,
+   "full_ms": 291.545,
+   "decode_ms": 21.392
+  },
+  {
+   "t": 800,
+   "full_ms": 899.389,
+   "decode_ms": 51.523
+  }
+ ],
+ "generate": [
+  {
+   "n": 50,
+   "no_cache_s": 2.367,
+   "cache_s": 1.073
+  },
+  {
+   "n": 100,
+   "no_cache_s": 5.84,
+   "cache_s": 1.868
+  },
+  {
+   "n": 200,
+   "no_cache_s": 18.033,
+   "cache_s": 3.992
+  }
+ ],
+ "model": {
+  "vocab_size": 1000,
+  "max_context_len": 1024,
+  "embed_dim": 384,
+  "n_head": 6,
+  "n_layer": 6,
+  "ff_dim": 1024
+ }
+}

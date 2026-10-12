@@ -1,0 +1,32 @@
+{
+ "vocab_size": 10000,
+ "n_merges": 9743,
+ "end_token_id": 9999,
+ "prompt": "Once upon a time, there was a little girl named Lily. She",
+ "prompt_ids": [
+  429,
+  438,
+  258,
+  397,
+  44,
+  400,
+  282,
+  258,
+  389,
+  476,
+  401,
+  405,
+  46,
+  338
+ ],
+ "n_new": 60,
+ "same_with_and_without_cache": true,
+ "utils_generate_same_text": true,
+ "correct": "Once upon a time, there was a little girl named Lily. She had a big, soft pillow that she loved very much. One day, Lily's mom told her that they were going to have a party. Lily was very excited and wanted to help her mom.\nAt the party, Lily saw her friend, Tom. Tom was sad because he did not have",
+ "buggy": "Once upon a time, there was a little girl named Lily. She had a big, soft pillow that she loved very much. Every night, she would hug her pillow tight and close her eyes.\nOne day, Lily's pillow was gone. She looked everywhere for it, but she could not find it. She was very sad. She asked her mom, \"",
+ "buggy_first_diff_token": 26,
+ "max_context_len": 256,
+ "beyond_total_tokens": 300,
+ "beyond_first_diff_position": 262,
+ "source": "third_party/dlfs6/storybot/model_pretrain.pt（HF koki0702/zero-llm-data，键名 mlp→ffn 改名后加载）"
+}

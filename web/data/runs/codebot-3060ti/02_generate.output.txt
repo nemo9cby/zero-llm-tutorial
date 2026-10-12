@@ -1,0 +1,38 @@
+--- サンプル 1 ---
+def transform_json(transform):
+        # Convert th the transformation statistical statistical statistical statistical data
+        stats_stats = stats_request(transformed)
+        if stats_stats['history'] > details_stats['history_large']:
+            return 'Invalid input transactions'
+        # Add statistical metadata statistics data and description, render their weather and
+            a = math.detectMovd(transaction)[0]
+            a = math.atan2(a)
+            b = math.atan2(a)
+            curr_
+--- サンプル 2 ---
+def most optimize(data):
+    """
+    Cesive a constraint to a lower case
+    """
+    # Calculate the distance between parameters
+    dist sample_dist_between x and y
+    """
+    dist = 0
+    :param data: The distance between two values
+    uses:
+        x: The seat values in that matching values
+--- サンプル 3 ---
+def product_idgender(object):
+        """
+        Returns the product of two products.
+        """
+        return self.name
+    def get_price(self):
+        return self.price
+--- サンプル 4 ---
+def [random.randint(0, 10) for i in range(10)]
+--- サンプル 5 ---
+def da_list(list):
+  return list(set(list))
+list = [4, 5, 8]
+print(da_list(list))

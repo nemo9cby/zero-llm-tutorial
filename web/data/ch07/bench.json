@@ -1,0 +1,421 @@
+{
+ "what": "Chapter 7 measurements; produced by verify/_ch07_record.py",
+ "date": "2026-10-11",
+ "machine": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "logical_cpus": 16,
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "cpu_load_percent_at_start": 71,
+  "numpy": "2.5.4",
+  "regex": "2026.9.29",
+  "tiktoken": "0.14.0",
+  "python_10M_loop_s": 0.756,
+  "python_10M_loop_s_at_end": 0.536
+ },
+ "encode_2mb": {
+  "bytes": 2016713,
+  "tokens": 441170,
+  "docs": 403,
+  "rows": [
+   {
+    "key": "book",
+    "label": "原书 encode（纯 Python）",
+    "seconds": 8.967,
+    "mb_per_s": 0.225,
+    "speedup": 1.0,
+    "identical_ids": true
+   },
+   {
+    "key": "lookup",
+    "label": "原书 + 整词查表（纯 Python）",
+    "seconds": 1.643,
+    "mb_per_s": 1.228,
+    "speedup": 5.5,
+    "identical_ids": true
+   },
+   {
+    "key": "pretokenize",
+    "label": "只做预分词（Python regex）",
+    "seconds": 0.432,
+    "mb_per_s": 4.665,
+    "speedup": 20.7,
+    "identical_ids": null
+   },
+   {
+    "key": "tiktoken1",
+    "label": "tiktoken，1 个线程",
+    "seconds": 0.17,
+    "mb_per_s": 11.829,
+    "speedup": 52.6,
+    "identical_ids": true
+   },
+   {
+    "key": "tiktoken8",
+    "label": "tiktoken，8 个线程",
+    "seconds": 0.071,
+    "mb_per_s": 28.32,
+    "speedup": 125.9,
+    "identical_ids": true
+   }
+  ],
+  "owt_train_hours": {
+   "book": 14.72,
+   "lookup": 2.7,
+   "pretokenize": 0.71,
+   "tiktoken1": 0.28,
+   "tiktoken8": 0.12
+  }
+ },
+ "train": {
+  "scaling": [
+   {
+    "mb": 0.25,
+    "bytes": 254401,
+    "pretokens": 51739,
+    "distinct_pretokens": 9657,
+    "merges": 1743,
+    "wall_s": 6.04,
+    "pretok_s": 0.1,
+    "max_s": 5.01,
+    "max_share": 0.829,
+    "pairs_scanned": 17313748,
+    "pairs_first_step": 1357,
+    "pairs_last_step": 11814,
+    "ns_per_pair": 289,
+    "pairs_every_100_steps": [
+     1357,
+     4730,
+     6831,
+     8089,
+     9000,
+     9682,
+     10140,
+     10454,
+     10683,
+     10950,
+     11152,
+     11294,
+     11440,
+     11570,
+     11650,
+     11718,
+     11772,
+     11815
+    ]
+   },
+   {
+    "mb": 0.5,
+    "bytes": 507499,
+    "pretokens": 103653,
+    "distinct_pretokens": 14540,
+    "merges": 1743,
+    "wall_s": 8.77,
+    "pretok_s": 0.13,
+    "max_s": 7.43,
+    "max_share": 0.846,
+    "pairs_scanned": 22676361,
+    "pairs_first_step": 1599,
+    "pairs_last_step": 16300,
+    "ns_per_pair": 328,
+    "pairs_every_100_steps": [
+     1599,
+     5445,
+     8154,
+     9887,
+     11222,
+     12213,
+     12893,
+     13504,
+     13991,
+     14433,
+     14839,
+     15185,
+     15448,
+     15633,
+     15821,
+     15960,
+     16088,
+     16213
+    ]
+   },
+   {
+    "mb": 1,
+    "bytes": 1014195,
+    "pretokens": 207537,
+    "distinct_pretokens": 22489,
+    "merges": 1743,
+    "wall_s": 11.7,
+    "pretok_s": 0.27,
+    "max_s": 9.27,
+    "max_share": 0.792,
+    "pairs_scanned": 29563232,
+    "pairs_first_step": 1942,
+    "pairs_last_step": 22233,
+    "ns_per_pair": 313,
+    "pairs_every_100_steps": [
+     1942,
+     6450,
+     9891,
+     12233,
+     14093,
+     15536,
+     16420,
+     17318,
+     18010,
+     18686,
+     19348,
+     19901,
+     20382,
+     20845,
+     21229,
+     21555,
+     21870,
+     22137
+    ]
+   },
+   {
+    "mb": 2,
+    "bytes": 2016713,
+    "pretokens": 415482,
+    "distinct_pretokens": 34005,
+    "merges": 1743,
+    "wall_s": 18.93,
+    "pretok_s": 0.52,
+    "max_s": 15.17,
+    "max_share": 0.802,
+    "pairs_scanned": 37870936,
+    "pairs_first_step": 2338,
+    "pairs_last_step": 29628,
+    "ns_per_pair": 401,
+    "pairs_every_100_steps": [
+     2338,
+     7500,
+     11844,
+     14834,
+     17379,
+     19087,
+     20623,
+     21817,
+     23072,
+     24059,
+     25027,
+     25789,
+     26474,
+     27113,
+     27858,
+     28364,
+     28964,
+     29441
+    ]
+   },
+   {
+    "mb": 4,
+    "bytes": 4040634,
+    "pretokens": 835106,
+    "distinct_pretokens": 50688,
+    "merges": 1743,
+    "wall_s": 21.76,
+    "pretok_s": 1.12,
+    "max_s": 15.68,
+    "max_share": 0.721,
+    "pairs_scanned": 47629895,
+    "pairs_first_step": 2872,
+    "pairs_last_step": 38339,
+    "ns_per_pair": 329,
+    "pairs_every_100_steps": [
+     2872,
+     8714,
+     14003,
+     18043,
+     21173,
+     23649,
+     25478,
+     27271,
+     28745,
+     30554,
+     31666,
+     32631,
+     33603,
+     34507,
+     35648,
+     36371,
+     37243,
+     38006
+    ]
+   },
+   {
+    "mb": 8,
+    "bytes": 8020583,
+    "pretokens": 1675698,
+    "distinct_pretokens": 76458,
+    "merges": 1743,
+    "wall_s": 34.9,
+    "pretok_s": 1.94,
+    "max_s": 23.48,
+    "max_share": 0.673,
+    "pairs_scanned": 60147039,
+    "pairs_first_step": 4254,
+    "pairs_last_step": 49329,
+    "ns_per_pair": 390,
+    "pairs_every_100_steps": [
+     4254,
+     10724,
+     17030,
+     22236,
+     25979,
+     29133,
+     31372,
+     34043,
+     36285,
+     38292,
+     39811,
+     41384,
+     42737,
+     44029,
+     45502,
+     46808,
+     47987,
+     49011
+    ]
+   }
+  ],
+  "shrunk": [
+   {
+    "mb": 0.25,
+    "bytes": 254401,
+    "identical_prefix": 6,
+    "first_difference": [
+     " s",
+     "on"
+    ],
+    "learned_in_official_first_n": 1267,
+    "n": 1743
+   },
+   {
+    "mb": 0.5,
+    "bytes": 507499,
+    "identical_prefix": 10,
+    "first_difference": [
+     "--",
+     "at"
+    ],
+    "learned_in_official_first_n": 1396,
+    "n": 1743
+   },
+   {
+    "mb": 1,
+    "bytes": 1014195,
+    "identical_prefix": 15,
+    "first_difference": [
+     "an",
+     "is"
+    ],
+    "learned_in_official_first_n": 1442,
+    "n": 1743
+   },
+   {
+    "mb": 2,
+    "bytes": 2016713,
+    "identical_prefix": 15,
+    "first_difference": [
+     "an",
+     "is"
+    ],
+    "learned_in_official_first_n": 1507,
+    "n": 1743
+   },
+   {
+    "mb": 4,
+    "bytes": 4040634,
+    "identical_prefix": 15,
+    "first_difference": [
+     "an",
+     "is"
+    ],
+    "learned_in_official_first_n": 1574,
+    "n": 1743
+   },
+   {
+    "mb": 8,
+    "bytes": 8020583,
+    "identical_prefix": 20,
+    "first_difference": [
+     "ing",
+     "ed"
+    ],
+    "learned_in_official_first_n": 1623,
+    "n": 1743
+   }
+  ],
+  "cprofile_1mb": {
+   "total_s": 22.22,
+   "top": [
+    {
+     "function": "<built-in method builtins.max>",
+     "ncalls": 1743,
+     "tottime_s": 9.98,
+     "cumtime_s": 17.69
+    },
+    {
+     "function": "tokenizer.py:160(<lambda>)",
+     "ncalls": 29563232,
+     "tottime_s": 7.72,
+     "cumtime_s": 7.72
+    },
+    {
+     "function": "tokenizer.py:119(train_bpe)",
+     "ncalls": 1,
+     "tottime_s": 1.87,
+     "cumtime_s": 22.22
+    },
+    {
+     "function": "tokenizer.py:16(count_pairs)",
+     "ncalls": 222461,
+     "tottime_s": 0.83,
+     "cumtime_s": 0.83
+    },
+    {
+     "function": "tokenizer.py:24(merge)",
+     "ncalls": 99986,
+     "tottime_s": 0.43,
+     "cumtime_s": 0.69
+    },
+    {
+     "function": "<method 'discard' of 'set' objects>",
+     "ncalls": 558685,
+     "tottime_s": 0.33,
+     "cumtime_s": 0.33
+    }
+   ]
+  }
+ },
+ "hf_tokenizers": {
+  "version": "0.23.3",
+  "sample_mb": 8,
+  "runs": [
+   {
+    "vocab": 2000,
+    "merges": 1743,
+    "seconds": 1.42,
+    "identical_prefix_vs_book": 42,
+    "same_tokens_as_book": 1743,
+    "first_difference": {
+     "book": {
+      "token": "ent",
+      "count": 21767
+     },
+     "hf": {
+      "token": "ll",
+      "count": 21767
+     }
+    }
+   },
+   {
+    "vocab": 10000,
+    "merges": 9743,
+    "seconds": 1.82
+   }
+  ]
+ }
+}

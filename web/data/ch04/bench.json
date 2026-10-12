@@ -1,0 +1,387 @@
+{
+ "env": {
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "logical_cpus": 16,
+  "physical_cores": 8,
+  "ram_gb": 47.7,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "numpy": "2.5.4",
+  "regex": "2026.9.29",
+  "date": "2026-10-11 20:26"
+ },
+ "races": [
+  {
+   "id": "train_small",
+   "short": "训练 · 500 KB",
+   "title": "训练：TinyStories 验证集前 499,577 字节，词表 1,000",
+   "input": "TinyStories 验证集的前 499,577 字节，词表 1,000（学 743 条规则）",
+   "metric": "train_bpe 一次调用的 CPU 秒（单进程，多次运行取最快）",
+   "load": 99.9,
+   "rows": [
+    {
+     "key": "naive",
+     "name": "第 1 章：朴素",
+     "seconds": 185.0,
+     "identical": true
+    },
+    {
+     "key": "dedup",
+     "name": "4.1 去重",
+     "seconds": 13.812,
+     "identical": true
+    },
+    {
+     "key": "cache",
+     "name": "4.2 增量更新",
+     "seconds": 1.469,
+     "identical": true
+    },
+    {
+     "key": "heap",
+     "name": "扩展：堆",
+     "sub": "本教程，非原书",
+     "seconds": 0.703,
+     "ext": true,
+     "identical": true
+    }
+   ],
+   "extra": "（4.3 分块版 1.75 秒，与增量版是同一个合并循环）"
+  },
+  {
+   "id": "train_codes",
+   "short": "训练 · TinyCodes",
+   "title": "训练：整份 TinyCodes（6.5 MB），词表 1,000",
+   "input": "整份 TinyCodes（6,487,033 字节，git 中的 LF 版本），词表 1,000",
+   "metric": "train_bpe 一次调用的 CPU 秒（单进程）",
+   "load": 99.7,
+   "rows": [
+    {
+     "key": "naive",
+     "name": "第 1 章：朴素",
+     "seconds": 3147.047,
+     "identical": true
+    },
+    {
+     "key": "dedup",
+     "name": "4.1 去重",
+     "seconds": 163.719,
+     "identical": true
+    },
+    {
+     "key": "cache",
+     "name": "4.2 增量更新",
+     "seconds": 13.797,
+     "identical": true
+    },
+    {
+     "key": "heap",
+     "name": "扩展：堆",
+     "sub": "本教程，非原书",
+     "seconds": 9.938,
+     "ext": true,
+     "identical": true
+    }
+   ],
+   "extra": "（每个版本学到的 743 条规则都与仓库里的 codebot/merge_rules.pkl 逐项相同）"
+  },
+  {
+   "id": "loops_valid",
+   "short": "合并循环 · 词表 1 万",
+   "title": "合并循环：整份 TinyStories 验证集，词表 10,000",
+   "input": "整份 TinyStories 验证集（22,502,601 字节，13,111 个不同的预分词），词表 10,000（学 9,743 条规则）",
+   "metric": "合并循环的 CPU 秒（不含预分词）",
+   "load": 100.0,
+   "rows": [
+    {
+     "key": "cache",
+     "name": "4.2 增量更新",
+     "sub": "max() 全表扫描",
+     "seconds": 66.781,
+     "identical": true
+    },
+    {
+     "key": "heap",
+     "name": "扩展：堆",
+     "sub": "本教程，非原书",
+     "seconds": 2.766,
+     "ext": true,
+     "identical": true
+    }
+   ]
+  },
+  {
+   "id": "encode_small",
+   "short": "编码 · 30 KB",
+   "title": "编码：TinyStories 验证集前 29,642 字节，9,743 条规则",
+   "input": "TinyStories 验证集的前 29,642 字节（7,294 个 token），StoryBot 的 9,743 条规则",
+   "metric": "encode 一次调用的 CPU 秒（单进程）",
+   "load": 94.8,
+   "rows": [
+    {
+     "key": "ch01",
+     "name": "第 1 章：逐条试规则",
+     "seconds": 45.453,
+     "identical": true
+    },
+    {
+     "key": "06",
+     "name": "4.6 按优先级合并",
+     "seconds": 0.203,
+     "identical": true
+    },
+    {
+     "key": "memo",
+     "name": "扩展：缓存",
+     "sub": "本教程，非原书",
+     "seconds": 0.078,
+     "ext": true,
+     "identical": true
+    }
+   ]
+  },
+  {
+   "id": "encode_valid",
+   "short": "编码 · 整份验证集",
+   "title": "编码：整份 TinyStories 验证集（5,465,873 个 token）",
+   "input": "整份 TinyStories 验证集（22,502,601 字节），StoryBot 的 9,743 条规则",
+   "metric": "encode 一次调用的 CPU 秒（单进程）",
+   "load": 99.0,
+   "rows": [
+    {
+     "key": "06",
+     "name": "4.6 按优先级合并",
+     "seconds": 146.297,
+     "identical": true
+    },
+    {
+     "key": "memo",
+     "name": "扩展：缓存",
+     "sub": "本教程，非原书",
+     "seconds": 13.984,
+     "ext": true,
+     "identical": true
+    }
+   ],
+   "extra": "（两者的输出都与官方 tiny_stories_valid.bin 逐个相同）"
+  }
+ ],
+ "profile": {
+  "input": "storybot/tiny_stories_valid.txt",
+  "vocab": 10000,
+  "merges": 9743,
+  "unique": 13111,
+  "affected_mean": 7.05,
+  "affected_median": 1,
+  "max_share": 0.9648,
+  "loop_cpu": 71.812,
+  "loop_wall": 135.111,
+  "pretok_wall": 14.67,
+  "load": 100.0
+ },
+ "pretok": {
+  "input": "storybot/tiny_stories_valid.txt",
+  "bytes": 22502601,
+  "chunks": 64,
+  "serial_wall": 20.754,
+  "serial_chunked_wall": 19.197,
+  "pool": [
+   {
+    "n": 1,
+    "wall": 22.738
+   },
+   {
+    "n": 2,
+    "wall": 11.735
+   },
+   {
+    "n": 4,
+    "wall": 7.149
+   },
+   {
+    "n": 8,
+    "wall": 5.618
+   },
+   {
+    "n": 16,
+    "wall": 5.535
+   }
+  ],
+  "identical": true,
+  "merge_loop_wall": 92.134,
+  "heap_loop_wall": 3.632,
+  "load": 100.0
+ },
+ "encode_file": [
+  {
+   "n": 16,
+   "wall": 37.189,
+   "identical": true
+  },
+  {
+   "n": 8,
+   "wall": 43.105,
+   "identical": true
+  },
+  {
+   "n": 4,
+   "wall": 62.019,
+   "identical": true
+  },
+  {
+   "n": 2,
+   "wall": 114.941,
+   "identical": true
+  },
+  {
+   "n": 1,
+   "wall": 204.711,
+   "identical": true
+  }
+ ],
+ "memory": [
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 22502601,
+   "mode": "naive_idslist",
+   "peak_mib": 661.0,
+   "info": "{'occurrences': 5419001}",
+   "wall": 21.3
+  },
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 22502601,
+   "mode": "findall_list",
+   "peak_mib": 363.6,
+   "info": "{'pretokens': 5419001}",
+   "wall": 9.3
+  },
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 22502601,
+   "mode": "whole",
+   "peak_mib": 102.3,
+   "info": "{'max_codepoint': 8230, 'str_bytes': 44986832, 'chars': 22493387}",
+   "wall": 13.3
+  },
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 22502601,
+   "mode": "chunked",
+   "peak_mib": 35.6,
+   "info": "{}",
+   "wall": 14.5
+  },
+  {
+   "file": "train_prefix.txt",
+   "bytes": 104856833,
+   "mode": "whole",
+   "peak_mib": 660.0,
+   "info": "{'max_codepoint': 127820, 'str_bytes': 419254676, 'chars': 104813654}",
+   "wall": 51.7
+  },
+  {
+   "file": "train_prefix.txt",
+   "bytes": 104856833,
+   "mode": "chunked",
+   "peak_mib": 46.3,
+   "info": "{}",
+   "wall": 68.9
+  }
+ ],
+ "heaps": [
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 1048933,
+   "occurrences": 253341,
+   "unique": 4658
+  },
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 2097704,
+   "occurrences": 506049,
+   "unique": 5980
+  },
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 5243189,
+   "occurrences": 1263202,
+   "unique": 8126
+  },
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 10485828,
+   "occurrences": 2524909,
+   "unique": 10132
+  },
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 22502601,
+   "occurrences": 5419001,
+   "unique": 13111,
+   "top10_share": 0.3194,
+   "top1000_share": 0.9254
+  },
+  {
+   "file": "train_prefix.txt",
+   "bytes": 1048928,
+   "occurrences": 253296,
+   "unique": 4741
+  },
+  {
+   "file": "train_prefix.txt",
+   "bytes": 10486323,
+   "occurrences": 2525586,
+   "unique": 10235
+  },
+  {
+   "file": "train_prefix.txt",
+   "bytes": 52429239,
+   "occurrences": 12629913,
+   "unique": 17376
+  },
+  {
+   "file": "train_prefix.txt",
+   "bytes": 104856833,
+   "occurrences": 25254556,
+   "unique": 21808,
+   "top10_share": 0.3193,
+   "top1000_share": 0.9249
+  }
+ ],
+ "train_prefix_encode": {
+  "tokens": 25473389,
+  "wall": 88.876,
+  "processes": 16,
+  "identical_to_official_train_bin_prefix": true,
+  "official_prefix_bytes": 50946778,
+  "load": 100.0
+ },
+ "scanned": {
+  "first": 932,
+  "max": 12025,
+  "last": 7821,
+  "mean": 10224.2,
+  "steps": 9743
+ },
+ "pep393": {
+  "valid": {
+   "pieces": 27631,
+   "wide_pieces": 722,
+   "whole_str_bytes": 44986832,
+   "pieces_str_bytes": 23883449,
+   "max_codepoint": 8230
+  },
+  "train_prefix": {
+   "pieces": 127993,
+   "wide_pieces": 3428,
+   "whole_str_bytes": 419254676,
+   "pieces_str_bytes": 111344313,
+   "max_codepoint": 127820
+  }
+ },
+ "accomplishment_ms": {
+  "ch01": 15.1,
+  "06": 0.233
+ }
+}
