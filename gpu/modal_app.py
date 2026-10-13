@@ -7,10 +7,13 @@ Setup, once (the Volume "zero-llm" holds data, checkpoints and reports):
 Plan without touching Modal (the same estimate `launch` prints before it starts anything):
   uv run --group gpu python gpu/modal_app.py plan --job webbot --gpu H100:8
 
-Launch. Prints the estimate first and refuses to start when its upper end exceeds --budget (USD):
+Launch. Prints the estimate first and refuses to start when its upper end exceeds --budget (USD), when the
+tutorial tree has uncommitted changes (--allow-dirty records their sha256 instead), or when the run id's
+report in web/data/runs/ came from run_local.py (another provider: use a new run id):
   uv run --group gpu modal run --detach gpu/modal_app.py::launch --job storybot --gpu H100 --run storybot-h100 --budget 4
 
-Bring the results into the book (report.json, metrics, figures -> web/data/runs/<run>/ + index.json):
+Bring the results into the book (report.json, metrics, figures, timing.json, *.output.txt
+-> web/data/runs/<run>/ + index.json):
   uv run --group gpu python gpu/modal_app.py pull --run storybot-h100
 
 Jobs and the few patches they need (WebBot probe, multi-GPU token budget) live in gpu/jobs.py; the
@@ -20,7 +23,8 @@ Volume layout                                  what
   /vol/data/<bot>/<file>                         book data and official checkpoints from Hugging Face
   /vol/runs/<run>/work/<repo path>               files the scripts produced (checkpoints, figures)
   /vol/runs/<run>/logs/<stem>.log                raw stdout+stderr
-  /vol/runs/<run>/out/                           report.json, <stem>.metrics.jsonl, figures (= web/data/runs/<run>/)
+  /vol/runs/<run>/out/                           report.json, <stem>.metrics.jsonl, figures, timing.json,
+                                                 <stem>.output.txt (= web/data/runs/<run>/)
 """
 from __future__ import annotations
 
@@ -141,13 +145,21 @@ def run_job(plan: dict, run: str, meta: dict, force: bool = False) -> dict:
 
     Idempotent per script: a retry after preemption skips scripts that already finished in this run
     (same script, same patches). A failing script is recorded and stops the job without raising, so a
-    bug is not re-run (and re-billed) by the retry policy.
+    bug is not re-run (and re-billed) by the retry policy. For the same reason, appending to a report
+    recorded on another kind of host or by run_local.py is refused without raising (`refused`).
+    Each step records meta["tutorial"], the tree `launch` started from.
     """
     t_start = time.time()
     p = jobs.Plan.from_dict(plan)
     vol.reload()
     vroot = VOL / "runs" / run
     out, logs, saved = vroot / "out", vroot / "logs", vroot / "work"
+    host = run_local.host_info()
+    report = _read_json(out / "report.json")
+    clash = run_local.append_error(report, host, "modal") if report else None
+    if clash:                                     # before copying anything: nothing to bill but the start
+        print(f"[{run}] refused: {clash}", flush=True)
+        return {"run": run, "refused": clash, "steps": [], "cost_usd": report.get("cost_usd")}
     work = WS / run
     shutil.rmtree(work, ignore_errors=True)
     shutil.copytree(Path(BOOK), work)
@@ -156,8 +168,7 @@ def run_job(plan: dict, run: str, meta: dict, force: bool = False) -> dict:
         (work / rel).parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(_from_volume(rel, p.bot), work / rel)
 
-    host = run_local.host_info()
-    report = _read_json(out / "report.json") or {
+    report = report or {
         "run": run, "tutorial_commit": meta["tutorial_commit"], "dlfs6_commit": meta["dlfs6_commit"],
         "host": host, "provider": "modal", "cost_usd": 0.0, "steps": []}
     entry = {"started": datetime.now(timezone.utc).isoformat(timespec="seconds"), "job": p.job,
@@ -184,6 +195,7 @@ def run_job(plan: dict, run: str, meta: dict, force: bool = False) -> dict:
     done = {(s["script"], json.dumps(s.get("patches", []), ensure_ascii=False))
             for s in report["steps"] if s["exit_code"] == 0}
     gpu_name = f"{host.get('gpu_count', 1)}× {host.get('gpu', '?')}"
+    timing = meta.get("timing") or {}
     summary = []
     for script in p.scripts:
         patched = run_local.prepare_script(work, script, p.patches_for(script), pristine=Path(BOOK))
@@ -191,8 +203,11 @@ def run_job(plan: dict, run: str, meta: dict, force: bool = False) -> dict:
             print(f"[{run}] {script}: already finished in this run, skipped (launch with --force to rerun)", flush=True)
             continue
         print(f"[{run}] {script} on {gpu_name} ...", flush=True)
-        step, _ = run_local.run_step(work, out, logs, script, env, run_local.launcher(p.nproc), patched)
+        step, _ = run_local.run_step(work, out, logs, script, env, run_local.launcher(p.nproc), patched,
+                                     timing.get(script))
         step.update(job=p.job, gpu=gpu_name)
+        if meta.get("tutorial"):
+            step["tutorial"] = meta["tutorial"]
         report["steps"].append(step)
         for rel in step["produced"]:              # persist checkpoints/figures for later jobs of this run
             (saved / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -250,9 +265,31 @@ def default_run_id(job: str, gpu_str: str) -> str:
     return f"{job}-modal-{base.lower().rstrip('!+')}" + (f"x{n}" if n else "")
 
 
+def launch_meta(p: jobs.Plan, gpu_str: str, est: dict, run: str, allow_dirty: bool = False) -> dict:
+    """What run_job records from this side: the commits and the tree they come from, the price, timing facts.
+
+    Refuses (SystemExit) a tutorial tree with uncommitted changes unless allow_dirty, and a run id whose
+    report in web/data/runs/ was recorded by another provider (run_local.py on this PC or a rented box).
+    """
+    tree = run_local.repo_state(p.scripts)
+    refusal = run_local.dirty_error(tree)
+    if refusal and not allow_dirty:
+        raise SystemExit(refusal)
+    local = _read_json(RUNS_OUT / run / "report.json")
+    clash = run_local.append_error(local, None, "modal") if local else None
+    if clash:
+        raise SystemExit(clash)
+    return {"tutorial_commit": tree["commit"], "dlfs6_commit": run_local.git_rev(run_local.DLFS6),
+            "gpu_request": gpu_str, "nproc": p.nproc,
+            "usd_per_hour": round(p.nproc * est["price"] + est["extra_per_hour"], 4),
+            "price_src": est["src"], "price_checked": est["checked"],
+            "tutorial": tree, "timing": run_local.timing_facts(p.scripts, p)}
+
+
 @app.local_entrypoint()
 def launch(job: str, gpu: str = "", run: str = "", max_iters: int = 0, scale: str = "iters",
-           budget: float = 5.0, dry_run: bool = False, force: bool = False, probe_steps: int = 200):
+           budget: float = 5.0, dry_run: bool = False, force: bool = False, probe_steps: int = 200,
+           allow_dirty: bool = False):
     p, gpu_str, est = plan_and_estimate(job, gpu, max_iters, scale, probe_steps)
     run = run or default_run_id(job, gpu_str)
     print(f"run {run}: job {job} on Modal gpu={gpu_str!r}")
@@ -260,22 +297,25 @@ def launch(job: str, gpu: str = "", run: str = "", max_iters: int = 0, scale: st
     for note in p.notes:
         print(f"  note: {note}")
     if dry_run:
+        refusal = run_local.dirty_error(run_local.repo_state(p.scripts))
+        if refusal and not allow_dirty:
+            print(f"  note: a real launch would refuse: {refusal}")
         print("dry run: nothing was launched")
         return
     refusal = budget_error(est, budget)
     if refusal:
         raise SystemExit(refusal)
-    meta = {"tutorial_commit": run_local.git_rev(ROOT), "dlfs6_commit": run_local.git_rev(DLFS6),
-            "gpu_request": gpu_str, "nproc": p.nproc,
-            "usd_per_hour": round(p.nproc * est["price"] + est["extra_per_hour"], 4),
-            "price_src": est["src"], "price_checked": est["checked"]}
+    meta = launch_meta(p, gpu_str, est, run, allow_dirty)
     timeout = int(min(24 * 3600, max(1800, 2 * est["hours"][1] * 3600 + 1800)))
     fn = run_job.with_options(gpu=gpu_str, timeout=timeout, cpu=CPU_PER_GPU * p.nproc,
                               memory=GIB_PER_GPU * 1024 * p.nproc)
     call = fn.spawn(p.to_dict(), run, meta, force)
     print(f"launched {run} ({call.object_id}); timeout {timeout / 3600:.1f} h per attempt")
     print(f"when it finishes: uv run --group gpu python gpu/modal_app.py pull --run {run}")
-    print(json.dumps(call.get(), ensure_ascii=False, indent=1))
+    result = call.get()
+    print(json.dumps(result, ensure_ascii=False, indent=1))
+    if result.get("refused"):
+        raise SystemExit(result["refused"])
 
 
 def pull(run: str, dest_root: Path = RUNS_OUT, volume=None) -> list[Path]:

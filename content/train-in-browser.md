@@ -138,7 +138,7 @@ assert len(t) == len(train) - train.count(EOT) * (len(EOT) - 1)   # 每个 <|end
 
 TinyCodes 是纯 ASCII 文本，出现过的字符有 95 种：换行符，加上 94 个可打印字符（只有 `~` 一次也没出现）。再加上 `<|endoftext|>`，词表大小 V = 96。
 
-字符级的代价，[1.2 节](ch01.html#s1-2)已经见过：序列变长。同一段留出文本，CodeBot 的 BPE 分词器切成 10,659 个 token，字符级切成 25,151 个，是 BPE 的 2.36 倍。上下文同样是 64 个 token，字符级模型一次只能看到 64 个字符。在浏览器里，我们接受这个代价，换来一张只有 96 行的嵌入表。
+字符级的代价，[1.2 节](ch01.html#s1-2)已经见过：序列变长。同一段留出文本，CodeBot 的 BPE 分词器切成 10,659 个 token，字符级切成 25,151 个，是 BPE 的 2.36 倍。上下文同样是 64 个 token，字符级模型一次只能看到 64 个字符。在浏览器里，我们接受这个代价，换来一张只有 96 行的 embedding 表。
 
 ```localcheck verify/test_trainer.py::test_bpe_sequences_are_shorter title="同一段文字，BPE 的 token 数是字符级的 1/2.36"
 ```
@@ -211,7 +211,7 @@ assert abs(floor - 2.5622) < 1e-4 and floor < h2 - 0.13
 
 ## T.3 模型：同一张图纸
 
-数据和尺子都有了，下面来搭模型。迷你 GPT 的结构与 CodeBot 完全相同。下面是 `codebot/model.py` 的 GPT 类：token 嵌入加上可学习的位置嵌入，`n_layer` 个 Transformer 块，一个 LayerNorm，最后由 `unembed` 映射回词表。注意倒数第二行的 `self.embed.weight = self.unembed.weight`：`unembed` 与 `embed` 共享同一个权重矩阵（**权重共享**，weight tying），但 `unembed` 保留了自己的 bias。
+数据和尺子都有了，下面来搭模型。迷你 GPT 的结构与 CodeBot 完全相同。下面是 `codebot/model.py` 的 GPT 类：token embedding 加上可学习的位置 embedding，`n_layer` 个 Transformer 块，一个 LayerNorm，最后由 `unembed` 映射回词表。注意倒数第二行的 `self.embed.weight = self.unembed.weight`：`unembed` 与 `embed` 共享同一个权重矩阵（**权重共享**，weight tying），但 `unembed` 保留了自己的 bias。
 
 ```listing codebot/model.py#L102-L126
 ```
@@ -222,7 +222,7 @@ assert abs(floor - 2.5622) < 1e-4 and floor < h2 - 0.13
 |---|---|---|---|
 | 词表 `vocab_size` | 1,000（BPE） | 96（字符） | 字符级分词，见 T.2 |
 | 上下文 `context_len` | 256 | 64 | Attention 的打分矩阵是 64 × 64，计算量随长度的平方增长 |
-| 嵌入维度 `embed_dim` | 384 | 64 | 让每一步只要几十毫秒（见 T.6） |
+| embedding 维度 `embed_dim` | 384 | 64 | 让每一步只要几十毫秒（见 T.6） |
 | 头数 `n_head` | 6 | 4 | 每个头 16 维 |
 | 层数 `n_layer` | 6 | 2 | 同上 |
 | FFN 宽度 `ff_dim` | 1,536（4 倍） | 192（3 倍） | 参数预算 10 万以内（4 倍是 109,920） |
@@ -273,7 +273,7 @@ JavaScript 这边，每个参数都按 PyTorch 的 `state_dict` 取名，形状�
 
 ### 初始 loss
 
-初始化同样照搬 `_init_weights`：所有线性层和嵌入的权重取自 $\mathcal{N}(0, 0.02^2)$，bias 为 0。LayerNorm 不在 `_init_weights` 里，用的是 `nn.LayerNorm` 的默认值：γ 为 1，β 为 0。
+初始化同样照搬 `_init_weights`：所有线性层和 embedding 的权重取自 $\mathcal{N}(0, 0.02^2)$，bias 为 0。LayerNorm 不在 `_init_weights` 里，用的是 `nn.LayerNorm` 的默认值：γ 为 1，β 为 0。
 
 ```listing codebot/model.py#L128-L134
 ```
@@ -303,7 +303,7 @@ assert abs(ce - (ln_v + sigma ** 2 / 2)) < 0.01 and ce > ln_v
 ::: think T.1 的曲线在第 0 步的留出 loss 是 4.546，比瞎猜的 ln 96 = 4.564 还低。一个随机初始化的模型，怎么会比瞎猜还准？
 :::
 ::: answer
-原因在权重共享。初始时，残差流里带着当前字符自己的嵌入向量 $e_c$，而 `unembed` 用的恰好是同一张表，所以“下一个字符还是 c”这一项的 logit 会比别的字符高出一截。代码里，下一个字符与当前字符相同的情况并不少见（缩进里连续的空格、`==`、`''`），占了 8.58%。模型一出生就带着这个偏好，而这个偏好碰巧对了一部分，loss 就略低于 ln V。
+原因在权重共享。初始时，残差流里带着当前字符自己的 embedding 向量 $e_c$，而 `unembed` 用的恰好是同一张表，所以“下一个字符还是 c”这一项的 logit 会比别的字符高出一截。代码里，下一个字符与当前字符相同的情况并不少见（缩进里连续的空格、`==`、`''`），占了 8.58%。模型一出生就带着这个偏好，而这个偏好碰巧对了一部分，loss 就略低于 ln V。
 
 ```verify id=T.3-c title="权重共享让初始模型偏爱“重复当前字符”"
 same = (t[1:] == t[:-1]).mean()
@@ -342,7 +342,7 @@ assert abs(est - held[0]) < 0.015
 
 | 层 | 前向 | 对输入的梯度 | 对参数的梯度 |
 |---|---|---|---|
-| 嵌入 | x = E[id] + P[t] | — | 按 id 累加 dy |
+| embedding | x = E[id] + P[t] | — | 按 id 累加 dy |
 | 线性 | y = xWᵀ + b | dx = dy·W | dW = dyᵀx，db = Σdy |
 | LayerNorm | y = γ⊙x̂ + β | 见下文 | dγ = Σ dy⊙x̂，dβ = Σ dy |
 | GELU | y = x·Φ(x) | dx = dy⊙(Φ(x) + x·φ(x)) | — |
@@ -351,7 +351,7 @@ assert abs(est - held[0]) < 0.015
 
 这六种零件，在 PyTorch 里依次是 `nn.Embedding`、`nn.Linear`、`nn.LayerNorm`、`nn.GELU()`、`codebot/model.py` 里的 `MultiHeadAttention` 和 `F.cross_entropy`。
 
-下面按反向传播的顺序，从 loss 出发往回走：先看 softmax 与交叉熵，最后看嵌入。每个零件都配一个 NumPy 的验证单元：先按公式算出梯度，再用**数值微分**（中心差分）独立算一遍，两者应当一致。这就是章首说的梯度确认。
+下面按反向传播的顺序，从 loss 出发往回走：先看 softmax 与交叉熵，最后看 embedding。每个零件都配一个 NumPy 的验证单元：先按公式算出梯度，再用**数值微分**（中心差分）独立算一遍，两者应当一致。这就是章首说的梯度确认。
 
 ### softmax 与交叉熵
 
@@ -576,9 +576,9 @@ JavaScript 版对每个 batch、每个头分别做这几步。其中算出 $G$�
       }
 ```
 
-### 嵌入与权重共享
+### embedding 与权重共享
 
-嵌入层是查表：第 t 个位置取出词表的第 id 行。反向传播就是把梯度按 id 加回去。同一个 token 出现几次，它那一行就收到几份梯度，所以是累加，不是覆盖。如果你读过《深度学习入门2：自制框架》附录 B，`np.add.at` 做的正是这件事。
+embedding 层是查表：第 t 个位置取出词表的第 id 行。反向传播就是把梯度按 id 加回去。同一个 token 出现几次，它那一行就收到几份梯度，所以是累加，不是覆盖。如果你读过《深度学习入门2：自制框架》附录 B，`np.add.at` 做的正是这件事。
 
 权重共享让事情多了一层：同一个矩阵既用来查表，又在最后当 `unembed`。它从两条路径各得到一份梯度，两份相加。这就是《深度学习入门：基于Python的理论与实现》附录 A 说的“正向传播时有分支流出，反向传播时梯度相加”。
 
@@ -635,7 +635,7 @@ print(f"tanh 近似与精确 GELU 的最大差 {diff.max():.2e}，出现在 x = 
 assert 4.6e-4 < diff.max() < 4.8e-4
 ```
 
-所以还需要第二道检查：与原书的模型本身对拍。对拍用一个很小的 DLFS6 GPT：词表 23、嵌入 16 维，上下文 16，其余结构与迷你版相同（4 个头，2 层，FFN 64）。词表取 23，是因为这个数与其他尺寸都不同：哪个矩阵的两个维度一旦弄反，数字就对不上。`verify/_trainer_export.py` 用 float64 跑这个模型，关掉 dropout，把随机权重、一批 token、loss 和全部梯度存成文件；接着用 `torch.optim.AdamW`（学习率 0.05）走 3 步，把每一步的 loss 和最后的参数也存下来。JavaScript 按 `state_dict` 的名字读入同样的权重，再算一遍。
+所以还需要第二道检查：与原书的模型本身对拍。对拍用一个很小的 DLFS6 GPT：词表 23、embedding 16 维，上下文 16，其余结构与迷你版相同（4 个头，2 层，FFN 64）。词表取 23，是因为这个数与其他尺寸都不同：哪个矩阵的两个维度一旦弄反，数字就对不上。`verify/_trainer_export.py` 用 float64 跑这个模型，关掉 dropout，把随机权重、一批 token、loss 和全部梯度存成文件；接着用 `torch.optim.AdamW`（学习率 0.05）走 3 步，把每一步的 loss 和最后的参数也存下来。JavaScript 按 `state_dict` 的名字读入同样的权重，再算一遍。
 
 | 对拍的内容 | 容差 |
 |---|---|
@@ -795,7 +795,7 @@ assert np.allclose(np.abs(w1 - w0 * (1 - 3e-5)), 3e-3, rtol=1e-3)   # 无论梯�
 | `context_len` 64 → 128 | 97,504 | 2.3 |
 | batch 8 → 16 | 93,408 | 2.0 |
 
-参数量是算出来的；每步的时间是在录制用的机器上实测的，以现在的设置为 1。头数加倍、FFN 加到 4 倍，每步只慢一两成；嵌入维度、层数、上下文或 batch 翻一倍，每步的时间就要翻一倍左右，甚至更多。
+参数量是算出来的；每步的时间是在录制用的机器上实测的，以现在的设置为 1。头数加倍、FFN 加到 4 倍，每步只慢一两成；embedding 维度、层数、上下文或 batch 翻一倍，每步的时间就要翻一倍左右，甚至更多。
 
 ```verify id=T.6-c title="放大模型或 batch 的代价：参数量与每步的时间"
 var = {x["id"]: x for x in rec["timing"]["variants"]}

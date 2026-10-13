@@ -334,8 +334,8 @@ assert jf_raw[-1] < jf_scaled[-1] / 4                       # 大 d 时梯度很
 {"d": 64, "n": 16}
 ```
 
-::: cs336 Lecture 3：让 attention 的 logits 保持在合理范围
-CS336 作业 1 的 `scaled_dot_product_attention` 同样要求除以 $\sqrt{d_k}$。第 3 讲（架构与超参数）把它放进了一个更大的话题：怎样防止 attention 的 logits 变得过大。除了 $\sqrt{d_k}$，现代模型还会用 QK-norm（点积之前先把 $\mathbf q$、$\mathbf k$ 归一化）、logit soft-capping 等办法；作业 3 的训练 API 所用的模型就带有 QK-norm（[CS336 课程主页](https://cs336.stanford.edu/)，2026-10 查证）。
+::: cs336 Lecture 3：让 Attention 的 logits 保持在合理范围
+CS336 作业 1 的 `scaled_dot_product_attention` 同样要求除以 $\sqrt{d_k}$。第 3 讲（架构与超参数）把它放进了一个更大的话题：怎样防止 Attention 的 logits 变得过大。除了 $\sqrt{d_k}$，现代模型还会用 QK-norm（点积之前先把 $\mathbf q$、$\mathbf k$ 归一化）、logit soft-capping 等办法；作业 3 的训练 API 所用的模型就带有 QK-norm（[CS336 课程主页](https://cs336.stanford.edu/)，2026-10 查证）。
 :::
 
 最后补一个实现上的细节。WebBot 的模型直接调用 PyTorch 的 `F.scaled_dot_product_attention`（[8.2 节](ch08.html#s8-2)），没有显式地写除法。它默认的缩放因子是 $1/\sqrt{\text{查询的最后一维}}$，也就是每个头的维度，与 CodeBot 手写的 `D ** 0.5` 一致：

@@ -387,9 +387,9 @@ assert np.allclose(A, 0.5 * np.array([r1 - r2, r2 - r1]))   # 一半的 RLOO 优
 ```localcheck verify/test_appendix.py::test_c_grpo_grad needs="PyTorch" title="比率为 1 时，grpo_loss 的梯度就是带组均值基线的策略梯度；打开 dropout 后比率与梯度都偏了"
 ```
 
-这个偏差的代价不小。本书在 RTX 3060 Ti 上把 `09_grpo.py` 各跑了一次：原样运行时，第 51 步的 greedy 准确率是 60.5%；从同一次运行的 SFT checkpoint 出发，只在更新前加一行 `model.eval()`，第 51 步就到了 98.8%。
+这个偏差的代价不小。本书在 RTX 3060 Ti 上把 `09_grpo.py` 各跑了一次：原样运行时，第 51 轮贪心解码的准确率是 60.5%；从同一次运行的 SFT checkpoint 出发，只在更新前加一行 `model.eval()`，第 51 轮就到了 98.8%。
 
-```verify id=C-g title="运行记录：更新前加一行 model.eval()，第 51 步的准确率从 60.5% 变成 98.8%" files=data/runs/codebot-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/report.json
+```verify id=C-g title="运行记录：更新前加一行 model.eval()，第 51 轮的准确率从 60.5% 变成 98.8%" files=data/runs/codebot-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/report.json
 import json
 
 def grpo_acc(run_id):                   # 第 it 步的 greedy 准确率（%）
@@ -444,6 +444,6 @@ GRPO 的组均值包含了回答自己的奖励，严格说不满足前提，但
 - 逐 token 的基线可以依赖前缀，依赖动作本身就会带偏（[验证 C-d](#v-C-d)）。
 - GRPO 组均值的期望梯度是 $\frac{G-1}{G}\nabla J$，RLOO 恰好是 $\nabla J$，两者的优势只差常数倍（[验证 C-e](#v-C-e)）。
 - $G = 1$ 没有梯度；$G = 2$ 有信号的概率是 $2p(1-p)$（[验证 C-f](#v-C-f)）。
-- 原书的 `grpo_loss` 要在比率为 1、EOS 也进梯度时才等于这个估计量；更新时开着 dropout，比率就不是 1，加一行 `model.eval()`，第 51 步的准确率从 60.5% 变成 98.8%（[验证 C-g](#v-C-g)、[验证 C-h](#v-C-h)）。
+- 原书的 `grpo_loss` 要在比率为 1、EOS 也进梯度时才等于这个估计量；更新时开着 dropout，比率就不是 1，加一行 `model.eval()`，第 51 轮的准确率从 60.5% 变成 98.8%（[验证 C-g](#v-C-g)、[验证 C-h](#v-C-h)）。
 
 基线解决了“往哪个方向走”的噪声问题，走多远则交给优化器。[附录 D](appendix-d.html) 看 Adam 的偏差校正：为什么要除以 $1-\beta^t$，不除又会怎样。

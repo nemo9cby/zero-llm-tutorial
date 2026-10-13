@@ -3,7 +3,7 @@
    下方的小图：一个没有数据梯度、只有权重衰减的参数（验证 6.1-e）。
    纯函数都导出，供 tests/js/ch06-math.test.mjs 与页面上的验证单元对拍。 */
 import { h } from './_lib.js';
-import { lineChart, seriesColor } from './_plot.js';
+import { lineChart, seriesColor, onThemeChange } from './_plot.js';
 
 export const grad = (p, c = [0, 0]) => [(p[0] - c[0]) / 10, 2 * (p[1] - c[1])];
 
@@ -211,6 +211,6 @@ export function mount(root, config = {}) {
   for (const el of [tIn, lrIn, wdIn, bowlSel, l2Box]) el.addEventListener('input', render);
   bowlSel.addEventListener('change', render);
   l2Box.addEventListener('change', render);
-  new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  onThemeChange(() => render());                 // the paths use the palette: the toggle and the OS setting alike
   render();
 }

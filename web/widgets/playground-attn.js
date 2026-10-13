@@ -1,6 +1,6 @@
 /* P.5 Where Attention looks: the softmax weights of all 6 layers x 6 heads for the current input (thumbnails), and
    one head enlarged with token labels (rows = queries, columns = keys; the causal mask hides the upper triangle).
-   config: { checkpoint, prompt, template, layer, head } (layer and head count from 1) */
+   config: { checkpoint, prompt, template, layer, head } (layer and head count from 0, written L0H0 as in the code and ch02) */
 import { h } from './_lib.js';
 import { heatmap, seqColor } from './_plot.js';
 import {
@@ -9,13 +9,16 @@ import {
 } from './playground-common.js';
 
 const MAX_TOKENS = 40;
+const N_LAYER = 6, N_HEAD = 6;
+const headName = (l, hh) => `L${l}H${hh}`;
+const clampIndex = (v, n) => Math.min(n - 1, Math.max(0, Math.trunc(Number(v)) || 0));
 
 let gridStyled = false;
 function injectGridStyle() {
   if (gridStyled) return;
   gridStyled = true;
   document.head.append(h('style', {}, `
-.w-pg-grid { display: grid; grid-template-columns: max-content repeat(6, minmax(0, 52px)); justify-content: start; gap: 4px; align-items: center; margin: .5rem 0; }
+.w-pg-grid { display: grid; grid-template-columns: max-content repeat(${N_HEAD}, minmax(0, 52px)); justify-content: start; gap: 4px; align-items: center; margin: .5rem 0; }
 .w-pg-grid .hd { font-size: .75rem; color: var(--ink-3); text-align: center; white-space: nowrap; padding-right: .2rem; }
 .w-pg-thumb { padding: 2px; line-height: 0; border: 1px solid var(--rule); background: var(--paper); }
 .w-pg-thumb canvas { width: 100%; height: auto; image-rendering: pixelated; }
@@ -39,7 +42,7 @@ function thumbnail(values, n, label, onPick) {
 
 export async function mount(root, config = {}) {
   injectStyle();
-  const cfg = { checkpoint: 'pretrain', prompt: 'def add(a, b):\n    return a + b', template: false, layer: 1, head: 1, ...config };
+  const cfg = { checkpoint: 'pretrain', prompt: 'def add(a, b):\n    return a + b', template: false, layer: 0, head: 0, ...config };
   const box = h('div', { class: 'w-pg' }, h('p', { class: 'w-pg-note' }, '正在准备……'));
   root.append(box);
   let entries, tok;
@@ -50,13 +53,14 @@ export async function mount(root, config = {}) {
     return;
   }
   injectGridStyle();
-  let name = cfg.checkpoint, sel = { l: cfg.layer - 1, h: cfg.head - 1 }, data = null, busy = false, again = false;
+  let name = cfg.checkpoint, sel = { l: clampIndex(cfg.layer, N_LAYER), h: clampIndex(cfg.head, N_HEAD) };
+  let data = null, busy = false, again = false;
   const sw = checkpointSwitch(entries, name, (n) => { name = n; refresh(); });
   const text = h('textarea', { class: 'w-input', rows: 2, spellcheck: 'false', 'aria-label': 'prompt' });
   text.value = cfg.prompt;
   const tpl = h('input', { type: 'checkbox', checked: cfg.template });
   const status = statusLine();
-  const grid = h('div', { class: 'w-pg-grid', role: 'group', 'aria-label': '6 层 × 6 个头的注意力权重缩略图' });
+  const grid = h('div', { class: 'w-pg-grid', role: 'group', 'aria-label': '6 层 × 6 个头的注意力权重缩略图（层和头从 0 编号）' });
   const title = h('div', { class: 'w-label' });
   const big = h('div');
   const note = h('div', { class: 'w-pg-note', 'aria-live': 'polite' });
@@ -66,7 +70,7 @@ export async function mount(root, config = {}) {
 
   function head(l, hh) {
     const { n, attention } = data;
-    const off = ((l * 6) + hh) * n * n;
+    const off = ((l * N_HEAD) + hh) * n * n;
     return attention.subarray(off, off + n * n);
   }
 
@@ -83,8 +87,8 @@ export async function mount(root, config = {}) {
     const colLabels = full.map((s) => cut(s, Math.max(2, Math.floor(cellPx / 7))));
     const values = Array.from({ length: n }, (_, r) => Array.from({ length: n }, (_, c) => (c > r ? NaN : w[r * n + c])));
     const opts = { values, rowLabels, colLabels, scale: 'seq', domain: [0, 1], size: 26, showValues: false,
-      cellFormat: (v) => pct(v), masked: (r, c) => c > r, ariaLabel: `第 ${sel.l + 1} 层第 ${sel.h + 1} 个头的注意力权重` };
-    title.textContent = `第 ${sel.l + 1} 层第 ${sel.h + 1} 个头（行：查询 token；列：被看的 token）`;
+      cellFormat: (v) => pct(v), masked: (r, c) => c > r, ariaLabel: `${headName(sel.l, sel.h)} 的注意力权重` };
+    title.textContent = `${headName(sel.l, sel.h)}（行：查询 token；列：被看的 token）`;
     if (hm) hm.update(opts); else hm = heatmap(big, opts);
     const last = w.subarray((n - 1) * n, n * n);
     let best = 0;
@@ -93,11 +97,11 @@ export async function mount(root, config = {}) {
   }
 
   function buildGrid() {
-    grid.replaceChildren(h('span'), ...Array.from({ length: 6 }, (_, j) => h('span', { class: 'hd' }, `头 ${j + 1}`)));
-    for (let l = 0; l < 6; l++) {
-      grid.append(h('span', { class: 'hd' }, `层 ${l + 1}`));
-      for (let hh = 0; hh < 6; hh++) {
-        const b = thumbnail(head(l, hh), data.n, `第 ${l + 1} 层第 ${hh + 1} 个头`, () => { sel = { l, h: hh }; show(); });
+    grid.replaceChildren(h('span'), ...Array.from({ length: N_HEAD }, (_, j) => h('span', { class: 'hd' }, `H${j}`)));
+    for (let l = 0; l < N_LAYER; l++) {
+      grid.append(h('span', { class: 'hd' }, `L${l}`));
+      for (let hh = 0; hh < N_HEAD; hh++) {
+        const b = thumbnail(head(l, hh), data.n, `${headName(l, hh)}（层和头从 0 数）`, () => { sel = { l, h: hh }; show(); });
         b.dataset.l = l; b.dataset.h = hh;
         grid.append(b);
       }

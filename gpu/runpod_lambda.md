@@ -15,6 +15,9 @@
 
 WebBot 单卡全程的时间来自 200 步探针（运行记录 `webbot-probe`）：每步 0.317 秒、每次完整评估约 56 秒，
 外推全程约 10.4 小时（`content/gpu.md` 的验证 G.2-j）。事前按 MFU 35% 估算的是 9.1 小时。
+探针第 0 步的评估用了 101 秒：第 1 个 batch 等了约 19 秒，最后一个较小的 batch 又停了约 26 秒，
+两处都与重新编译的说法相符（`content/ch08.md` 的 8.5 节）。它们算在第一步实测的 141 秒里，之后的评估
+按每次约 56 秒计，所以 10.4 小时的外推不变。
 
 2026-10-11 的部分按需价格（每 GPU·小时）：RunPod H100 SXM Community 2.69 / Secure 3.49，
 RTX 4090 Community 0.34；Lambda 1× H100 SXM 4.29、8× H100 SXM 每卡 3.99。
@@ -96,6 +99,27 @@ uv run python gpu/run_local.py --run webbot-8xh100 --job webbot --nproc 8       
 
 `Ctrl-b d` 离开 tmux，`tmux attach -t train` 回来。日志在 `runs/<run>/<脚本名>.log`。
 
+每一步在 `report.json` 里还会留下几样东西，供日后核对：
+
+- `tutorial`：开跑时教程的提交号。工作树有未提交的改动时，`dirty` 为 true，并附上改动的文件名和
+  `git diff HEAD` 的 SHA-256；原书子模块里的改动另记一个 `dlfs6_diff_sha256`。这个哈希可以自己复算：
+  `git diff HEAD --binary --no-color --no-ext-diff -- . ':(exclude)web/data/runs' | sha256sum`。
+- `checkpoints`：这一步写出的每个 `.pt` 文件的路径、字节数和 SHA-256。
+- `steady_s_per_it`：从第 20 步起、只算不含评估的区间，平均每步几秒。评估要画出自己的进度条才认得出来：
+  第 6 章和第 9 章预训练的评估有，GRPO 的准确率检查没有，它的这个数仍含评估。旁边的 `s_per_it` 意思不变，
+  仍是后半程的平均，评估也算在里面。
+
+运行器还会从日志里直接生成两种文件。预训练脚本跑完后写 `timing.json`：第一步的耗时、稳定后的每步秒数、
+评估进度条的速度，以及按这个速度一次评估要几秒。没有进度条的脚本（生成脚本）则把它打印的各行
+（空行除外）存成 `<脚本名>.output.txt`。脚本出错时，这两种文件都不写。
+
+有两种情况，`run_local.py` 会在动手之前拒绝运行，免得报告记错：
+
+1. 教程的工作树有未提交的改动（`web/data/runs/` 下的运行产物不算）。先 commit 再跑；确实要跑就加
+   `--allow-dirty`，改动的哈希会记进报告。用 bundle 克隆到机器上的仓库本来就是干净的。
+2. `--run` 指定的运行名已经有一份 `report.json`，记录的却是另一种机器（GPU、PyTorch、CUDA、Python
+   或操作系统不同），或者是 Modal 上的运行。再追加的步骤会被记到那台机器名下，所以要换一个新的运行名。
+
 ## 六、把结果带回本书
 
 ```bash
@@ -106,7 +130,8 @@ uv run python tools/build.py
 ```
 
 `register_run.py` 把这次运行登记进 `web/data/runs/index.json`，GPU 手册的“运行记录”和各章的训练曲线
-只显示登记过的运行。检查点（`runs/<run>/work/**/*.pt`）不进仓库，需要的话另行 scp。
+只显示登记过的运行。checkpoint（`runs/<run>/work/**/*.pt`）不进仓库，需要的话另行 scp；
+报告里记着每个 checkpoint 的 SHA-256，复制回来后可以用 `sha256sum` 核对。
 
 **最后，停止或终止实例。** 空闲的 GPU 照样计费；RunPod 的 Network Volume 与 Lambda 的 Filesystem
 在实例终止后也继续按容量计费，不再需要时一并删除。
@@ -120,4 +145,6 @@ uv run python tools/build.py
 | ch09 卡在 `torch.compile` 报找不到编译器 | `apt-get install -y build-essential` |
 | ch09 要求登录 wandb | `run_local.py` 默认设 `WANDB_MODE=disabled`；想记录到 W&B 就先 `wandb login` 再设 `WANDB_MODE=online` |
 | 8 卡跑完花了单卡 8 倍的钱 | 直接 `torchrun` 原样脚本会让每张卡都跑满 100,000 步；用 `--job webbot --nproc 8` |
-| 磁盘满 | WebBot 的 `owt_train.bin` 5.3 GB，检查点每个约 0.6 GB；Volume 至少留 40 GB |
+| `the tutorial tree differs from its commit` | 工作树有未提交的改动（含 `third_party/dlfs6` 里的改动）：commit 之后再跑；确实要跑就加 `--allow-dirty` |
+| `was recorded on another kind of host` 或 `by another provider` | 这个运行名已经属于另一台机器或 Modal 上的运行：换一个新的 `--run` 名字 |
+| 磁盘满 | WebBot 的 `owt_train.bin` 5.3 GB，checkpoint 每个约 0.6 GB；Volume 至少留 40 GB |

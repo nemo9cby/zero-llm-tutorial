@@ -22,7 +22,7 @@
 2. CodeBot 模型是 GPT-2 式：V=1000、C=256、E=384、6 层 6 头、FFN 1536、dropout 0.1、learned 位置编码、pre-LN、**embedding 与 unembedding 权重共享**；参数 **11,121,640**（重复计算共享权重则为 11,505,640）。
 3. 随机初始化时 loss **7.0025**（eval，seed 0）/ 首步训练 loss **6.9895**，≈ ln(1000)=6.9078 再多约 0.08–0.09——多出的部分来自 logit 的方差（std 实测 0.3955 ≈ 0.02·√384）。
 4. 预训练 20000 iter × 32 × 256 = 1.638 亿 token-position，**相当于语料（2,677,398 token）过了 61 遍**；下载的 `model_pretrain.pt` 在训练语料上的 loss 只有 **0.424（ppl 1.53）**，几乎是背下来了；本章没有验证集（第 6 章才加）。
-5. SFT 数据 1092 条，其中 **81 条正是 GRPO 用的全部 `i+j=`（i,j∈1..9）**；最长样本 138 token，所以 `context_len=256` 下 **91.5% 的位置是 padding**，只有 8.455% 的位置带 label。
+5. SFT 数据 1092 条，其中 **81 条正是 GRPO 用的全部 `i+j=`（i,j∈1..9）**；最长样本 138 token，所以 `context_len=256` 下 **91.5% 的位置是 padding**，只有 8.455% 的位置带 label。（更正：91.5% 是不带 label 的位置，含 prompt；纯 padding 占全部位置的 81.5%，见教程第 3 章验证 3.3-d。）
 6. SFT 用 `labels=-100` 屏蔽 prompt，`F.cross_entropy(ignore_index=-100)` 是**整个 batch 的 token 级平均**（不是逐样本平均）；SFT 后 response 上的 loss 从 4.04 降到 **0.028**，但 prompt token 上的 loss 从 3.40 **升到 6.18**（模型不再会“续写用户的话”）。
 7. SFT 模型在 81 道加法上 greedy 只有 **54.3%**（44/81）——训练集里就有这些题，它也没背下来；平均 P(正确答案)=0.450。这正是 3.4.2「モデルの計算能力」引出强化学习的动机。
 8. 09_grpo.py 的 GRPO = **Dr. GRPO 风格**：advantage 只减组均值、**不除 std**；loss 是对 token 求和后除以序列数 B·G（**没有 1/|o_i| 长度归一化**）；**没有 KL、没有 reference model**；`old_model` 每轮从当前模型拷贝；每批 rollout 更新 2 次，所以只有第 2 次更新时 clip 才真正起作用。官方目录里恰好有专栏「GRPOとDr.GRPO」。
@@ -460,6 +460,17 @@ wall 609.6s = 50.80 s/iter
 
 **(c) 插桩版 GRPO（批量采样，算法与原脚本一致）**：`scripts/grpo_fast.py` 用 `exec` 直接从 `09_grpo.py` 取出 `GRPODataset / calculate_reward / compute_probs / grpo_loss` 原函数；唯一改动是把 256 次逐条采样换成一次批量采样（81 个 prompt 都是 22 个 token，无需 padding），统计意义上等价，随机数流不同。超参与原脚本相同（lr 7e-6、G=8、batch 32、ε=0.2、每批 2 次更新、clip_grad_norm 1.0），每 iter 额外用 eval 模式前向一次记录指标（不改变训练）。CPU 上约 17–21 s/iter（争用下）。
 
+> **后记（2026-10-12）**：`scripts/grpo_fast.py` 是研究阶段的脚本，只放在当时会话的临时目录里（附录 B），没有进入本仓库；
+> 下面几张表的数字留作研究记录，保存在 `research/data/ch03_grpo_metrics_*.jsonl`。教程页面用的 CPU 对照记录改由仓库里的
+> `verify/_ch03_grpo_replicate.py` 生成：做法相同（从 `09_grpo.py` 取出原函数、批量采样、记录同一组指标），批量采样时每条
+> 回答最多 40 个 token，只保留 base 与 nodrop（`--dropout-off`）两种设置，没有 `--std-norm`、`--G`、`--lr`、`--init`。
+> 它在 3 个种子上各跑 60 轮，输出 `web/data/ch03/grpo_dropout/seed{0,1,2}_{base,nodrop}.jsonl`，汇总在
+> `web/data/ch03/grpo_dropout_runs.json`：dropout 开着时最终 greedy 准确率 70.4% / 74.1% / 72.8%，关掉后 95.1% / 95.1% / 93.8%
+> （教程第 3 章验证 3.9-h；`verify/test_ch03.py::test_recorded_grpo_runs` 核对这些文件）。所以下表的 stdnorm 一行、
+> seed 1 的 40 轮复核和 §4.4 的小模型运行，都只是研究阶段的结果，没有在仓库里重跑。
+> 完整规模的对照后来在 RTX 3060 Ti 上跑满了 500 轮（`gpu/run_local.py`，运行记录 `codebot-3060ti` 与
+> `codebot-grpo-evalfix-3060ti`）：原样脚本最终 86.4%，只加一行 `model.eval()` 是 100%，第 51 轮已到 98.8%（验证 3.9-n）。
+
 greedy 准确率（%，81 题，每 10 iter 测一次；起点都是 SFT 的 54.3%）：
 
 | 运行（seed 0，60 iter） | it0 | it10 | it20 | it30 | it40 | it50 | it59 |
@@ -609,7 +620,7 @@ nodrop 在 k≤8 时全面胜出，但 pass@64 已低于 SFT（0.957 < 0.999）�
   * GPU 估算（未实测，需跑前 200 iter 校准）：默认 fp32 且 PyTorch 默认不开 TF32 matmul，注意力是显式 (32,6,256,256) 张量（每个约 50 MB，访存密集）。RTX 3060 Ti 8GB：约 60–120 ms/iter → **20–40 min**；A10G/L4：约 30–60 ms/iter → 10–20 min；A100（fp32 非 TF32 只有 19.5 TFLOPS）：约 30–50 ms/iter；开 `torch.set_float32_matmul_precision('high')`（TF32）或 bf16 autocast（第 6 章内容）可再快 2–3 倍。
   * 显存：激活 2.22 GiB + 权重/梯度/AdamW 170 MiB + CUDA context ≈ **3 GB**，8 GB 卡足够。
   * 主机内存：`itertools.cycle` 会把 20000 个 batch 都留在内存里（≈ 2.4 GiB），Modal 上请把 `memory` 设到 ≥ 8 GB。
-* **SFT**：500 iter × 32 × 256（其中 91.5% 是 padding）≈ 6ND = 2.7e14 FLOPs；GPU 上 1–2 分钟；CPU 上 ctx 256 约 60 min、ctx 137 约 21–36 min（实测 4.27 s/iter）。
+* **SFT**：500 iter × 32 × 256（其中 91.5% 的位置不带 label，81.5% 是 padding）≈ 6ND = 2.7e14 FLOPs；GPU 上 1–2 分钟；CPU 上 ctx 256 约 60 min、ctx 137 约 21–36 min（实测 4.27 s/iter）。
 * **GRPO**：瓶颈在**采样**——每 iter 256 次 `generate()`，batch=1、无 KV cache、每个回答约 2.5 次前向（1–2 个数字 + EOS 那一步）、每步 `.item()` 同步一次 → 约 640 次小前向；评估每 10 iter 再加 81 次 greedy 生成。
   * CPU 实测：轻争用 ~19 s/iter（其中 32×8 采样实测 10.8 s，其余约 8 s 为推算的 2 次更新）→ 500 iter ≈ **2.6 h**；重争用 51 s/iter。
   * GPU 估算：每次小前向受 kernel launch 限制约 2–3 ms → 采样 ~1.5–2.5 s/iter，更新 (256×24 token) 毫秒级 → 500 iter ≈ **15–25 min**；GPU 型号几乎无关（T4 足够）。
@@ -623,6 +634,7 @@ nodrop 在 k≤8 时全面胜出，但 pass@64 已低于 SFT（0.957 < 0.999）�
 * `gpu="A10G"`（或 `"L4"`/`"T4"`），`timeout ≥ 2h`，`memory ≥ 8192`。
 * 顺序：`01_pretrain.py` →（可选）`02_generate.py` → `03_sft.py` → `09_grpo.py` → `04_chat.py`（交互式，云上需改成读文件）。
 * 建议在 GPU 上补做的消融（本机 CPU 只做了 60 iter、1–2 个 seed）：`09_grpo` 原版（逐条采样）vs **更新时 `model.eval()`（关 dropout）** vs **除 std** vs **G∈{2,4,8,16}**，各 500 iter、≥3 个 seed，记录 §2.6.3 的指标。CPU 上已经看到的现象（关 dropout：60 iter 95.1% vs 70.4%）需要在完整 500 iter 上确认，尤其要看关 dropout 后是否仍会出现“被压死的题”（§5 第 8 条）。
+  * 后记（2026-10-12）：其中“原版 vs 关 dropout”已在 RTX 3060 Ti 上各跑满 500 iter（单次，同一个 SFT 起点；运行记录 `codebot-3060ti` 与 `codebot-grpo-evalfix-3060ti`）：greedy 准确率 86.4% vs 100%；P(正确) < 0.01 的题 9 道 vs 0 道（教程第 3 章验证 3.9-n、3.9-i）。除 std 与改 G 的消融没有做。
 * RunPod/Lambda：开一台 RTX 4090/A10/A100 按小时计费的机器，`git clone` + `uv sync` + 装 CUDA torch，1 小时内跑完整章。
 
 ### 4.4 CPU 端到端（笔记本可跑，约 20 分钟；全部实测）
@@ -670,7 +682,7 @@ GRPO 阶段的 greedy 加法准确率（%，起点都是 12.3%）：
 14. **评估用的是“prompt+回答”的全文（已验证无害）**：`generate()` 返回包含 prompt，`calculate_reward` 取最后一个整数；回答没有数字时会取到 prompt 里的 j，而 j ≠ i+j（i≥1），所以本任务恰好无害（全文/仅回答两种算法的准确率一致）；换成 `0+5=` 这样的题就会误判。
 15. **解码→再编码（实测 0/648 不一致，F36）**：`response = full_text[len(prompt):]` 后又 `encode(response)`，如果模型采样出非规范切分（如 '1','0' 而不是 '10'），训练的就不是实际采样的 token 序列；本任务里没发生，但大模型/中文里很常见。
 16. **`generate()` 的副作用（已验证 F11）**：调用后模型停在 eval；在训练循环里对 policy 调用 `generate` 会悄悄关掉 dropout。09 里只对 `old_model` 调用、评估后又 `model.train()`，所以恰好没问题。
-17. **SFT padding 浪费（F15/F16）**：91.5% 的计算花在 padding 上；按 batch 内最大长度动态 padding 或把 `context_len` 设成 137 结果完全等价（F16）。
+17. **SFT padding 浪费（F15/F16）**：91.5% 的位置不产生 loss；其中纯 padding 占全部位置的 81.5%，这部分计算完全白花（尾部的 padding 影响不到前面的位置）；按 batch 内最大长度动态 padding 或把 `context_len` 设成 137 结果完全等价（F16）。
 18. **SFT 的 loss 是 token 平均（F06）**：长回答（多行代码，最长 112 token）主导梯度；与“逐样本平均”数值不同。
 19. **掩码后的遗忘（F17）**：SFT 后 prompt token 上的 loss 从 3.40 升到 6.18，模型几乎不会再“续写用户输入”；这是 loss 掩码的直接后果，不是 bug，但值得在教程里点明。
 20. **SFT 没能背下算术（F36/F45）**：81 道题都在训练集里、训练了 14.65 轮，平均 P(正确) 仍只有 0.45；这些 prompt 只差两个 token，像 9×9 查表，而每题平均只被看到 ~15 次。
@@ -755,9 +767,9 @@ GRPO 阶段的 greedy 加法准确率（%，起点都是 12.3%）：
 * `p04_chat.py`：模型路径由环境变量给、`torch.manual_seed(0)`、stdin 读到 EOF 退出并回显输入。
 * `p09_grpo.py`：`sft_model_path` 指向下载的 `model_sft.pt`、`max_iters`（3 / 12）、seed、每 iter 打印一行、输出到 scratch。
 * `p03_sft_tiny.py`：预训练权重改为 `model_pretrain_tiny.pt`、`context_len=128`、seed、输出到 scratch；其余超参（lr 3e-4、batch 32、500 iter）不变。
-* `grpo_fast.py`：见 §2.6.4(c)；参数 `--iters --seed --dropout-off --std-norm --G --lr（默认 7e-6）--init --tag`。
+* `grpo_fast.py`：见 §2.6.4(c)；参数 `--iters --seed --dropout-off --std-norm --G --lr（默认 7e-6）--init --tag`。研究阶段的脚本，没有进入本仓库；仓库里生成页面记录的是 `verify/_ch03_grpo_replicate.py`（参数 `--iters --seed --dropout-off --tag --out`，见 §2.6.4(c) 的后记）。
 
-复现命令模板（Git Bash，仓库根目录）：`export PYTHONUTF8=1 PYTHONIOENCODING=utf-8 MPLBACKEND=Agg CH03_OUT=<scratch>\out; uv run python <scratch>/scripts/p09_grpo.py 12`；`uv run python <scratch>/scripts/grpo_fast.py --iters 60 --tag nodrop --dropout-off`。
+复现命令模板（Git Bash，仓库根目录）：`export PYTHONUTF8=1 PYTHONIOENCODING=utf-8 MPLBACKEND=Agg CH03_OUT=<scratch>\out; uv run python <scratch>/scripts/p09_grpo.py 12`；`uv run python <scratch>/scripts/grpo_fast.py --iters 60 --tag nodrop --dropout-off`。仓库里能运行的对应命令：`CUDA_VISIBLE_DEVICES=-1 uv run python verify/_ch03_grpo_replicate.py --iters 60 --seed 0 --tag nodrop --dropout-off`（输出默认写到 `runs/ch03-grpo-dropout/`）。
 
 ## 附录 B：产物路径
 

@@ -6,8 +6,9 @@
      yLabel: "loss（nats）", xLabel: "iteration",
      refLines: [{ "y": 6.9078, "label": "ln 1000" }],
      command: "uv run python gpu/run_local.py --run codebot-3060ti --script ch03/01_pretrain.py",
-     maxPoints: 600                           // downsample for display
-   }
+     maxPoints: 600,                          // downsample for display
+     markers: false                           // optional; by default a sparse metric (recordedPoints) gets a dot
+   }                                          //   at every measurement, false turns the dots off
    If the run has not been recorded yet, the widget says so and shows the command instead of a chart. */
 import { h } from './_lib.js';
 import { lineChart, fmtNum } from './_plot.js';
@@ -16,6 +17,22 @@ async function getJSON(url) {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
+}
+
+/** The points of metric `key` that are actual measurements, or null when every logged value is one.
+    A metric logged on only some rows (sparse) was measured on those rows. A metric that sits on every row but
+    changes on few of them was carried forward between measurements (the progress bar repeats the last
+    validation loss until the next evaluation): its measurements are the rows where the value changes. */
+export function recordedPoints(rows, key, max = 150) {
+  const pts = rows.filter((p) => p[key] != null).map((p) => [p.it, p[key]]);
+  if (pts.length < 2) return null;
+  let rec = null;
+  if (pts.length <= rows.length / 2) rec = pts;
+  else {
+    const changes = pts.filter((p, i) => i === 0 || p[1] !== pts[i - 1][1]);
+    if (changes.length - 1 <= (pts.length - 1) / 10) rec = changes;
+  }
+  return rec && rec.length <= max ? rec : null;     // hundreds of dots would only thicken the line
 }
 
 function downsample(points, n) {
@@ -60,8 +77,10 @@ export async function mount(root, config) {
   }
   const rows = text.split('\n').filter(Boolean).map((l) => JSON.parse(l));
   const keys = config.metrics || ['loss'];
+  // A metric measured only now and then (e.g. every 500 steps) gets a dot at each measurement.
   const series = keys.map((k) => ({
     name: k, points: downsample(rows.filter((p) => p[k] != null).map((p) => [p.it, p[k]]), config.maxPoints || 600),
+    markers: (config.markers !== false && recordedPoints(rows, k)) || false,
   })).filter((s) => s.points.length);
   if (!series.length) {
     root.append(h('p', { class: 'w-label' }, `运行记录里没有指标 ${keys.join('、')}。`));

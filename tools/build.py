@@ -11,6 +11,10 @@ Markdown dialect (on top of CommonMark + tables + $math$ + footnotes):
 
   ::: note | warn | column <title> | cs336 <title> | confusion <title> | gpu <title> | think <title> | answer
   :::
+  (a title may use inline code, $math$ and links; emphasis and raw HTML stay literal)
+
+Front matter: hidden: true keeps a page out of the nav, pager and TOC; hidden pages other than the cover
+also get <meta name="robots" content="noindex"> (override with noindex: true/false).
 
 Usage:  uv run python tools/build.py [--no-cells] [--only ch01]
 """
@@ -21,16 +25,19 @@ import ast
 import hashlib
 import html
 import json
+import os
 import re
 import shlex
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
 from markdown_it import MarkdownIt
+from markdown_it.common.utils import escapeHtml
 from mdit_py_plugins.container import container_plugin
 from mdit_py_plugins.dollarmath import dollarmath_plugin
 from mdit_py_plugins.footnote import footnote_plugin
@@ -126,6 +133,20 @@ def hl(code: str, lang: str) -> str:
     return highlight(code, lexer, _FORMATTER)
 
 
+def hl_lines(code: str, lang: str) -> list[str]:
+    """Highlight `code` and return one HTML fragment per source line (len == code.count("\\n") + 1).
+    Pygments' formatter closes every span at a line end, multi-line strings included, so each fragment is
+    balanced on its own. Unlike hl(), blank lines at either end are kept: line k out is line k in."""
+    try:
+        lexer = get_lexer_by_name(lang, stripnl=False) if lang else TextLexer(stripnl=False)
+    except Exception:
+        lexer = TextLexer(stripnl=False)
+    lines = highlight(code + "\n", lexer, _FORMATTER).split("\n")[:-1]
+    if len(lines) != code.count("\n") + 1:
+        raise BuildError(f"highlighting turned {code.count(chr(10)) + 1} lines into {len(lines)}")
+    return lines
+
+
 def render_listing(arg: str, attrs: dict, commit: str) -> str:
     path, _, frag = arg.partition("#")
     src = DLFS6 / path
@@ -146,12 +167,15 @@ def render_listing(arg: str, attrs: dict, commit: str) -> str:
     url = f"{DLFS6_URL}/blob/{commit}/{path}{anchor}"
     title = attrs.get("title", "")
     rng = f"第 {start}–{end} 行" if frag else "全文"
+    # A gutter numbered from `start` (CSS counter on .line::before), so "L91-L109" in the text can be found.
+    lines = "".join(f'<span class="line">{line}</span>\n' for line in hl_lines(code, "python"))
     return (
         f'<figure class="listing" data-start="{start}">'
         f'<figcaption><a class="listing-path" href="{esc(url)}" target="_blank" rel="noopener">{esc(path)}</a>'
         f'<span class="listing-range">{rng}</span>'
         + (f'<span class="listing-title">{esc(title)}</span>' if title else "")
-        + f'</figcaption><pre class="code"><code>{hl(code, "python")}</code></pre></figure>'
+        + f'</figcaption><pre class="code numbered" style="counter-reset: line {start - 1}; '
+        f'--ln-digits: {len(str(end))}"><code>{lines}</code></pre></figure>'
     )
 
 
@@ -222,15 +246,48 @@ def render_widget(name: str, attrs: dict, body: str, fig: str) -> str:
 
 # ---------------------------------------------------------------- markdown setup
 
+def math_html(content: str, opts: dict) -> str:
+    """$...$ and $$...$$ become placeholders that runtime.js typesets with KaTeX."""
+    if opts.get("display_mode"):
+        return f'<div class="math-block">{esc(content)}</div>'
+    return f'<span class="math-inline">{esc(content)}</span>'
+
+
+# Inline code keeps its spaces (site.css), and a line may break after any kept space. A space that starts the code
+# or follows another space is glued to the next character (span.glue is white-space: pre), so that a token such as
+# ` reversible` never splits into an empty box at the end of one line and the word at the start of the next.
+GLUE_RE = re.compile(r"((?:^[ \t]+|[ \t]{2,})(?:\S|\Z))")
+
+
+def code_inline(self, tokens, idx, options, env):
+    parts = GLUE_RE.split(tokens[idx].content)            # text, glued, text, glued, ..., text
+    inner = "".join(f'<span class="glue">{escapeHtml(p)}</span>' if i % 2 else escapeHtml(p)
+                    for i, p in enumerate(parts))
+    return f"<code{self.renderAttrs(tokens[idx])}>{inner}</code>"
+
+
+def with_inline(md: MarkdownIt) -> MarkdownIt:
+    """The inline rules that pages and callout titles share: $math$ placeholders and inline code."""
+    md.use(dollarmath_plugin, allow_space=True, allow_digits=False, double_inline=True, renderer=math_html)
+    md.add_render_rule("code_inline", code_inline)
+    return md
+
+
+# Callout titles get inline code, math, links and backslash escapes. Emphasis, images and raw HTML stay off,
+# so identifiers (embed_dim), products (2*3*4) and tokens (<|endoftext|>) print as written, as they did
+# when titles were plain escaped text.
+TITLE_MD = with_inline(MarkdownIt("commonmark", {"html": False, "typographer": False}).disable(["emphasis", "image"]))
+
+
+def render_title(text: str) -> str:
+    return TITLE_MD.renderInline(text, {})
+
+
 def make_md(state: dict) -> MarkdownIt:
-    md = (MarkdownIt("commonmark", {"html": True, "typographer": False})
-          .enable(["table", "strikethrough"])
-          .use(front_matter_plugin)
-          .use(footnote_plugin)
-          .use(dollarmath_plugin, allow_space=True, allow_digits=False, double_inline=True,
-               renderer=lambda content, opts: (
-                   f'<div class="math-block">{esc(content)}</div>' if opts.get("display_mode")
-                   else f'<span class="math-inline">{esc(content)}</span>')))
+    md = with_inline(MarkdownIt("commonmark", {"html": True, "typographer": False})
+                     .enable(["table", "strikethrough"])
+                     .use(front_matter_plugin)
+                     .use(footnote_plugin))
 
     def callout_render(kind):
         def render(self, tokens, idx, options, env):
@@ -238,12 +295,11 @@ def make_md(state: dict) -> MarkdownIt:
             if tok.nesting == 1:
                 rest = tok.info.strip()[len(kind):].strip()
                 label = CALLOUTS[kind]
-                title = f"{label}：{rest}" if rest and kind not in ("think",) else (rest or label)
                 if kind == "answer":
                     return f'<details class="callout callout-answer"><summary>{esc(label)}（先想一想再展开）</summary>\n'
                 return (f'<aside class="callout callout-{kind}"><div class="callout-title">'
                         f'<span class="callout-kind">{esc(label)}</span>'
-                        + (f'<span class="callout-text">{esc(rest)}</span>' if rest else "")
+                        + (f'<span class="callout-text">{render_title(rest)}</span>' if rest else "")
                         + '</div>\n')
             return "</details>\n" if kind == "answer" else "</aside>\n"
         return render
@@ -319,6 +375,12 @@ def check_fences(slug: str, body: str) -> None:
                              f"(use quotes or 「」 in titles): {m.group(0)[:120]}")
 
 
+def count_cells(body: str) -> int:
+    """The number of verify cells in a source, without collect_cells' checks: the index TOC reads every page,
+    and an --only build must not fail on another page's transient duplicate id."""
+    return len(VERIFY_RE.findall(body))
+
+
 def collect_cells(body: str) -> list[dict]:
     cells, seen = [], set()
     for m in VERIFY_RE.finditer(body):
@@ -352,12 +414,21 @@ def run_cells(slug: str, cells: list[dict], out: Path) -> dict:
         cached = json.loads(cache.read_text(encoding="utf-8"))
         if cached.get("key") == key:
             return cached["results"]
-    inp = BUILD / f"cells-{slug}.in.json"
+    # Builds into different --out dirs may run at the same time: each run gets its own input file, and the
+    # cache is replaced atomically, so one build never runs (or reads) another build's version of a page.
+    # Afterwards the input is kept as cells-<slug>.in.json, for rerunning tools/run_cells.py by hand.
+    inp = BUILD / f"cells-{slug}.{key}.{os.getpid()}.in.json"
     inp.write_text(json.dumps({"cells": cells, "data_dir": str(out / "data")}, ensure_ascii=False),
                    encoding="utf-8")
-    proc = subprocess.run(PYODIDE_MIRROR + [str(ROOT / "tools" / "run_cells.py"), str(inp)],
-                          capture_output=True, text=True, encoding="utf-8", errors="replace",
-                          env={**__import__("os").environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"})
+    try:
+        proc = subprocess.run(PYODIDE_MIRROR + [str(ROOT / "tools" / "run_cells.py"), str(inp)],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              env={**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"})
+    finally:
+        try:
+            os.replace(inp, BUILD / f"cells-{slug}.in.json")
+        except OSError:
+            inp.unlink(missing_ok=True)
     if proc.returncode != 0:
         raise BuildError(f"cell runner crashed for {slug}:\n{proc.stderr[-3000:]}")
     results = {r["id"]: r for r in json.loads(proc.stdout)}
@@ -368,8 +439,17 @@ def run_cells(slug: str, cells: list[dict], out: Path) -> dict:
     slow = [f"{r['id']} ({r['seconds']:.1f}s)" for r in results.values() if r["seconds"] > 3]
     if slow:
         print(f"  warning: slow cells in {slug}: {', '.join(slow)}", file=sys.stderr)
-    cache.write_text(json.dumps({"key": key, "results": results}, ensure_ascii=False, indent=1),
-                     encoding="utf-8")
+    tmp = cache.with_name(f"{cache.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps({"key": key, "results": results}, ensure_ascii=False, indent=1), encoding="utf-8")
+    for _ in range(10):              # Windows refuses to replace a file that another build is reading
+        try:
+            os.replace(tmp, cache)
+            break
+        except PermissionError:
+            time.sleep(0.2)
+    else:
+        tmp.unlink(missing_ok=True)
+        print(f"  warning: could not update the cell cache {cache.name}", file=sys.stderr)
     return results
 
 
@@ -393,12 +473,20 @@ def load_chapters(only: str | None) -> list[Chapter]:
     return chapters
 
 
+# Parts head their chapters in the nav; the appendices and the extra pages get a label of the same weight,
+# so they do not read as more chapters of Part III.
+NAV_GROUPS = {"appendix": "附录", "extra": "实践与参考"}
+
+
 def nav_html(chapters: list[Chapter], current: Chapter) -> str:
-    items = []
+    items, labelled = [], set()
     for ch in chapters:
         if ch.meta.get("hidden"):
             continue
         kind = ch.meta.get("kind", "chapter")
+        if kind in NAV_GROUPS and kind not in labelled:
+            labelled.add(kind)
+            items.append(f'<li class="nav-group"><span class="nav-group-label">{esc(NAV_GROUPS[kind])}</span></li>')
         num = ch.meta.get("chapter", "")
         label = f'<span class="nav-num">{esc(str(num))}</span>' if num != "" and kind != "part" else ""
         classes = [f"kind-{kind}"] + (["current"] if ch is current else [])
@@ -435,7 +523,7 @@ def toc_html(chapters: list[Chapter]) -> str:
     for ch in chapters:
         if ch.meta.get("hidden"):
             continue
-        n_cells = len(collect_cells(ch.body))
+        n_cells = count_cells(ch.body)
         secs = "".join(f'<li><a href="{ch.slug}.html#s{num.replace(".", "-")}"><span class="toc-num">{esc(num)}</span>'
                        f'{esc(title)}</a></li>' for num, title in H2_RE.findall(ch.body))
         badge = f'<span class="toc-count">{n_cells} 项验证</span>' if n_cells else ""
@@ -476,22 +564,39 @@ def build(only: str | None, run: bool, out: Path) -> None:
         print(f"  {ch.slug}: {len(ch.cells)} verify cells, {state['fig']} figures")
 
     for ch in chapters:
-        if ch.slug not in rendered:
-            continue
-        num = ch.meta.get("chapter", "")
-        head = (f'<header class="chapter-head"><div class="chapter-num">{esc(str(num))}</div>'
-                f'<h1>{esc(ch.meta.get("title", ""))}</h1>'
-                + (f'<p class="chapter-lede">{esc(ch.meta["lede"])}</p>' if ch.meta.get("lede") else "")
-                + "</header>") if not ch.meta.get("bare") else ""
-        page = (template
-                .replace("{{title}}", esc(ch.meta.get("title", "")))
-                .replace("{{description}}", esc(ch.meta.get("lede", "")))
-                .replace("{{nav}}", nav_html(chapters, ch))
-                .replace("{{packages}}", esc(json.dumps(ch.meta.get("pyodide_packages", ["numpy"]))))
-                .replace("{{body}}", head + rendered[ch.slug] + neighbors(chapters, ch))
-                .replace("{{slug}}", ch.slug))
-        (out / f"{ch.slug}.html").write_text(page, encoding="utf-8")
+        if ch.slug in rendered:
+            page = render_page(template, chapters, ch, rendered[ch.slug])
+            (out / f"{ch.slug}.html").write_text(page, encoding="utf-8")
     check_links(out, list(rendered), full=not only)
+
+
+NOINDEX = '<meta name="robots" content="noindex">'
+PLACEHOLDER_RE = re.compile(r"\{\{(\w+)\}\}")
+
+
+def is_noindex(ch: Chapter) -> bool:
+    """Hidden pages (the component sample page) are still built, for check_pages, but kept out of search
+    engines. The cover is hidden only from the nav (the book title links to it), so it stays indexable."""
+    return bool(ch.meta.get("noindex", ch.meta.get("hidden") and ch.slug != "index"))
+
+
+def render_page(template: str, chapters: list[Chapter], ch: Chapter, body: str) -> str:
+    num = ch.meta.get("chapter", "")
+    head = (f'<header class="chapter-head"><div class="chapter-num">{esc(str(num))}</div>'
+            f'<h1>{esc(ch.meta.get("title", ""))}</h1>'
+            + (f'<p class="chapter-lede">{esc(ch.meta["lede"])}</p>' if ch.meta.get("lede") else "")
+            + "</header>") if not ch.meta.get("bare") else ""
+    values = {
+        "title": esc(ch.meta.get("title", "")),
+        "description": esc(ch.meta.get("lede", "")),
+        "robots": NOINDEX if is_noindex(ch) else "",
+        "nav": nav_html(chapters, ch),
+        "packages": esc(json.dumps(ch.meta.get("pyodide_packages", ["numpy"]))),
+        "body": head + body + neighbors(chapters, ch),
+        "slug": ch.slug,
+    }
+    # One pass over the template: "{{...}}" inside the inserted body (code, formulas) is never substituted.
+    return PLACEHOLDER_RE.sub(lambda m: values[m.group(1)] if m.group(1) in values else m.group(0), template)
 
 
 HREF_RE = re.compile(r'href="([^"#:?]*\.html)?(?:#([^"]+))?"')

@@ -2,6 +2,7 @@
    外层逐块取 query，内层逐块取 key/value；每处理一块，就用 online softmax 修正每行的最大值 m 与指数和 ℓ。
    计算全部用 Float64，在页面上与朴素 softmax attention 对拍；同一结论由验证 8.2-c 钉住。 */
 import { h } from './_lib.js';
+import { isDark, onThemeChange } from './_plot.js';
 
 /** 可复现的伪随机数（mulberry32）加 Box–Muller，生成 N×d 的高斯矩阵。 */
 export function gaussianMatrix(rows, cols, seed) {
@@ -110,16 +111,6 @@ const svg = (tag, attrs = {}, text) => {
   if (text != null) el.textContent = text;
   return el;
 };
-
-const isDark = () => {
-  const t = document.documentElement.dataset.theme;
-  return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-};
-
-function onThemeChange(fn) {
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', fn);
-  new MutationObserver(fn).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-}
 
 export function mount(root, config = {}) {
   injectStyle();

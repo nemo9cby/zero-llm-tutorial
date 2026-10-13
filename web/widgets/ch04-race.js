@@ -3,7 +3,7 @@
    每组有一个参照（reference: 原书版本或官方文件），其余各行的 identical 是运行时与它比较的结果。
    config: { data: "data/ch04/bench.json" } */
 import { h, fmt } from './_lib.js';
-import { seriesColor } from './_plot.js';
+import { seriesColor, onThemeChange } from './_plot.js';
 
 const STYLE = `
 .w-ch04-race, .w-ch04-race * { font-variant-ligatures: none !important; }
@@ -142,9 +142,7 @@ export async function mount(root, config) {
   });
 
   // bar colours come from the light/dark palette: redraw when the theme changes
-  const redraw = () => { if (!anim) render(); };
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redraw);
-  new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  onThemeChange(() => { if (!anim) render(); });
 
   render();
 }

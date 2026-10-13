@@ -1,7 +1,7 @@
 /* 图：训练好的 CodeBot 的注意力（2.8.1 节）。数据 data/ch02/attn_maps.json 由原书作者公开的 model_pretrain.pt
    导出，verify/test_ch02.py 会从 checkpoint 重新计算并核对；正文的结论由验证 2.8-a 断言。层和头从 0 开始编号。 */
 import { h, visible } from './_lib.js';
-import { seqColor } from './_plot.js';
+import { seqColor, onThemeChange } from './_plot.js';
 import { injectStyle, range, seqLegend } from './ch02-util.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -172,7 +172,5 @@ export async function mount(root, config) {
   render();
   let lastW = root.clientWidth;
   new ResizeObserver(() => { if (root.clientWidth !== lastW) { lastW = root.clientWidth; renderMapAndReadout(); } }).observe(root);
-  const rerender = () => render();
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', rerender);
-  new MutationObserver(rerender).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  onThemeChange(() => render());                 // seqColor and the masked colour (--paper) differ by theme
 }

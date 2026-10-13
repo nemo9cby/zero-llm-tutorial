@@ -105,8 +105,8 @@ export function mount(root, cfg = {}) {
       { name: '留出 loss', points: evalPts },
     ],
     xLabel: '步数（参数更新次数）', yLabel: 'loss（nats）', yMin: 0, refLines: refLines(), table: false, height: 280,
-    // Until the first point after step 0 arrives, every point is at x = 0: show one tick, not 0, 0.2, 0.4 ... steps.
-    xTicks: [...trainPts, ...evalPts].some(([x]) => x > 0) ? undefined : [0],
+    // The x axis spans the whole run from the start, so the curve grows into it instead of rescaling every draw.
+    xMin: 0, xMax: Math.max(settings.maxSteps, ...trainPts.map(([x]) => x), ...evalPts.map(([x]) => x)),
     ariaLabel: '训练 loss 与留出 loss 随步数变化的曲线',
   });
   const draw = () => {
@@ -216,7 +216,12 @@ export function mount(root, cfg = {}) {
   sampleBtn.addEventListener('click', () => worker.postMessage({ type: 'sample' }));
   for (const r of [modeNormal, modeOverfit]) r.addEventListener('change', () => r.checked && set({ mode: r.value }));
   lrSel.addEventListener('change', () => set({ lr: Number(lrSel.value) }));
-  stepSel.addEventListener('change', () => { set({ maxSteps: Number(stepSel.value) }); setRunning(running); showStatus(); });
+  stepSel.addEventListener('change', () => {
+    set({ maxSteps: Number(stepSel.value) });
+    setRunning(running);
+    showStatus();
+    if (facts) scheduleDraw();                    // the x axis spans the new number of steps
+  });
   tempSel.addEventListener('change', () => set({ temperature: Number(tempSel.value) }));
   simdBox.addEventListener('change', () => set({ simd: simdBox.checked }));
 }

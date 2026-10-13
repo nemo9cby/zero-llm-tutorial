@@ -167,7 +167,7 @@ $$
 6N' + 6 L \, n_\text{ctx} \, d
 $$
 
-次浮点运算。这里，$N'$ 是去掉词嵌入后的参数量（词嵌入只是查表，不做乘法），$L$ 是层数，$n_\text{ctx}$ 是上下文长度，$d$ 是向量宽度；第二项就是 Attention 分数那部分。拿 WebBot 算一算：$6N' \approx 6 \times 1.14\text{ 亿} \approx 6.8$ 亿，第二项在 $n_\text{ctx} = 1{,}024$ 时是 $6 \times 12 \times 1{,}024 \times 768 \approx 0.57$ 亿，在 256 时是 0.14 亿。所以 1,024 只比 256 多约 6% 的计算量。
+次浮点运算。这里，$N'$ 是去掉 token embedding 后的参数量（embedding 只是查表，不做乘法），$L$ 是层数，$n_\text{ctx}$ 是上下文长度，$d$ 是向量宽度；第二项就是 Attention 分数那部分。拿 WebBot 算一算：$6N' \approx 6 \times 1.14\text{ 亿} \approx 6.8$ 亿，第二项在 $n_\text{ctx} = 1{,}024$ 时是 $6 \times 12 \times 1{,}024 \times 768 \approx 0.57$ 亿，在 256 时是 0.14 亿。所以 1,024 只比 256 多约 6% 的计算量。
 
 ```verify id=III.1-d title="1,024：与 GPT-2 small 相同；数据和算力给的是取舍" files=data/ch00/bots.json
 gpt2_small = {"n_ctx": 1024, "n_embd": 768, "n_layer": 12, "n_head": 12, "vocab_size": 50257}  # HF 配置文件
@@ -178,7 +178,7 @@ for k, v in same.items():
     print(f"GPT-2 small {k:<8} = {gpt2_small[k]:>5}   WebBot {v:<11} = {web_cfg[v]:>5}")
     assert gpt2_small[k] == web_cfg[v]
 assert web_cfg["vocab_size"] == 50_000 != gpt2_small["vocab_size"]
-n_prime = bots["webbot"]["params"] - bots["webbot"]["params_split"]["embedding"]   # 去掉词嵌入
+n_prime = bots["webbot"]["params"] - bots["webbot"]["params_split"]["embedding"]   # 去掉 token embedding
 d, layers = web_cfg["embed_dim"], web_cfg["n_layer"]
 flops = {}
 for ctx in (256, 1024, 2048):
@@ -206,12 +206,12 @@ WebBot 的三章对应原书的 7.1–7.6、8.1–8.6、9.1–9.7 节。下表�
 ```localcheck verify/test_part3.py::test_hint_only_topics title="在原书仓库里确认：哪些主题有代码，哪些没有"
 ```
 
-模型是 GPT-2 small 的身材，配上 StoryBot 的现代零件（RoPE、SwiGLU、RMSNorm，无 bias，不共享权重），再加上 GQA：12 个查询头只配 4 组键和值。参数一共 152,316,672 个，其中略多于一半在词嵌入和输出层这两张 50,000 × 768 的大表里：
+模型是 GPT-2 small 的身材，配上 StoryBot 的现代零件（RoPE、SwiGLU、RMSNorm，无 bias，不共享权重），再加上 GQA：12 个查询头只配 4 组键和值。参数一共 152,316,672 个，其中略多于一半在 token embedding 和输出层这两张 50,000 × 768 的大表里：
 
-```verify id=III.2-a title="WebBot 的参数有 50.4% 在词嵌入和输出层"
+```verify id=III.2-a title="WebBot 的参数有 50.4% 在 token embedding 和输出层"
 split = bots["webbot"]["params_split"]
 table = split["embedding"] + split["output_extra"]
-print(f"总参数 {bots['webbot']['params']:,}；词嵌入 + 输出层 {table:,} = 2 × 50,000 × 768，占 {table / bots['webbot']['params']:.1%}")
+print(f"总参数 {bots['webbot']['params']:,}；token embedding + 输出层 {table:,} = 2 × 50,000 × 768，占 {table / bots['webbot']['params']:.1%}")
 assert table == 2 * 50_000 * 768 and round(table / bots["webbot"]["params"], 3) == 0.504
 ```
 
@@ -247,16 +247,18 @@ assert 9 < hours < 10.5
 
 价格取自 [Modal 的价目表](https://modal.com/pricing)（2026-10-11）。这只是开工前的估算。稳妥的做法是先在云上跑 200 步，从进度条读出真实的速度，再决定要不要跑完整的 10 万步。
 
-本书做了这个计时探针（本页开头的运行记录 webbot-probe）。稳定之后每步 0.317 秒，相当于 MFU 约 38%，比假设的 35% 略好，10 万步的训练本身约 8.8 小时。别忘了验证：脚本每 1,000 步（以及最后一步）在全部 6,450 万个验证 token 上评估一次，从探针的日志看，每次约 56 秒，101 次合计约 1.6 小时。所以全程约 10.4 小时。费用按本书两次 Modal 运行的实际账单算（GPU 加上 CPU 和内存，折合每小时 4.11 美元），约 43 美元：
+本书做了这个计时探针（本页开头的运行记录 webbot-probe）。稳定之后每步 0.317 秒，按 6ND（全部参数）的口径，MFU 约 38%，比假设的 35% 略好，10 万步的训练本身约 8.8 小时。MFU 的分子还有另一种数法：只数参与矩阵乘的参数，再加上 Attention 分数那部分运算，同一个速度算出来约 31%（[G.2 节](gpu.html#sG-2)、[验证 9.7-e](ch09.html#v-9.7-e)）。两个数说的是同一个速度，比较 MFU 之前，先确认分子是怎么数的。别忘了验证：脚本每 1,000 步（以及最后一步）在全部 6,450 万个验证 token 上评估一次，从探针的日志看，每次约 56 秒，101 次合计约 1.6 小时。所以全程约 10.4 小时。费用按本书两次 Modal 运行的实际账单算（GPU 加上 CPU 和内存，折合每小时 4.11 美元），约 43 美元：
 
-```verify id=III.2-d title="计时探针：每步 0.317 秒（MFU 约 38%），加上验证全程约 10.4 小时" files=data/runs/webbot-probe/timing.json,data/runs/webbot-probe/report.json,data/runs/webbot-probe/01_pretrain.log.txt
+```verify id=III.2-d title="计时探针：每步 0.317 秒（MFU 按 6ND 的口径约 38%，按矩阵乘加 Attention 的口径约 31%），加上验证全程约 10.4 小时" files=data/runs/webbot-probe/timing.json,data/runs/webbot-probe/report.json,data/runs/webbot-probe/01_pretrain.log.txt
 import re
 
 timing = json.load(open("data/runs/webbot-probe/timing.json", encoding="utf-8"))
 probe = json.load(open("data/runs/webbot-probe/report.json", encoding="utf-8"))
 log = open("data/runs/webbot-probe/01_pretrain.log.txt", encoding="utf-8").read()
 s = timing["steady_s_per_step_20_200"]                       # 第 20–200 步的平均秒数
-mfu = 6 * bots["webbot"]["params"] * timing["tokens_per_step"] / s / peak
+mfu = 6 * bots["webbot"]["params"] * timing["tokens_per_step"] / s / peak   # 6ND：全部参数
+n_mm = bots["webbot"]["params"] - split["embedding"] - (2 * layers + 1) * d  # 只数矩阵乘：去掉查表的 embedding 和 25 个 RMSNorm 的 γ
+mfu_mm = (6 * n_mm + 6 * layers * web_cfg["context_len"] * d) * timing["tokens_per_step"] / s / peak   # 加上 Attention 分数那一项
 train_h = 100_000 * s / 3600
 # 第 0 步的完整验证：进度条“已完成/总批数 [已用时间<剩余, 速度]”，跳过开头编译的那几行
 bars = [(int(a), int(b), float(r)) for a, b, r in re.findall(r"Evaluating:.*? (\d+)/(\d+) \[[^,]*, ([\d.]+)it/s", log)]
@@ -265,10 +267,11 @@ eval_s = bars[0][1] / rate
 n_eval = 100_000 // 1000 + 1                                 # step % 1000 == 0 共 100 次，再加最后一步
 eval_h = n_eval * eval_s / 3600
 usd_h = probe["billing"][0]["usd_per_hour"]
-print(f"训练：每步 {s} 秒 × 10 万步 = {train_h:.1f} 小时；MFU = {mfu:.1%}")
+print(f"训练：每步 {s} 秒 × 10 万步 = {train_h:.1f} 小时；MFU：6ND 口径 {mfu:.1%}，矩阵乘加 Attention 口径 {mfu_mm:.1%}")
 print(f"验证：{bars[0][1]:,} 批 ÷ {rate:.1f} 批/秒 = {eval_s:.0f} 秒/次，{n_eval} 次 = {eval_h:.1f} 小时")
 print(f"全程约 {train_h + eval_h:.1f} 小时 × {usd_h} 美元/小时 ≈ {(train_h + eval_h) * usd_h:.0f} 美元")
 assert 0.35 < mfu < 0.40 and 8.5 < train_h < 9.0 and 1.4 < eval_h < 1.8
+assert n_mm == 113_897_472 and 0.30 < mfu_mm < 0.32                 # 与 9.7-e 的记账相同
 assert bars[0][1] * 32 * 1024 >= 64_000_000                  # 每次都把 6,450 万个验证 token 过一遍
 assert 10 < train_h + eval_h < 11 and 40 < (train_h + eval_h) * usd_h < 46
 ```
@@ -277,7 +280,7 @@ assert 10 < train_h + eval_h < 11 and 40 < (train_h + eval_h) * usd_h < 46
 :::
 
 ::: cs336 CS336 用的是同一份网页数据
-CS336 的 A1 也在这份 OWT 样本上训练分词器和语言模型。验证集文件与原书的 `owt_valid.txt` 逐字节相同：把 CS336 的 [owt_valid.txt.gz](https://huggingface.co/datasets/stanford-cs336/owt-sample/tree/main) 解压后算 SHA-256，开头是 `2406f278e71829d2`，与原书数据集[文件列表](https://huggingface.co/api/datasets/koki0702/zero-llm-data/tree/main?recursive=true)里 `webbot/owt_valid.txt` 的哈希相同，大小也都是 289,998,753 字节（2026-10-12 查证）。不过 A1 在 OWT 上训练的 BPE 词表是 32,000，而不是 WebBot 的 50,000。原书在第 8、9 章只给提示的主题，大多能在 CS336 里找到动手的版本：A2 要用 Triton 写 FlashAttention2、实现 DDP 和优化器状态切分，A3 要用实验拟合 scaling law。资料来源：[CS336 课程主页](https://cs336.stanford.edu/)。
+CS336 的 A1 也在这份 OWT 样本上训练分词器和语言模型。验证集文件与原书的 `owt_valid.txt` 逐字节相同：把 CS336 的 [owt_valid.txt.gz](https://huggingface.co/datasets/stanford-cs336/owt-sample/tree/main) 解压后算 SHA-256，开头是 `2406f278e71829d2`，与原书数据集[文件列表](https://huggingface.co/api/datasets/koki0702/zero-llm-data/tree/main?recursive=true)里 `webbot/owt_valid.txt` 的哈希相同，大小也都是 289,998,753 字节（2026-10-12 查证）。不过 A1 在 OWT 上训练的 BPE 词表是 32,000，而不是 WebBot 的 50,000。原书在第 8、9 章只给提示的主题，大多能在 CS336 里找到动手的版本：A2 要用 Triton 写 FlashAttention-2、实现 DDP 和优化器状态切分，A3 要用实验拟合 scaling law。资料来源：[CS336 课程主页](https://cs336.stanford.edu/)。
 :::
 
 ## 本部要点
@@ -290,7 +293,7 @@ CS336 的 A1 也在这份 OWT 样本上训练分词器和语言模型。验证�
 - OWT 验证集有 59,059 篇文档，中位数 696 个 token，32.0% 超过上下文长度 1,024（[验证 III.1-a](#v-III.1-a)、[验证 III.1-b](#v-III.1-b)）。
 - 在约 100 万字节的网页样本上，WebBot 的分词器每个 token 装 4.61 字节，CodeBot 的只装 2.01 字节；领域和词表大小都有影响（[验证 III.1-c](#v-III.1-c)）。
 - 上下文长度 1,024 与 GPT-2 small 相同；数据和算力给的是取舍：从 256 加到 1,024，看得完的网页从 9% 升到 68%，每个 token 的计算量只多约 6%（[验证 III.1-d](#v-III.1-d)）。
-- WebBot 的参数略多于一半在词嵌入和输出层；加 GPU 不会缩短训练时间，而是增加训练的 token 数（[验证 III.2-a](#v-III.2-a)、[验证 III.2-b](#v-III.2-b)）。
-- 一张 H100 上的单卡预训练：计时探针实测每步 0.317 秒（MFU 约 38%），训练约 8.8 小时，加上验证约 10.4 小时（[验证 III.2-c](#v-III.2-c)、[验证 III.2-d](#v-III.2-d)）。
+- WebBot 的参数略多于一半在 token embedding 和输出层；加 GPU 不会缩短训练时间，而是增加训练的 token 数（[验证 III.2-a](#v-III.2-a)、[验证 III.2-b](#v-III.2-b)）。
+- 一张 H100 上的单卡预训练：计时探针实测每步 0.317 秒（MFU 按 6ND 的口径约 38%，按矩阵乘加 Attention 的口径约 31%），训练约 8.8 小时，加上验证约 10.4 小时（[验证 III.2-c](#v-III.2-c)、[验证 III.2-d](#v-III.2-d)）。
 
 第 7 章的第一步，就是在 12 GB 的网页文本上训练一个 5 万词表的分词器。光是这一步，就会让第 4 章的加速成果接受一次真正的考验。

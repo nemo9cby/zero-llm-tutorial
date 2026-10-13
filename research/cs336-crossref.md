@@ -14,13 +14,13 @@ Researched 2026-10-11. Evidence tags used below:
 1. **Latest offering = Spring 2026** (Hashimoto & Liang, Mar 30 – Jun 3 2026). It runs on **B200s and Modal** where 2025 used H100s and Together. The handouts were re-versioned 26.x, and A5 was rewritten: OLMo-2-0425-1B on GSM8K, with GRPO, Dr. GRPO, RFT, MaxRL, off-policy clipping and GSPO. [S]
 2. **DLFS6 is visibly built on CS336 A1.**
    - StoryBot's pretraining config is *exactly* CS336 A1's TinyStories config: vocab 10 000, context 256, d_model 512, 16 heads, 4 layers, d_ff 1344, RoPE θ 10 000, 32×40 000×256 = **327 680 000 tokens**.
-   - DLFS6 saves a checkpoint at iteration 5 000, which is 40 960 000 tokens. That equals CS336's low-resource budget. [V]
+   - DLFS6 saves a checkpoint at iteration 5 000. The loop counter starts at 0, so the checkpoint has made 5 001 updates and seen 40 968 192 tokens. That is about the size of the handout's low-resource *reference run* (32 × 5 000 × 256 = 40 960 000 tokens) and just over the low-resource *budget*, which is 40 000 000 tokens (A1 v26.0.3 §7.2). Its learning rate is still at 88 % of the peak, so it is only a rough stand-in for a run whose schedule ends there (tutorial page cs336, verify X.1-a). [V]
 3. **Same data, byte for byte.**
    - DLFS6's `storybot/tiny_stories_{train,valid}.txt` are the same files as CS336's `TinyStoriesV2-GPT4-{train,valid}.txt` (identical size and SHA-256).
    - DLFS6's `webbot/owt_valid.txt` is identical to CS336's `owt-sample/owt_valid.txt.gz` once decompressed.
    - So CS336's numeric targets apply to DLFS6 runs: val loss ≤ 1.45 on the full budget, ≤ 2.00 on the 40 M-token budget. [V]
 4. **Same function, up to one ε.** We loaded CS336's A1 test-fixture weights into DLFS6's StoryBot `GPT` by renaming keys only. Its logits match CS336's `test_transformer_lm` snapshot to **1.05e-5**, but only after RMSNorm eps is set to 1e-5. As shipped, DLFS6 uses `nn.RMSNorm()` with default eps≈1.19e-7, and the difference is 4.6e-4, which *fails* the 1e-4 tolerance. [V]
-5. **BPE: one tie-break key decides "passes CS336" or not.** DLFS6's ch04 trainer breaks ties by token-ID tuples. On CS336's `corpus.en` (vocab 500) that diverges from the reference at merge #92, with 170/243 positions equal. Switching the key to byte-string lexicographic order reproduces all 243 reference merges exactly. The trainer also runs in 1.04 s, inside CS336's 1.5 s speed bar. [V]
+5. **BPE: one tie-break key decides "passes CS336" or not.** DLFS6's ch04 trainer breaks ties by token-ID tuples. On CS336's `corpus.en` (vocab 500) the first 92 merges match the reference; it diverges at merge #93 (0-based index 92), with 170/243 positions equal. Switching the key to byte-string lexicographic order reproduces all 243 reference merges exactly. Speed sits right at CS336's 1.5 s bar and depends on how busy the machine is: two recorded sessions on this machine, both under load, 5 runs each, took 1.27–1.52 s and 0.95–1.11 s (`web/data/cs336/a1_results.json` → `speed_history`; tutorial ch04 §4.2.4). The test itself passed both times, at 1.29 s and 1.43 s. The single research-phase run in V1 took 1.04 s. [V]
 6. **Other components verified against CS336 protocols.**
    - DLFS6 `RoPE` (interleaved pairs) matches CS336's `test_rope` snapshot to 3e-7.
    - DLFS6 `AdamW` matches `torch.optim.AdamW` to 4.8e-6 after 1 000 steps, which passes CS336's `test_adamw`.
@@ -30,7 +30,7 @@ Researched 2026-10-11. Evidence tags used below:
    - loss = Σ_tokens / #sequences, which is a "constant" normalizer.
    - 2 gradient steps per rollout batch with PPO clip ε = 0.2.
    - no KL term; G = 8; 32 prompts × 8 = 256 rollouts. The 256 rollouts are identical to CS336's `rollout_batch_size=256, group_size=8`.
-   - Two numerical caveats, both verified. First, the ratio is computed in *probability* space as p/(p_old+1e-8), so at p = 1e-8 the ratio is 0.5. Second, the CodeBot policy keeps **dropout 0.1 active** while `old_model` is in eval mode. On the *first* "on-policy" step that gives mean|r−1| ≈ 0.05 and about 0.9 % of tokens outside the clip range, using random weights. [V]
+   - Two numerical caveats, both verified. First, the ratio is computed in *probability* space as p/(p_old+1e-8), so at p = 1e-8 the ratio is 0.5. Second, the CodeBot policy keeps **dropout 0.1 active** while `old_model` is in eval mode. On the *first* "on-policy" step that gives mean|r−1| ≈ 0.05 and about 0.9 % of tokens outside the clip range, using random weights. [V] With the trained SFT weights it is about half of the tokens (§11).
 8. **CS336 goes much deeper on systems, scaling, data and RL theory.** Its A2 to A5 have no DLFS6 counterpart: profiling, a Triton FlashAttention-2 kernel, DDP/ZeRO-1/FSDP, IsoFLOPs scaling-law fitting, Common Crawl filtering and dedup, and the RL estimator zoo. DLFS6 is gentler on tokenization and attention intuition, and gives small end-to-end bots that run on one GPU.
 9. **CS336 "executable lectures"** are Python programs traced by **edtrace** (github.com/percyliang/edtrace, MIT). The pipeline is `python -m edtrace.execute -m lecture_XX`, which writes `var/traces/lecture_XX.json`, which a React viewer replays line by line.
    - `text()` emits markdown and `# @inspect x` shows a variable's value; plain `assert` statements carry the claims.
@@ -147,10 +147,11 @@ Common harness [S]:
 - **Data** [S]: TinyStoriesV2-GPT4 train/valid, and the OWT sample from HF `stanford-cs336/owt-sample`.
 - **Configs and targets** [S]:
   - BPE on TinyStories: vocab 10k, ≤ 30 min and 30 GB RAM; the hint says under 2 min with multiprocessing.
+  - §2.5 "Experimenting with BPE Tokenizer Training" parallelizes only pre-tokenization. Its "Optimizing the merging step" paragraph (an incremental pair-count index) ends: "the merging part of BPE training is not parallelizable in Python". Its "Low-Resource Tip: 'Downscaling'" says to debug the tokenizer on the TinyStories validation set ("22K documents instead of 2.12M") before the full set.
   - BPE on OWT: vocab **32k**, ≤ 12 h and 100 GB RAM.
   - TinyStories LM: vocab 10 000, ctx 256, d_model 512, d_ff 1344, θ 10 000, 4 layers, 16 heads, "~17 M non-embedding params", **327 680 000 tokens**, "20–30 min on 1 B200".
   - Deliverable: **val loss ≤ 1.45**.
-  - Low-resource variant: 40 M tokens, target **≤ 2.00**. The M4 Max reference ran 32×5000×256 in 36 min on MPS or 1 h 22 min on CPU and reached val 1.80.
+  - Low-resource variant (the CPU/MPS tip in §7.2): **40 000 000 tokens**, target **≤ 2.00**. The staff's own reference run on an M4 Max used 32×5000×256 = 40 960 000 tokens: 36 min on MPS or 1 h 22 min on CPU, val 1.80 at step 5000. So 40 960 000 is that reference run, not the budget.
   - Ablations: drop RMSNorm, post-norm, NoPE, SwiGLU vs SiLU (SiLU with d_ff = 4·d).
   - OWT main run.
   - Leaderboard: ≤ **45 min on one B200**, beat the naive loss of 5.0.
@@ -367,9 +368,9 @@ DLFS6 structure (per the publisher's table of contents) [S]:
 | ch03/04_chat.py | Supplement red-teaming and chat evaluation | — |
 | ch03/09_grpo.py | 2026 A5 GRPO family; 2025 A5 GRPO | Toy task: 81 single-digit sums, with the eval set equal to the training set. See §7 row "GRPO" and V4(d). |
 | ch04/01_bpe_optimize.py | A1 "pre-tokenize and count" | Same strategy. |
-| ch04/02_bpe_cache.py | A1 "optimizing the merging step" (incremental pair-count index); `test_train_bpe_speed` < 1.5 s | **Passes the speed bar: 1.04 s on corpus.en [V]**. Merges differ only through the tie-break [V]. |
+| ch04/02_bpe_cache.py | A1 "optimizing the merging step" (incremental pair-count index); `test_train_bpe_speed` < 1.5 s | **Right at the speed bar**: two recorded sessions under load took 1.27–1.52 s and 0.95–1.11 s on corpus.en (5 runs each; TL;DR 5). The test's docstring quotes 0.38 s for the staff reference on the author's laptop and about 3 s for the toy version [S/V]. Merges differ only through the tie-break [V]. |
 | ch04/03_bpe_chunk.py | A1 `pretokenization_example.py::find_chunk_boundaries` | Essentially the same algorithm: 4 096-byte mini-reads, snapping chunk starts to `<\|endoftext\|>`. |
-| ch04/04_bpe_parallel.py | A1 "parallelizing pre-tokenization" (< 2 min TinyStories hint) | `multiprocessing.Pool`, 8 processes by default. |
+| ch04/04_bpe_parallel.py | A1 "parallelizing pre-tokenization" (< 2 min TinyStories hint) | `multiprocessing.Pool`, 8 processes by default. Only pre-tokenization runs in parallel; as A1 §2.5 puts it, "the merging part of BPE training is not parallelizable in Python". On the full TinyStories train set the book's `04` took 9.4 min wall on this machine under full load (3.2 min pre-tokenization, 6.1 min merging; about 1.5 GiB peak): well inside the 30 min / 30 GB limits, far from the 2-minute hint (tutorial ch04 §4.4). |
 | ch04/06_encode_optimize.py | A1 `Tokenizer.encode` | Rank-based: repeatedly merge the lowest-rank pair. This equals "apply merges in creation order", which L1 calls "only loop over merges that matter". |
 | ch04/07_encode_parallel.py | A1 `encode_iterable` (streaming; 1 MB memory test, Linux only) | DLFS6 takes a different route to the same goal: multiprocess chunk encoding, then disk cache, then a `np.memmap` of uint16. There is no generator API. |
 | ch05/01_rope.py | A1 `run_rope` (`RotaryPositionalEmbedding(theta, d_k, max_seq_len)` plus `token_positions`) | **Numerically identical to CS336's snapshot (3e-7) [V].** Interleaved-pair layout. DLFS6 has no `token_positions` argument; it uses an `offset` in ch05/05. |
@@ -417,7 +418,7 @@ DLFS6 structure (per the publisher's table of contents) [S]:
 
 | Topic | DLFS6 | CS336 | Status / note |
 |---|---|---|---|
-| BPE tie-break | lexicographic on **token-ID** tuple (ch04); dict-first (ch01) | lexicographically greater **bytes** pair | [V] diverges at merge #92 on `corpus.en`; one-line key change gives an exact match |
+| BPE tie-break | lexicographic on **token-ID** tuple (ch04); dict-first (ch01) | lexicographically greater **bytes** pair | [V] diverges at merge #93 (0-based index 92) on `corpus.en`; comparing bytes instead gives an exact match (keep an id → bytes table so the key stays cheap) |
 | Tokenizer API | ID-keyed `merge_rules`; special token id last | bytes-keyed vocab and merges; special tokens anywhere; overlapping specials | [S] |
 | Normalization | CodeBot: LayerNorm (bias); Story/Web: `nn.RMSNorm()` with eps = finfo eps ≈ 1.19e-7 for fp32 | RMSNorm eps 1e-5 **with fp32 upcast** | [V] eps matters at test tolerance (4.6e-4 vs 1.05e-5 logits error) and for tiny activations. Under bf16 autocast the residual stream stays fp32, so the norms see fp32 inputs (V7b, CPU autocast). |
 | Positional encoding | CodeBot learned absolute; Story/Web RoPE θ = 1e4, interleaved pairs | A1 RoPE θ = 1e4, interleaved (snapshot); A3 API θ = 1e6; staff A2 code writes half-split output | [V] all layouts give identical q·k. Weights are not interchangeable across layouts without a permutation. |
@@ -449,10 +450,10 @@ DLFS6 structure (per the publisher's table of contents) [S]:
 
 | ID | Script | Result |
 |---|---|---|
-| V1 | `v1_bpe_tiebreak.py` | DLFS6 `ch04/02_bpe_cache.train_bpe(corpus.en, 500)`: 243 merges, **170 position-identical, first divergence #92** (DLFS6 `(b' c', b'om')` vs reference `(b't', b'h')`), 1.04 s. With the bytes-lexicographic key: **243/243 identical**. |
+| V1 | `v1_bpe_tiebreak.py` | DLFS6 `ch04/02_bpe_cache.train_bpe(corpus.en, 500)`: 243 merges, **170 position-identical, first divergence at merge #93 (0-based index 92)** (DLFS6 `(b' c', b'om')` vs reference `(b't', b'h')`), 1.04 s in this one run. With the bytes-lexicographic key: **243/243 identical**. Later recorded timings: TL;DR 5. A bytes key that rebuilt the byte strings with a function call on every comparison took 1.80–2.48 s and failed the 1.5 s bar; with an id → bytes table it took 0.98–1.11 s, about 10 % more CPU time than the id key (`a1_results.json` `speed_history`; tutorial page cs336, verify X.2-d). |
 | V2 | `v2_adamw_and_misc.py` | (a) DLFS6 AdamW vs torch AdamW, CS336 protocol: max\|Δw\| = **4.77e-6** (passes atol 1e-4). (b) Adam with loss vs loss/512: **1.55e-6**. (c) `nn.RMSNorm(8).eps` is None, i.e. 1.19e-7: on 1e-3-scale inputs it differs from eps = 1e-5 by **1.30**; on unit-scale inputs by **1.3e-5**. (d) tanh-GELU vs erf-GELU: **4.74e-4**. (e) Cosine (CS336 test) vs D2Z at iterations 0,4,…,24: `[0, .571, .989, .745, .355, .111, .1]` vs `[0, .571, .929, .643, .357, .071, 0]`. |
 | V3 | `v3_rope_layout.py` | DLFS6 RoPE vs the CS336 `test_rope.npz` snapshot: **2.98e-7**. The half-split layout differs elementwise by 5.36, but q·k agrees to **5.7e-6**. score(5,2) = score(40,37) = 0.74422, while score(5,3) = 0.89683. |
-| V4 | `v4_models_rl.py` | (a) StoryBot total 22 696 448; embeddings 5.12 M; LM head 5.12 M; blocks 12 455 936; **non-embedding including the LM head = 17 576 448**, CS336's "~17 M". CodeBot 11 121 640 (tied, head bias). Tokens 327 680 000 and 40 960 000. (b) Initial loss 9.353 vs ln 10 000 = 9.210. (c) **DPO(π = π_ref) = 0.693147 = ln 2**. (d) GRPO ratio: train-mode policy vs eval-mode old policy gives mean\|r − 1\| = **0.052**, 0.9 % outside [0.8, 1.2]; eval mode gives 1.0e-5. ε bias: p = 1e-6 → 0.990; **p = 1e-8 → 0.500**. |
+| V4 | `v4_models_rl.py` | (a) StoryBot total 22 696 448; embeddings 5.12 M; LM head 5.12 M; blocks 12 455 936; **non-embedding including the LM head = 17 576 448**, CS336's "~17 M". CodeBot 11 121 640 (tied, head bias). Tokens 327 680 000 and 40 960 000 (the latter is 32 × 5 000 × 256, the handout's low-resource reference run; the budget is 40 000 000). (b) Initial loss 9.353 vs ln 10 000 = 9.210. (c) **DPO(π = π_ref) = 0.693147 = ln 2**. (d) GRPO ratio: train-mode policy vs eval-mode old policy gives mean\|r − 1\| = **0.052**, 0.9 % outside [0.8, 1.2]; eval mode gives 1.0e-5. ε bias: p = 1e-6 → 0.990; **p = 1e-8 → 0.500**. |
 | V5 | `v5_get_batch.py` | DLFS6 `get_batch` under the CS336 protocol: min start 0, **max start 91**, 92 distinct; CS336 expects max 92 and 93 distinct, so the test would fail. |
 | V6 | `v6_storybot_vs_cs336_lm.py` | CS336 fixture weights → DLFS6 StoryBot (key rename only; no missing or unexpected keys). As shipped (`nn.RMSNorm` default eps): max\|Δlogits\| **4.63e-4** (fails). eps = 1e-5: **1.05e-5** full and 9.5e-6 truncated (**passes**). |
 | V7 | `v7_init_and_autocast.py` | Initial loss vs ln V + Var/2: DLFS6 init 9.3074 vs 9.3121; CS336 init 9.2567 vs 9.2578. Under CPU bf16 autocast: Linear gives bf16; fp32-residual + bf16 → fp32; RMSNorm on an fp32 residual gives fp32. finfo eps: bf16 7.8e-3, fp32 1.19e-7. |
@@ -492,6 +493,8 @@ FLOPs ≈ (6·N_nonemb + 6·L·ctx·d)·tokens. Every figure below needs measuri
 | WebBot pretraining | 152.3 M (113.9 M non-embedding) | 13.1 B per GPU at 100 k iterations | ~9.7e18 | ~9 days, not feasible | ~7 h on 1×H100; 8×H100 with max_iters/8 ≈ 1 h |
 | GRPO (CodeBot) | 11.1 M | — | — | Generation-bound: 256 sequential, un-batched, no-KV-cache generations per iteration × 500 iterations. Kernel-launch overhead dominates; batching rollouts is the obvious speedup. | — |
 
+Measured since (`web/data/runs/`, see §11): CodeBot pretraining 41.9 min and GRPO 89.7 min on the 3060 Ti; StoryBot pretraining 16.2 min on an H100; WebBot about 10.4 h on one H100, extrapolated from a 200-step probe (8.8 h of steps plus 101 full evaluations of about 56 s each).
+
 **Platform caveats** [S]:
 - **Triton (A2):** Linux or WSL2. A community `triton-windows` build exists.
 - **vLLM 0.19.1 + flash-attn (A5):** Linux x86_64 with CUDA 12.9 wheels, two GPUs.
@@ -503,7 +506,8 @@ FLOPs ≈ (6·N_nonemb + 6·L·ctx·d)·tokens. Every figure below needs measuri
 ## 10. Suggested tutorial hooks (how to weave CS336 in)
 
 - **Per DLFS6 chapter, add a "CS336 对照" box** with three parts: (1) the CS336 lecture or assignment it corresponds to, (2) one *verifiable* difference (from §7, with our check), and (3) an "if you want to go deeper" link (handout section or lecture trace).
-- **Use CS336's targets as acceptance criteria** for our end-to-end StoryBot: val ≤ 2.00 at 40.96 M tokens (the DLFS6 iteration-5000 checkpoint) and ≤ 1.45 at the full 327.68 M tokens. Report wall time and GPU, like CS336's experiment log.
+- **Use CS336's targets as acceptance criteria** for our end-to-end StoryBot: val ≤ 2.00 on the 40 M-token low-resource budget (the DLFS6 iteration-5000 checkpoint, about 40.97 M tokens, is the closest stand-in) and ≤ 1.45 at the full 327.68 M tokens. Report wall time and GPU, like CS336's experiment log.
+  - Done: on a Modal H100 the unchanged `ch06/05_pretrain.py` reached full-validation loss 1.662 at step 5 000 and 1.304 at the end, in 16 minutes (run `storybot-h100`; tutorial page cs336, verify X.1-b).
 - **Turn the weight-rename experiment (V6) into a page:** "our hand-built model == Stanford's reference, within 1e-5". This is a strong trust anchor. Present it as architectural equivalence, not as assignment solutions.
 - **RL chapter:** present DLFS6's GRPO as the starting point, then show CS336's variant grid as a table of single-switch changes. That covers baseline, normalizer, loss normalization and importance reweighting, plus the dropout and log-space fixes. Each switch gets a tiny in-browser numeric demo (advantages on `[1,0,0,1]`; Lambert's 4-vs-7-token gradient example).
 - **Systems sidebar** for ch8/ch9: CS336 A2's FlashAttention-2 tiling and online softmax (Algorithm 1) as an interactive tile stepper, with an optional Modal GPU trace.
@@ -514,6 +518,8 @@ FLOPs ≈ (6·N_nonemb + 6·L·ctx·d)·tokens. Every figure below needs measuri
 
 - Whether OWT *train* matches byte for byte (4.6 GB download). The validation split matches.
 - Real throughput and wall time of DLFS6 runs on 3060 Ti, H100 or B200. The DLFS6 venv has CPU-only torch, so measure on Modal or with a CUDA build.
+  - Since measured (`web/data/runs/`): CodeBot pretraining 41.9 min on the RTX 3060 Ti (`codebot-3060ti`); StoryBot pretraining 16.2 min on an H100 (`storybot-h100`); WebBot 0.317 s per step on an H100 over a 200-step probe, extrapolated to about 10.4 h for the full run (`webbot-probe`). B200 was not tried.
 - The dropout effect on GRPO ratios was measured with *random* weights. Re-measure with the trained `codebot/model_sft.pt` (downloadable from `koki0702/zero-llm-data`).
+  - Since measured with the trained `model_sft.pt`: on the first update, with identical weights, about half of the response tokens fall outside [0.8, 1.2] (53.9 % in `research/repo-ch03-train-align.md`, 56.9 % in tutorial ch03 verify 3.9-g), far more than the 0.9 % seen with random weights.
 - CUDA-autocast behaviour of `nn.RMSNorm`. Only CPU autocast was checked; type promotion keeps the residual stream in fp32, so the same result is expected.
 - The 2025 YouTube playlist URL was not found on the official site.

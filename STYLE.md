@@ -17,8 +17,18 @@
   直观解释标明是直观（“直观上……，严格的证明见附录 B”）。
 - **术语**：首次出现时 **中文（English）** 加粗，例如 **分词器**（tokenizer）；之后中英择一并保持一致。
   这些词正文直接用英文：token、BPE、Transformer、Attention、softmax、logits、embedding、LayerNorm、RMSNorm、
-  RoPE、SwiGLU、GELU、KV cache、SFT、RLHF、GRPO、PPO、DPO、AdamW、batch、epoch、checkpoint。
+  RoPE、SwiGLU、GELU、KV cache、SFT、RLHF、GRPO、PPO、DPO、AdamW、batch、epoch、checkpoint、warmup。
   译名用常用译法（智能体、回报、折扣因子、策略梯度），首次出现时可注明《深度学习入门4》的译法。
+- **统一用词**（用于正文、标题、图注和验证单元的标题；代码、代码清单、URL、标识符和对原书或论文的引文保持原样）：
+  - BPE 的并列取舍叫**平票**、**平票规则**（第 1 章专栏的定义），不叫“平局”。第 6 章偏好数据里的平局（打平、舍入）是另一回事。
+  - 模型的存档叫 checkpoint（“三个 checkpoint，三种回答”），不叫“检查点”。第 9 章的梯度检查点（activation checkpointing）是另一个概念，沿用第 9 章的写法。
+  - GRPO 的迭代按“轮”计数（“第 51 轮”）：一轮是一次生成加两次优化器更新，tqdm 显示的 it=k 就是第 k 轮。优化器的更新、预训练和 SFT 的迭代仍然叫“步”。
+  - 词嵌入写作 token embedding（第 2 章首次出现时写 **词嵌入**（token embedding）），位置嵌入写作位置 embedding，嵌入层写作 embedding 层。输出端的投影叫输出层（代码里是 `unembed`），不叫“反嵌入”。
+  - warmup 直接写英文（代码里是 `warmup_iters`）；第 6 章首次出现时写 **学习率预热**（warmup）。
+  - Attention 首字母大写。Flash Attention 指这项技术和 8.2 节（官方目录的写法）；FlashAttention、FlashAttention-2/-3 只在指论文或库时使用。
+  - Bradley-Terry 用 ASCII 连字符（官方目录 6.7.2 和 DPO 论文的写法），不用 en dash。
+  - greedy decoding 译作**贪心解码**，首次出现时加粗并注明（greedy decoding）；“greedy 生成”写作“贪心生成”。标识符不变。
+  - 术语表的“中文”一栏：正文里写英文的术语（上面的列表，以及 FFN、GQA、MoE、RoPE、KV cache 等）写成“English（中文）”，例如 Attention（注意力）、KV cache（KV 缓存）、LLM-as-a-Judge（LLM 评审）。
 - **路标**：“下面”“接下来”“首先……然后……最后”串起步骤；小节以“以上就是……”或一句承上启下的话收尾。
 - **节奏**：每 2–3 段至少有一个可运行或可看的东西（代码清单、验证单元、交互图、表格）。
 - **幽默**：干而轻，点到即止；推导时不开玩笑。
@@ -135,3 +145,6 @@ CS336 的要求、DLFS6 的差异以及差异带来的后果。所有关于 CS33
 - 隐藏 GPU 用 `CUDA_VISIBLE_DEVICES=-1`；Windows 会丢掉空字符串的环境变量，`""` 不起作用。
 - `localcheck` 默认标签是“本地验证”；需要特定依赖时写 `needs=PyTorch`（或 `needs=tiktoken`），标签会显示“本地验证（需要 PyTorch）”。
 - 全站构建会检查每一个站内链接（页面与 `#锚点` 都必须存在），改动节标题编号前先搜索引用它的地方。
+  没有编号的标题，锚点由标题文字的哈希生成（`h-` 加 8 位），改字也会改锚点。
+- 验证单元的 id 一旦被其他页面链接，就保持不变：新增的单元用新字母，不要给已有的单元重新编号。
+- Edit/Write 工具会把参数里的 `\uXXXX` 转义变成字面字符。JS 里需要转义时写 `\u{XXXX}`，或者在代码里用 `String.fromCodePoint` 构造。

@@ -11,7 +11,7 @@ pyodide_packages: [numpy]
 
 从这里开始，我们制作第一台机器人 **CodeBot**。它只有 1,112 万个参数，训练数据是 6.5 MB 的 Python 小程序，但它已经具备了 LLM 的全部要素：能续写代码，能按对话模板回答问题，还用强化学习专门练过个位数加法。
 
-先来看结果。下面是原书作者在 Hugging Face 上发布的三个 CodeBot checkpoint 的真实回答，由本书在 CPU 上重新生成。我们用的是贪心解码，也就是每一步都取概率最大的 token，所以在同样的环境下重跑，会得到同样的回答。可以在三个训练阶段之间切换。
+先来看结果。下面是原书作者在 Hugging Face 上发布的三个 CodeBot checkpoint 的真实回答，由本书在 CPU 上重新生成。我们用的是**贪心解码**（greedy decoding），也就是每一步都取概率最大的 token，所以在同样的环境下重跑，会得到同样的回答。可以在三个训练阶段之间切换。
 
 ```widget part1-chat caption="CodeBot 在三个阶段的回答。只做了预训练的模型不会接话；SFT 之后会打招呼、会写代码；强化学习之后，寒暄和代码几乎不变。"
 {"model": "grpo"}
@@ -229,7 +229,12 @@ assert (full, rest) == (34, 4) and sum(sizes) == 15_608 and round(sum(sizes) / l
 ```listing ch03/09_grpo.py#L64-L72
 ```
 
-这个算法叫 **GRPO**（Group Relative Policy Optimization），“组”指的就是同一道题的 8 个回答。题目的取法和 SFT 一样：81 道题被切成 32、32、17 道的三个 batch，轮流使用，所以每三步里有两步是 256 个回答，一步只有 136 个。一共训练 500 步。结果如下，格子里是模型对 $i + j$ 的回答（行是 $i$，列是 $j$）：
+这个算法叫 **GRPO**（Group Relative Policy Optimization），“组”指的就是同一道题的 8 个回答。训练按“轮”进行：每一轮先为一个 batch 的题目生成回答，再用这批回答更新两次参数，一共 500 轮。超参数写在脚本里：
+
+```listing ch03/09_grpo.py#L138-L145
+```
+
+题目的取法和 SFT 一样：81 道题被切成 32、32、17 道的三个 batch，循环使用，所以每三轮里有两轮是 256 个回答，一轮只有 136 个。结果如下，格子里是模型对 $i + j$ 的回答（行是 $i$，列是 $j$）：
 
 ```widget part1-arith caption="强化学习把加法的正确数从 44 道提高到 67 道：修好了 29 道，也弄坏了 6 道。"
 {"mode": "diff"}
@@ -255,10 +260,10 @@ assert (len(fixed), len(broke)) == (29, 6) and "7+8" not in correct["grpo"]
 
 强化学习之后，正确率从 54.3% 升到了 82.7%。不过这个进步不是单向的：有 6 道原来答对的题反而答错了，`7+8` 在两个官方 checkpoint 上都答错。
 
-这还不是 GRPO 的上限。本书在本机的 RTX 3060 Ti 上原样重跑了原书的强化学习脚本（运行记录 codebot-3060ti），500 步后是 86.4%。原书脚本在每轮更新时，让模型停在开着 dropout 的训练模式，而用来对比的旧模型是关着 dropout 的。我们只在更新之前加了一行 `model.eval()`，让两边都关掉 dropout，从同一次运行的 SFT checkpoint 出发重跑（运行记录 codebot-grpo-evalfix-3060ti）：51 步就到了 98.8%，从第 131 步起 81 道全对。
+这还不是 GRPO 的上限。本书在本机的 RTX 3060 Ti 上原样重跑了原书的强化学习脚本（运行记录 codebot-3060ti），500 轮后是 86.4%。原书脚本在每轮更新时，让模型停在开着 dropout 的训练模式，而用来对比的旧模型是关着 dropout 的。我们只在更新之前加了一行 `model.eval()`，让两边都关掉 dropout，从同一次运行的 SFT checkpoint 出发重跑（运行记录 codebot-grpo-evalfix-3060ti）：第 51 轮就到了 98.8%，从第 131 轮起 81 道全对。
 
-```verify id=I.4-b title="运行记录：更新前加一行 model.eval()，第 51 步的正确率从 60.5% 变成 98.8%" files=data/runs/codebot-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/report.json
-def grpo_acc(run):                                # 进度条上的 acc：每 10 步在这 81 道题上贪心解码测一次
+```verify id=I.4-b title="运行记录：更新前加一行 model.eval()，第 51 轮的正确率从 60.5% 变成 98.8%" files=data/runs/codebot-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/report.json
+def grpo_acc(run):                                # 进度条上的 acc：每 10 轮在这 81 道题上贪心解码测一次
     with open(f"data/runs/{run}/09_grpo.metrics.jsonl", encoding="utf-8") as f:
         return {r["it"]: r["acc"] for r in map(json.loads, f)}
 
@@ -267,22 +272,22 @@ fix = json.load(open("data/runs/codebot-grpo-evalfix-3060ti/report.json", encodi
 print("唯一的改动：", fix["steps"][0]["patches"][0]["new"].splitlines()[0].strip())
 print("起点：", fix["seeded"][0]["path"], "取自", fix["seeded"][0]["from"])
 for it in (51, 131, 500):
-    print(f"第 {it:3d} 步：原样 {as_is[it]:5.1f}%   加 model.eval() {fixed[it]:5.1f}%")
+    print(f"第 {it:3d} 轮：原样 {as_is[it]:5.1f}%   加 model.eval() {fixed[it]:5.1f}%")
 first_full = min(it for it, acc in fixed.items() if acc == 100.0)
-print(f"加 model.eval() 后，第一次 81 道全对是第 {first_full} 步")
+print(f"加 model.eval() 后，第一次 81 道全对是第 {first_full} 轮")
 assert len(fix["steps"][0]["patches"]) == 1 and fix["steps"][0]["patches"][0]["new"].lstrip().startswith("model.eval()")
 assert (as_is[51], as_is[500]) == (60.5, 86.4) and (fixed[51], fixed[500]) == (98.8, 100.0) and first_full == 131
-assert all(acc == 100.0 for it, acc in fixed.items() if it >= first_full)   # 从第 131 步起每次都是 81 道全对
+assert all(acc == 100.0 for it, acc in fixed.items() if it >= first_full)   # 从第 131 轮起每次都是 81 道全对
 ```
 
 为什么一行代码差这么多？组内 8 个回答全对或全错的题为什么学不到东西，训练时显示的 loss 为什么不能当进度条看？[3.9 节](ch03.html#s3-9)会细说。
 
 ::: warn 这 81 道题既是训练题，也是考试题
-原书的 GRPO 脚本每 10 步测一次准确率，用的正是训练时的这 81 道题（上图也是）。所以 82.7% 是训练集上的成绩，不能说明模型学会了“加法”这件事本身；100% 也只说明它把这 81 道题练熟了。对于一个只有 81 道题、可以穷举的玩具任务，这样做可以理解；但读论文或自己做实验时，要分清“训练中看到的分数”和“在留出数据上的评测”。
+原书的 GRPO 脚本每 10 轮测一次准确率，用的正是训练时的这 81 道题（上图也是）。所以 82.7% 是训练集上的成绩，不能说明模型学会了“加法”这件事本身；100% 也只说明它把这 81 道题练熟了。对于一个只有 81 道题、可以穷举的玩具任务，这样做可以理解；但读论文或自己做实验时，要分清“训练中看到的分数”和“在留出数据上的评测”。
 :::
 
 ::: cs336 CS336 A5 的 GRPO 是同一个形状
-CS336 的作业 A5（2026 年版）用 GRPO 训练 OLMo-2 1B 做 GSM8K 数学题，默认每步 32 道题、每题 8 个回答，共 256 个回答。原书 CodeBot 名义上也是 32 × 8 = 256（实际每三步有一步只有 17 道题）。两边的做法逐项对照如下：
+CS336 的作业 A5（2026 年版）用 GRPO 训练 OLMo-2 1B 做 GSM8K 数学题，默认每轮 32 道题、每题 8 个回答，共 256 个回答。原书 CodeBot 名义上也是 32 × 8 = 256（实际每三轮有一轮只有 17 道题）。两边的做法逐项对照如下：
 
 | | 原书 CodeBot | A5 的标准 GRPO | A5 的 Dr. GRPO |
 |---|---|---|---|
@@ -305,6 +310,6 @@ CodeBot 是全书的基本功。它的数据只有 6.5 MB，模型只有 1,112 �
 - 九成程序不超过上下文长度 256 个 token，但训练窗口是从首尾相连的语料里任意截取的，平均跨过两个多程序边界；预训练把 267.7 万 token 的语料看了 61 遍（[验证 I.2-c](#v-I.2-c)、[验证 I.2-d](#v-I.2-d)）。
 - 只做预训练的模型会续写代码，却不会接话；SFT 数据有 1,092 条，最后 81 条正是 1+1= 到 9+9=；500 步共读 15,608 条，约 14.3 遍（[验证 I.3-a](#v-I.3-a)、[验证 I.3-b](#v-I.3-b)）。
 - 强化学习把加法的正确数从 44 提高到 67，修好 29 道、弄坏 6 道，而且是在训练题上测的（[验证 I.4-a](#v-I.4-a)）。
-- 原书脚本更新时开着 dropout；加一行 `model.eval()` 重跑，第 51 步的正确率从 60.5% 变成 98.8%，第 131 步起 81 道全对（[验证 I.4-b](#v-I.4-b)）。
+- 原书脚本更新时开着 dropout；加一行 `model.eval()` 重跑，第 51 轮的正确率从 60.5% 变成 98.8%，第 131 轮起 81 道全对（[验证 I.4-b](#v-I.4-b)）。
 
 下一章，我们从最朴素的问题出发：一段文字，怎样变成一串整数？

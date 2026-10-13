@@ -9,7 +9,7 @@ lede: 把原书仓库的脚本逐个跑过、拆开来测之后，我们整理�
 pyodide_packages: [numpy, regex]
 ---
 
-写这个教程的过程中，我们把 DLFS6 仓库（固定在 commit `c9b6e2e`）里的脚本逐个跑了一遍，把关键函数一个个拿出来单独测试，还拿斯坦福 CS336 的公开测试去对照了一遍。绝大多数代码都经得起这样的折腾，但也碰到了一些问题：有的会让第 3 章 GRPO 的准确率在前 200 次迭代里低 20 到 40 个百分点，有的会让第 6 章的脚本在某种用法下根本跑不起来，更多的是注释过期、边界情况没有处理之类的小毛病。
+写这个教程的过程中，我们把 DLFS6 仓库（固定在 commit `c9b6e2e`）里的脚本逐个跑了一遍，把关键函数一个个拿出来单独测试，还拿斯坦福 CS336 的公开测试去对照了一遍。绝大多数代码都经得起这样的折腾，但也碰到了一些问题：有的会让第 3 章 GRPO 的准确率在前 200 轮里低 20 到 40 个百分点，有的会让第 6 章的脚本在某种用法下根本跑不起来，更多的是注释过期、边界情况没有处理之类的小毛病。
 
 “逐个跑了一遍”要说清楚范围。规模大的、或者要花钱调用 API 的脚本，我们没有全部原样跑完。下表是每一类脚本实际的运行方式：
 
@@ -19,7 +19,7 @@ pyodide_packages: [numpy, regex]
 | 第 6 章的预训练、生成、DPO | Modal 的一张 H100，原样跑完（运行记录 storybot-h100） |
 | 第 4 章的 BPE 训练与编码 | 在 TinyStories 的切片和完整的验证集上运行，产物与官方文件逐字节相同；2.2 GB 的完整训练集没有跑 |
 | 第 7 章的 BPE 训练与编码 | 换成 OWT 验证集的前 30 MiB |
-| 第 6 章的两个 LLM 评审脚本 | 用离线的模拟评审打通流程，没有调用付费的 API |
+| 第 6 章的两个 LLM-as-a-Judge 脚本 | 用离线的模拟评审打通流程，没有调用付费的 API |
 | `ch09/01_pretrain.py` | 在 H100 上只跑了 200 步的计时探针（运行记录 webbot-probe） |
 | `ch09/02_generate.py` | 没有发布的 WebBot 权重（[E48](#e48)），只用一个训练了 30 步的小模型跑通代码 |
 | 其余脚本 | 本机 CPU，原样运行（交互式的 `ch03/04_chat.py` 改成从标准输入读） |
@@ -56,7 +56,7 @@ pyodide_packages: [numpy, regex]
 | [E12](#e12) | 中 | 否（无法运行） | 第 4.5 节用到的 ch04/05_eval.py 不在仓库里 | ch04/ |
 | [E13](#e13) | 低 | 否 | `get_batch` 永远采不到最后一个窗口 | ch06/05、ch09/01 |
 | [E14](#e14) | 低 | 几乎没有 | `evaluate` 少算最后一个完整窗口 | ch06/05、ch09/01 |
-| [E15](#e15) | 低 | 否（曲线缺了起点） | GRPO 的第 0 次准确率是两次更新之后测的 | ch03/09_grpo.py |
+| [E15](#e15) | 低 | 否（曲线缺了起点） | GRPO 的第 0 轮准确率是两次更新之后测的 | ch03/09_grpo.py |
 | [E16](#e16) | 低 | 否 | ratio 在概率空间计算，极小概率时有偏 | ch03/09_grpo.py |
 | [E17](#e17) | 低 | 否 | 两套 RMSNorm 的 eps 不一致 | ch05/03；storybot、webbot |
 | [E18](#e18) | 低 | 否 | CodeBot 实际用的是 erf 版 GELU 和 `nn.LayerNorm` | codebot/model.py |
@@ -72,7 +72,7 @@ pyodide_packages: [numpy, regex]
 | [E28](#e28) | 低 | 否 | `measure_generation_time` 清缓存的条件写反了 | ch05/05_kvcache.py |
 | [E29](#e29) | 低 | 仅中文 Windows | 读文本不指定编码，中文 Windows 上静默乱码 | ch01/07–09；ch03/03_alpaca、03_sft；ch04/01、02、06；ch06/08 |
 | [E30](#e30) | 低 | 否 | 软字典的 softmax 没有减去最大值 | ch02/01_soft_dict.py |
-| [E31](#e31) | 低 | 否 | RoPE 的 cos/sin 表存进了每一层的检查点 | storybot、webbot 的 model.py |
+| [E31](#e31) | 低 | 否 | RoPE 的 cos/sin 表在 checkpoint 里每层各存一份 | storybot、webbot 的 model.py |
 | [E32](#e32) | 低 | 否 | GRPO 评估时把“提示 + 回答”整段交给奖励函数 | ch03/09_grpo.py |
 | [E33](#e33) | 低 | 否 | 用 pickle 保存与读取分词规则 | codebot、storybot 的 tokenizer.py |
 | [E34](#e34) | 低 | 否 | 注释里的 id 930 应为 932 | ch03/03_alpaca.py |
@@ -144,13 +144,13 @@ assert s["totals"] == {"exact": 30, "repr": 3, "defaultdict": 1, "torch.Size": 3
 ```localcheck verify/test_reference.py::test_e01_grpo_policy_updates_in_train_mode needs="PyTorch" title="作者发布的 SFT 权重：训练模式下约一半的 ratio 超出裁剪区间，eval 模式下全部等于 1"
 ```
 
-那么，这对训练结果有多大影响呢？我们在本机的 RTX 3060 Ti 上把原书的 `09_grpo.py` 原样跑满 500 次迭代（运行记录 codebot-3060ti，用时 1 小时 29 分）；再从这次运行训练出的 SFT 检查点出发，只在更新循环之前加一行 `model.eval()`，又跑了一遍（运行记录 codebot-grpo-evalfix-3060ti，用时 1 小时 16 分）。下图默认显示这两次运行的 greedy 准确率（81 道题，每 10 次迭代测一次）。
+那么，这对训练结果有多大影响呢？我们在本机的 RTX 3060 Ti 上把原书的 `09_grpo.py` 原样跑满 500 轮（运行记录 codebot-3060ti，用时 1 小时 29 分）；再从这次运行训练出的 SFT checkpoint 出发，只在更新循环之前加一行 `model.eval()`，又跑了一遍（运行记录 codebot-grpo-evalfix-3060ti，用时 1 小时 16 分）。下图默认显示这两次运行贪心解码的准确率（81 道题，每 10 轮测一次）。
 
-```widget errata-grpo caption="同一个 SFT 起点，唯一的差别是更新前是否调用 model.eval()。关掉 dropout 后，51 次迭代就到了 98.8%，第 131 次起一直是 100%；原样运行跑满 500 次，停在 86.4%。另外两个选项是研究阶段在 CPU 上的对照，方向相同。"
+```widget errata-grpo caption="同一个 SFT 起点，唯一的差别是更新前是否调用 model.eval()。关掉 dropout 后，51 轮就到了 98.8%，第 131 轮起一直是 100%；原样运行跑满 500 轮，停在 86.4%。另外两个选项是研究阶段在 CPU 上的对照，方向相同。"
 {"runs": {"base": "data/runs/codebot-3060ti/09_grpo.metrics.jsonl", "fix": "data/runs/codebot-grpo-evalfix-3060ti/09_grpo.metrics.jsonl"}, "data": "data/errata/grpo_dropout_runs.json"}
 ```
 
-```verify id=Z.3-a title="书中脚本跑满 500 次：第 51 次迭代 60.5% 对 98.8%，最终 86.4% 对 100%" files=data/runs/codebot-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-3060ti/report.json,data/runs/codebot-grpo-evalfix-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/report.json
+```verify id=Z.3-a title="书中脚本跑满 500 轮：第 51 轮 60.5% 对 98.8%，最终 86.4% 对 100%" files=data/runs/codebot-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-3060ti/report.json,data/runs/codebot-grpo-evalfix-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/report.json
 import json
 
 def grpo_run(run_id):
@@ -181,12 +181,12 @@ assert first100 == 131 and all(fix[i] == 100.0 for i in fix if i >= first100)
 assert 20 < min(gaps) and max(gaps) < 40 and round(fix[500] - base[500], 1) == 13.6
 ```
 
-第 51 次迭代后的评估，原样运行是 60.5%，加了 `eval()` 的是 98.8%。加了 `eval()` 的从第 131 次迭代起一直是 100%；原样运行跑满 500 次，停在 86.4%。在第 21 到第 201 次迭代之间，两者的差距是 21 到 38 个百分点，到最后还差 13.6 个百分点。把两次运行最后保存的 `model_grpo.pt` 拿到 CPU 上重测，得到的也是 86.4% 与 100%：
+第 51 轮后的评估，原样运行是 60.5%，加了 `eval()` 的是 98.8%。加了 `eval()` 的从第 131 轮起一直是 100%；原样运行跑满 500 轮，停在 86.4%。在第 21 到第 201 轮之间，两者的差距是 21 到 38 个百分点，到最后还差 13.6 个百分点。把两次运行最后保存的 `model_grpo.pt` 拿到 CPU 上重测，得到的也是 86.4% 与 100%：
 
-```localcheck verify/test_reference.py::test_e01_recorded_grpo_checkpoints_on_cpu needs="PyTorch" title="本机的两份 GRPO 检查点在 CPU 上重测：70/81 与 81/81，回答里都没有两个以上的整数；共同的 SFT 起点是 44/81，sha256 与记录一致"
+```localcheck verify/test_reference.py::test_e01_recorded_grpo_checkpoints_on_cpu needs="PyTorch" title="本机的两个 GRPO checkpoint 在 CPU 上重测：70/81 与 81/81，回答里都没有两个以上的整数；共同的 SFT 起点是 44/81，sha256 与记录一致"
 ```
 
-需要说明的是，两种设置各只跑了一次，而且脚本本身没有设随机种子（[E43](#e43)），具体的数字会随运行而变。研究阶段我们在 CPU 上做过同样的对照：批量采样版的 GRPO（算法和超参数都与原脚本相同），两个 seed 各跑 40–60 次迭代，从作者发布的 SFT 权重出发。方向是一致的，上图可以切换查看：
+需要说明的是，两种设置各只跑了一次，而且脚本本身没有设随机种子（[E43](#e43)），具体的数字会随运行而变。研究阶段我们在 CPU 上做过同样的对照：批量采样版的 GRPO（算法和超参数都与原脚本相同），两个 seed 各跑 40–60 轮，从作者发布的 SFT 权重出发。方向是一致的，上图可以切换查看：
 
 ```verify id=Z.3-b title="研究阶段的 CPU 对照：两个 seed，关掉 dropout 都提高了 20 个百分点以上" files=data/errata/grpo_dropout_runs.json
 runs = json.load(open("data/errata/grpo_dropout_runs.json", encoding="utf-8"))["runs"]
@@ -217,9 +217,9 @@ for seed, (a, b) in {0: ("base", "nodrop"), 1: ("base_s1", "nodrop_s1")}.items()
 
 ### E02 HF 上的 StoryBot 权重用 `mlp`，代码用 `ffn`
 
-先说清楚什么时候会遇到它。第 6 章的生成、评估和 DPO 默认加载的是 `ch06/05_pretrain.py` 自己训练、自己保存的检查点，它们用的是现在的键名，不受影响。我们在 H100 上原样运行 05 → 06 → 08，三个脚本都顺利结束：
+先说清楚什么时候会遇到它。第 6 章的生成、评估和 DPO 默认加载的是 `ch06/05_pretrain.py` 自己训练、自己保存的 checkpoint，它们用的是现在的键名，不受影响。我们在 H100 上原样运行 05 → 06 → 08，三个脚本都顺利结束：
 
-```verify id=Z.4-a title="按书自己训练：05 存下三个检查点，06、08 原样读取，都正常结束" files=data/runs/storybot-h100/report.json
+```verify id=Z.4-a title="按书自己训练：05 存下三个 checkpoint，06、08 原样读取，都正常结束" files=data/runs/storybot-h100/report.json
 import json
 
 story = json.load(open("data/runs/storybot-h100/report.json", encoding="utf-8"))
@@ -240,7 +240,7 @@ assert {"storybot/model_pretrain.pt", "storybot/model_iter_500.pt",
 
 结果是，用下载来的权重运行 `ch06/06_generate.py`、`07_llm_judge.py`、`08_dpo.py`、`09_llm_judge.py`，都会在 `load_state_dict` 报出 `Missing key(s) "blocks.0.ffn.W.weight" … Unexpected key(s) "blocks.0.mlp.W.weight"`。WebBot 的 `webbot/model.py` 仍然叫 `mlp`，两份代码之间也不一致。
 
-```localcheck verify/test_reference.py::test_e02_hf_storybot_checkpoints_use_mlp_keys needs="PyTorch" title="三个发布的检查点都用 mlp，download.sh 里下载它们的几行都被注释掉了；改了 load_from 的那一行之后可以严格加载"
+```localcheck verify/test_reference.py::test_e02_hf_storybot_checkpoints_use_mlp_keys needs="PyTorch" title="三个发布的 checkpoint 都用 mlp，download.sh 里下载它们的几行都被注释掉了；改了 load_from 的那一行之后可以严格加载"
 ```
 
 **修法**：加载时把键名改回来。`GPT.load_from` 的最后几行是这样的：
@@ -270,7 +270,7 @@ assert {"storybot/model_pretrain.pt", "storybot/model_iter_500.pt",
 ```listing storybot/tokenizer.py#L99-L117
 ```
 
-`\r\n` 在代码语料里每行都出现一次，自然是最常见的字节对之一，于是 BPE 很早就会把它学成一个 token。我们先用一个十几行的小 BPE（与第 4 章同样的预分词正则、同样的平局规则）在一段代码上演示：
+`\r\n` 在代码语料里每行都出现一次，自然是最常见的字节对之一，于是 BPE 很早就会把它学成一个 token。我们先用一个十几行的小 BPE（与第 4 章同样的预分词正则、同样的平票规则）在一段代码上演示：
 
 ```verify id=Z.4-b title="同一段代码，换行写成 \r\n 后，前几条 merge 里就出现了 b'\r\n'"
 import regex
@@ -437,7 +437,7 @@ batch_bytes = 2 * 32 * 256 * 8             # 预训练一个 batch 的 x 与 y�
 print(f"预训练 20,000 步，cycle 存下的 batch 共 {20_000 * batch_bytes / 2**30:.2f} GiB")
 ```
 
-影响因脚本而异。SFT 的 1,092 条样本每轮分成 35 个 batch，500 步约是 14.3 轮；DPO 的 144 对每轮 18 个 batch，1,000 步约是 55.6 轮；GRPO 的 81 道题每轮分成 32、32、17 三批，500 次迭代约是 167 轮。这三个脚本从第二轮起，每个 batch 的组成和顺序都固定不变。预训练反而不会重放：20,000 步只取了 640,000 个窗口，还不到一轮（共 2,677,142 个窗口）；但 `cycle` 会把这 20,000 个 batch 都留在内存里，多占约 2.4 GiB。
+影响因脚本而异。SFT 的 1,092 条样本每轮分成 35 个 batch，500 步约是 14.3 轮；DPO 的 144 对每轮 18 个 batch，1,000 步约是 55.6 轮；GRPO 的 81 道题每轮分成 32、32、17 三批，脚本一共取 500 批，约是 167 轮。这三个脚本从第二轮起，每个 batch 的组成和顺序都固定不变。预训练反而不会重放：20,000 步只取了 640,000 个窗口，还不到一轮（共 2,677,142 个窗口）；但 `cycle` 会把这 20,000 个 batch 都留在内存里，多占约 2.4 GiB。
 
 ```localcheck verify/test_reference.py::test_e07_cycle_dataloader_replays_first_epoch_and_keeps_batches needs="PyTorch" title="真实的 DataLoader：第二轮的 batch 与第一轮是同一批对象"
 ```
@@ -505,7 +505,7 @@ assert calculate_reward(7, "7") == 1.0 and calculate_reward(7, "7 8") == 0.0
 
 **修法**：只捕获预期的异常，比如 `except ValueError:`（`int()` 解析失败时抛出的就是它），让编程错误照常报出来。
 
-顺便说一句，“最后一个整数”这个规则本身也可以被钻空子：回答 `'8 7'` 会得 1 分，`'7.0'` 却得 0 分。本书两次 GPU 运行训练出的模型没有学会这一招：对 81 道题的 greedy 回答，没有一个含两个以上的整数（原样运行的模型对 `3+3=` 答了一个空串，其余都是一个数；E01 里那个本地验证同时检查了这一点，温度为 1 的采样我们没有统计）。设计奖励函数时，还是值得留心。
+顺便说一句，“最后一个整数”这个规则本身也可以被钻空子：回答 `'8 7'` 会得 1 分，`'7.0'` 却得 0 分。本书两次 GPU 运行训练出的模型没有学会这一招：对 81 道题贪心解码的回答，没有一个含两个以上的整数（原样运行的模型对 `3+3=` 答了一个空串，其余都是一个数；E01 里那个本地验证同时检查了这一点，温度为 1 的采样我们没有统计）。设计奖励函数时，还是值得留心。
 
 <div id="e10"></div>
 
@@ -658,11 +658,11 @@ assert kept(513).tolist() == [0] and kept(514).tolist() == [0, 256]
 
 <div id="e15"></div>
 
-### E15 GRPO 的第 0 次准确率是两次更新之后测的
+### E15 GRPO 的第 0 轮准确率是两次更新之后测的
 
-GRPO 的训练循环里，评估写在两次更新之后（见 [E01](#e01) 中的代码），所以 `accuracies` 的第一个值并不是 SFT 模型的起点，而是已经更新过两次的模型。本书的两次 GPU 运行恰好能说明这一点：它们从同一个 SFT 检查点出发（sha256 相同），记下的“第 0 次”准确率却一个是 53.1%，一个是 56.8%。如果这真是起点，两个数应该相同。
+GRPO 的训练循环里，评估写在两次更新之后（见 [E01](#e01) 中的代码），所以 `accuracies` 的第一个值并不是 SFT 模型的起点，而是已经更新过两次的模型。本书的两次 GPU 运行恰好能说明这一点：它们从同一个 SFT checkpoint 出发（sha256 相同），记下的“第 0 轮”准确率却一个是 53.1%，一个是 56.8%。如果这真是起点，两个数应该相同。
 
-```verify id=Z.5-c title="同一个 SFT 起点，两次运行记下的“第 0 次”却不同：53.1% 与 56.8%" files=data/runs/codebot-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/09_grpo.metrics.jsonl
+```verify id=Z.5-c title="同一个 SFT 起点，两次运行记下的“第 0 轮”却不同：53.1% 与 56.8%" files=data/runs/codebot-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/09_grpo.metrics.jsonl
 import json
 
 first = {}
@@ -674,15 +674,15 @@ print(f"SFT 起点（本地验证）：44 / 81 = {100 * 44 / 81:.1f}%")
 assert first == {"codebot-3060ti": 53.1, "codebot-grpo-evalfix-3060ti": 56.8}
 ```
 
-这个 SFT 检查点本身在 CPU 上 greedy 答对 81 道题里的 44 道，即 54.3%（作者发布的 `model_sft.pt` 恰好也是 44 道）。研究阶段批量采样版的记录也一样：seed 0 记下的“第 0 次”是 55.6%，而它的起点是作者发布的 SFT 权重，54.3%。
+这个 SFT checkpoint 本身在 CPU 上贪心解码答对 81 道题里的 44 道，即 54.3%（作者发布的 `model_sft.pt` 恰好也是 44 道）。研究阶段批量采样版的记录也一样：seed 0 记下的“第 0 轮”是 55.6%，而它的起点是作者发布的 SFT 权重，54.3%。
 
-```localcheck verify/test_reference.py::test_e15_sft_greedy_baseline_is_44_of_81 needs="PyTorch" title="作者发布的 SFT 权重：81 道题 greedy 答对 44 道"
+```localcheck verify/test_reference.py::test_e15_sft_greedy_baseline_is_44_of_81 needs="PyTorch" title="作者发布的 SFT 权重：81 道题贪心解码答对 44 道"
 ```
 
 ```localcheck verify/test_reference.py::test_e15_grpo_logs_accuracy_after_the_updates title="语法树：评估块排在更新循环之后；画图时第 k 个点放在 10k 处"
 ```
 
-作图时，脚本把第 k 个准确率画在横坐标 10k 处（`steps = list(range(0, len(accuracies) * eval_interval, eval_interval))`），而它其实是第 10k+1 次迭代之后测的。也就是说，每个点都比它的横坐标晚一次迭代：整条曲线向左偏了 1 次迭代（不是一个评估间隔），真正的起点没有画出来。本页 E01 的图把点画在“已完成的迭代次数”处，并用虚线标出 SFT 的起点。
+作图时，脚本把第 k 个准确率画在横坐标 10k 处（`steps = list(range(0, len(accuracies) * eval_interval, eval_interval))`），而它其实是第 10k+1 轮之后测的。也就是说，每个点都比它的横坐标晚一轮：整条曲线向左偏了 1 轮（不是一个评估间隔），真正的起点没有画出来。本页 E01 的图按已完成的轮数画点，并用虚线标出 SFT 的起点。
 
 **修法**：在训练循环之前先测一次准确率作为第 0 个点，循环里改成在 `i + 1` 是 `eval_interval` 的倍数时评估。
 
@@ -785,7 +785,7 @@ assert 4.7e-4 < d.max() < 4.8e-4
 
 ### E21 GRPO 生成不设长度上限，而 CodeBot 只有 256 个位置
 
-`generate_group` 调用 `generate()` 时没有传 `max_new_tokens`，用的是默认值 1000。生成本身不会出错，因为 `generate()` 每步只看最近的 256 个 token；但更新时 `compute_probs` 要把“提示 + 回答”整段送进模型，而 CodeBot 的位置嵌入只有 256 个。提示 22 个 token，回答只要超过 234 个 token，就会触发 `IndexError`。
+`generate_group` 调用 `generate()` 时没有传 `max_new_tokens`，用的是默认值 1000。生成本身不会出错，因为 `generate()` 每步只看最近的 256 个 token；但更新时 `compute_probs` 要把“提示 + 回答”整段送进模型，而 CodeBot 的位置 embedding 只有 256 个。提示 22 个 token，回答只要超过 234 个 token，就会触发 `IndexError`。
 
 ```localcheck verify/test_reference.py::test_e21_grpo_has_no_length_cap_but_codebot_has_256_positions needs="PyTorch" title="默认 max_new_tokens=1000；超过 256 个 token 的批次让 compute_probs 报 IndexError；SFT 模型答一个数就结束的概率最低 97.6%"
 ```
@@ -971,9 +971,9 @@ assert np.isnan(naive).all() and np.allclose(stable, [0.5, 0.5])
 
 <div id="e31"></div>
 
-### E31 RoPE 的 cos/sin 表存进了每一层的检查点
+### E31 RoPE 的 cos/sin 表在 checkpoint 里每层各存一份
 
-RoPE 预先算好的 cos、sin 表是用 `register_buffer` 注册的，默认会写进 `state_dict`。所有 Transformer 块（StoryBot 4 个、WebBot 12 个）共用一个 RoPE 模块，表却在每一层的键下各存一份：StoryBot 的 `state_dict` 里有 8 张这样的表，WebBot 有 24 张。这些表完全由 θ 和 `max_context_len` 算出，本不需要保存；保存下来反而带来一个限制：想换一个更长的 `max_context_len`（比如第 8 章的上下文扩展），用原来的检查点加载会因为形状不同而报错。
+RoPE 预先算好的 cos、sin 表是用 `register_buffer` 注册的，默认会写进 `state_dict`。所有 Transformer 块（StoryBot 4 个、WebBot 12 个）共用一个 RoPE 模块，表却在每一层的键下各存一份：StoryBot 的 `state_dict` 里有 8 张这样的表，WebBot 有 24 张。这些表完全由 θ 和 `max_context_len` 算出，本不需要保存；保存下来反而带来一个限制：想换一个更长的 `max_context_len`（比如第 8 章的上下文扩展），用原来的 checkpoint 加载会因为形状不同而报错。
 
 ```localcheck verify/test_reference.py::test_e31_rope_tables_are_saved_into_every_layer needs="PyTorch" title="StoryBot 的 state_dict 里有 8 张 cos/sin 表，12 层的 WebBot 有 24 张；换一个上下文长度加载就报 size mismatch"
 ```
@@ -1056,7 +1056,7 @@ assert sum(empty) == 0 and calculate_reward(5, template.format(0, 5)) == 1.0
 ```localcheck verify/test_reference.py::test_z6_comment_doc_and_portability_facts title="逐条核对源码中的这些写法"
 ```
 
-```localcheck verify/test_reference.py::test_errata_external_facts_match_the_local_files title="HF 的文件列表与 GitHub 的记录（2026-10-12）：本地检查点的 sha256 与 HF 相同；model_dpo.pt 与 WebBot 权重不存在"
+```localcheck verify/test_reference.py::test_errata_external_facts_match_the_local_files title="HF 的文件列表与 GitHub 的记录（2026-10-12）：本地 checkpoint 的 sha256 与 HF 相同；model_dpo.pt 与 WebBot 权重不存在"
 ```
 
 ```localcheck verify/test_ch09.py::test_script_ddp_and_logging_details needs="PyTorch" title="E45、E49：读原书脚本的语法树，no_sync 只包住 backward、is_main 用 local_rank、effective_batch_size 没乘卡数"
@@ -1092,7 +1092,7 @@ assert sum(empty) == 0 and calculate_reward(5, template.format(0, 5)) == 1.0
 
 ## 小结
 
-50 个问题里，真正影响书中结果的只有少数几个，影响最大的是 E01：GRPO 更新时开着 dropout。在本书的 GPU 运行里，原样跑满 500 次迭代停在 86.4%；从同一个 SFT 检查点出发、只加一行 `model.eval()`，第 51 次迭代就到了 98.8%，之后一直是 100%。其次是几个只在特定用法下出现、后果却不小的问题：用 HF 上下载的 StoryBot 权重，第 6 章的脚本一加载就报错（E02）；把 git 检出的文本交给第 4 章的分词器，CRLF 会悄悄改变词表（E03）；用 8 张卡原样运行 WebBot 的预训练，读的 token 和用掉的 GPU 时间都变成 8 倍（E50）。
+50 个问题里，真正影响书中结果的只有少数几个，影响最大的是 E01：GRPO 更新时开着 dropout。在本书的 GPU 运行里，原样跑满 500 轮停在 86.4%；从同一个 SFT checkpoint 出发、只加一行 `model.eval()`，第 51 轮就到了 98.8%，之后一直是 100%。其次是几个只在特定用法下出现、后果却不小的问题：用 HF 上下载的 StoryBot 权重，第 6 章的脚本一加载就报错（E02）；把 git 检出的文本交给第 4 章的分词器，CRLF 会悄悄改变词表（E03）；用 8 张卡原样运行 WebBot 的预训练，读的 token 和用掉的 GPU 时间都变成 8 倍（E50）。
 
 其余大多是在边界情况下静默出错的问题。它们的共同特点是“不报错”：位置被冻结（E04）、位置被广播（E05）、掩码缺失（E06）、洗牌失效（E07）、错误被吞掉（E09）。这也是我们坚持给每个结论配一个可以重跑的检查的原因：不报错的问题，只有去测才会发现。
 
@@ -1101,7 +1101,7 @@ assert sum(empty) == 0 and calculate_reward(5, template.format(0, 5)) == 1.0
 本章所学的内容：
 
 - 原书 38 处“写在注释里的期望输出”中，30 处逐字一致，7 处只是写法不同，1 处已经过期（[验证 Z.2-a](#v-Z.2-a)）。
-- GRPO 更新时开着 dropout：原样跑满 500 次迭代停在 86.4%，只加一行 `model.eval()`，第 51 次迭代就到 98.8%，之后一直是 100%（[验证 Z.3-a](#v-Z.3-a)）。
+- GRPO 更新时开着 dropout：原样跑满 500 轮停在 86.4%，只加一行 `model.eval()`，第 51 轮就到 98.8%，之后一直是 100%（[验证 Z.3-a](#v-Z.3-a)）。
 - 二进制模式读取会保留 CRLF 里的 `\r`，BPE 会把 `\r\n` 学成一个 token；书中的流程恰好不会把检出的文件交给这样的读取（[验证 Z.4-b](#v-Z.4-b)）。
 - StoryBot 的 RoPE 把超出范围的位置夹在最后：生成时位置被冻结，输入恰好多 1 个 token 时位置被广播（[验证 Z.4-c](#v-Z.4-c)、[验证 Z.4-d](#v-Z.4-d)）。
 - `itertools.cycle` 只迭代一次并缓存所有元素，所以 `shuffle=True` 只在第一轮生效（[验证 Z.4-e](#v-Z.4-e)）。

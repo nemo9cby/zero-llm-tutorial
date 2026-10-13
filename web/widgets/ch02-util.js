@@ -2,13 +2,12 @@
    Pure math is exported so tests/js/ch02-widgets.test.mjs can check it in Node against the
    numbers the page's verify cells assert. */
 import { h } from './_lib.js';
-import { seqColor } from './_plot.js';
+import { seqColor, onThemeChange as onSharedThemeChange } from './_plot.js';
 
-/** Run fn whenever the theme changes. seqColor flips its ramp in the dark theme, so inline colors must be redrawn. */
+/** Run fn whenever the theme changes. seqColor flips its ramp in the dark theme, so inline colors must be redrawn.
+    Kept for the chapter-2 widgets; it is the shared helper in _plot.js (toggle and OS setting alike). */
 export function onThemeChange(fn) {
-  if (typeof document === 'undefined') return;
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', fn);
-  new MutationObserver(fn).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  return onSharedThemeChange(fn);
 }
 
 /** Color key for seqColor: the ramp runs light→dark in the light theme and dark→light in the dark theme, so every

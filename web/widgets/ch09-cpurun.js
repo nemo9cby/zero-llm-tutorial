@@ -37,17 +37,18 @@ export async function mount(root, config) {
   }
   const { cfg, train, val } = parseCalls(log);
   const lossBox = h('div'), lrBox = h('div');
+  const marginRight = 84;              // the same right margin for both charts, so their x axes line up
   root.append(lossBox);
   lineChart(lossBox, {
     series: [
       { name: 'train/loss（每步）', points: train.map((c) => [c.step, c.data['train/loss']]) },
       { name: 'val/loss', points: val.map((c) => [c.step, c.data['val/loss']]) },
     ],
-    xLabel: 'step', yLabel: 'loss（nats）', height: 250,
+    xLabel: 'step', yLabel: 'loss（nats）', height: 250, marginRight,
     refLines: [{ y: Math.log(cfg.vocab_size || 50000), label: `ln ${(cfg.vocab_size || 50000).toLocaleString('en-US')}` }],
   });
   if (config.lr !== false) {
-    // 两条线重合：记录下来的 train/lr 就是原书 get_lr 的值。两张图都是两条序列，右边距相同，横轴上下对齐。
+    // 两条线重合：记录下来的 train/lr 就是原书 get_lr 的值（下方的本地验证逐步核对了这一点）。
     root.append(lrBox);
     lineChart(lrBox, {
       series: [
@@ -55,7 +56,7 @@ export async function mount(root, config) {
         { name: '原书 get_lr（公式）', dash: '4 3',
           points: train.map((c) => [c.step, bookLr(c.step, cfg.learning_rate, cfg.warmup_iters, cfg.max_iters)]) },
       ],
-      xLabel: 'step', yLabel: '学习率 train/lr', height: 150, yMin: 0, table: false,
+      xLabel: 'step', yLabel: '学习率 train/lr', height: 150, yMin: 0, table: false, marginRight,
     });
   }
 

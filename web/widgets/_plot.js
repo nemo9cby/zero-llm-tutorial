@@ -1,7 +1,9 @@
 /* Shared SVG charts: lineChart, barChart, heatmap.
    Palette = the validated dataviz reference instance (categorical slots in fixed order,
    sequential blue, diverging blue↔red with a gray midpoint), light and dark steps.
-   Every chart ships a hover/focus tooltip and an optional data table (<details>). */
+   Every chart ships a hover/focus tooltip and an optional data table (<details>).
+   Also the theme helpers isDark() / onThemeChange(fn) for widgets that colour things in JS.
+   Nothing here touches the DOM at import time, so Node tests can import it. */
 import { h } from './_lib.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -10,12 +12,95 @@ const DARK = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', 
 const SEQ = ['#cde2fb', '#b7d3f6', '#9ec5f4', '#86b6ef', '#6da7ec', '#5598e7', '#3987e5', '#2a78d6',
   '#256abf', '#1c5cab', '#184f95', '#104281', '#0d366b'];
 const DIV_NEG = '#2a78d6', DIV_POS = '#e34948';
+const DIV_MID_LIGHT = '#f0efec', DIV_MID_DARK = '#383835';
+const ON_DARK = '#ffffff', ON_LIGHT = '#1b2233';      // value labels on heat-map cells: white or the ink
 
-const isDark = () => {
+// ---------------------------------------------------------------- theme
+
+/** True when the page shows the dark theme: the toggle's data-theme wins, otherwise the OS setting. */
+export function isDark() {
+  if (typeof document === 'undefined') return false;
   const t = document.documentElement.dataset.theme;
-  return t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
-};
+  if (t) return t === 'dark';
+  return typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+const themeListeners = new Set();
+let themeWatched = false, lastDark = false;
+
+/** Call fn(dark) once per change of the effective theme, whether it comes from the page's toggle (data-theme)
+    or from the OS setting while the page follows it. Returns an unsubscribe function; outside a browser it
+    does nothing. A listener that throws is reported and does not stop the others. */
+export function onThemeChange(fn) {
+  if (typeof document === 'undefined' || typeof MutationObserver === 'undefined') return () => {};
+  if (!themeWatched) {
+    themeWatched = true;
+    lastDark = isDark();
+    const check = () => {
+      const dark = isDark();
+      if (dark === lastDark) return;
+      lastDark = dark;
+      for (const f of [...themeListeners]) {
+        try { f(dark); } catch (err) { console.error(err); }
+      }
+    };
+    if (typeof matchMedia === 'function') matchMedia('(prefers-color-scheme: dark)').addEventListener('change', check);
+    new MutationObserver(check).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  }
+  themeListeners.add(fn);
+  return () => { themeListeners.delete(fn); };
+}
+
 export const seriesColor = (i) => (isDark() ? DARK : LIGHT)[i % 8];
+
+// ---------------------------------------------------------------- colour arithmetic
+
+const hexRgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+const toLinear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const fromLinear = (c) => (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055);
+const rgbHex = (rgb) => `#${rgb.map((c) => Math.round(Math.min(1, Math.max(0, c)) * 255).toString(16).padStart(2, '0')).join('')}`;
+
+/** WCAG 2 relative luminance of a #rrggbb colour. */
+export function relativeLuminance(hex) {
+  const [r, g, b] = hexRgb(hex).map(toLinear);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** WCAG 2 contrast ratio of two #rrggbb colours, from 1 to 21. */
+export function contrastRatio(a, b) {
+  const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** The colour for text drawn on `fill` (#rrggbb): white or the ink, whichever has the higher WCAG contrast. */
+export function textColorOn(fill) {
+  return contrastRatio(ON_DARK, fill) > contrastRatio(ON_LIGHT, fill) ? ON_DARK : ON_LIGHT;
+}
+
+// Oklab (Björn Ottosson's matrices on linear sRGB), the space CSS color-mix(in oklab, ...) interpolates in.
+function toOklab(hex) {
+  const [r, g, b] = hexRgb(hex).map(toLinear);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s];
+}
+function fromOklab([L, a, b]) {
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3;
+  return rgbHex([4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s].map(fromLinear));
+}
+
+/** color-mix(in oklab, a p, b) for 0 ≤ p ≤ 1, as an sRGB #rrggbb (clipped to the gamut). */
+export function mixOklab(a, b, p) {
+  const A = toOklab(a), B = toOklab(b);
+  return fromOklab(A.map((v, i) => v * p + B[i] * (1 - p)));
+}
 
 function svg(tag, attrs = {}, ...kids) {
   const el = document.createElementNS(NS, tag);
@@ -36,6 +121,38 @@ export function niceTicks(lo, hi, count = 5) {
   for (let v = start; v <= hi + step * 1e-9; v += step) ticks.push(+v.toPrecision(12));
   return ticks;
 }
+
+/** niceTicks, asked for more ticks until at least `min` of them fall inside [lo, hi]: on a narrow chart
+    niceTicks(−3, 3, 2) is just [0], autoTicks(−3, 3, 2) is [−2, 0, 2]. Unchanged when niceTicks has enough. */
+export function autoTicks(lo, hi, count = 5, min = 3) {
+  let ticks = niceTicks(lo, hi, count);
+  for (let c = count + 1; ticks.length < min && c <= count + 20; c++) ticks = niceTicks(lo, hi, c);
+  return ticks;
+}
+
+const MANTISSAS = [[1], [1, 2, 5], [1, 2, 3, 4, 5, 6, 7, 8, 9]];
+
+/** Ticks for a log axis on [lo, hi]: the powers of ten if at least `min` of them fit, else 1-2-5, else every
+    integer mantissa; a span too short for any of these (1.3 to 2.6) gets linear ticks, which on so short a
+    span read correctly on a log axis too. */
+export function logTicks(lo, hi, min = 3) {
+  lo = Math.max(lo, 1e-12);
+  if (!(hi >= lo)) return [];
+  for (const ms of MANTISSAS) {
+    const out = [];
+    for (let e = Math.floor(Math.log10(lo)); e <= Math.ceil(Math.log10(hi)); e++) {
+      for (const m of ms) {
+        const v = +(m * 10 ** e).toPrecision(12);
+        if (v >= lo * (1 - 1e-9) && v <= hi * (1 + 1e-9)) out.push(v);
+      }
+    }
+    if (out.length >= min) return out;
+  }
+  return autoTicks(lo, hi, 4, min);
+}
+
+/** Rough width in px of an 11–11.5 px chart label (CJK characters are about twice as wide). */
+const textWidth = (t) => [...String(t)].reduce((w, ch) => w + (ch.charCodeAt(0) > 0x2e80 ? 11.5 : 6.6), 0);
 
 export const fmtNum = (v) => {
   if (v == null || !isFinite(v)) return String(v);
@@ -100,16 +217,31 @@ function onResize(el, fn) {
   let w = 0;
   const ro = new ResizeObserver(() => { const nw = el.clientWidth; if (nw && nw !== w) { w = nw; fn(nw); } });
   ro.observe(el);
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => fn(el.clientWidth));
-  new MutationObserver(() => fn(el.clientWidth)).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  onThemeChange(() => fn(el.clientWidth || w || 600));       // series colours differ between the themes
+}
+
+/** Keep the ticks whose labels do not collide with the previous kept label (pos and size in px). */
+function spread(ticks, pos, size, gap) {
+  const out = [];
+  let end = -Infinity;
+  for (const v of [...ticks].sort((a, b) => pos(a) - pos(b))) {
+    if (pos(v) - size(v) / 2 < end + gap) continue;
+    out.push(v);
+    end = pos(v) + size(v) / 2;
+  }
+  return out;
 }
 
 /**
  * Line chart.
- * opts: { series: [{name, points: [[x, y], ...], dash?: '4 3', width?: 2, markers?: false}], xLabel, yLabel,
- *         height=260, yMin, yMax, xFormat, yFormat, logY=false, logX=false, xTicks?: number[],
+ * opts: { series: [{name, points: [[x, y], ...], dash?: '4 3', width?: 2, markers?: false | true | [[x, y], ...]}],
+ *         xLabel, yLabel, height=260, yMin, yMax, xMin, xMax, xFormat, yFormat, logY=false, logX=false,
+ *         xTicks?: number[], marginRight?: px (default 84 with 2–4 series, else 16),
  *         refLines: [{y, label, labelAt?: 'right'|'left'}],
  *         vLines: [{x, label, labelAt?: 'right'|'left', labelY?: 'top'|'bottom'}], table=true }
+ * xMin/xMax fix the x domain like yMin/yMax fix the y domain. markers: true marks every point, an array marks
+ * only those points (e.g. where a sparse metric was recorded). Without xTicks there are at least 3 x ticks,
+ * a log axis gets 1-2-5 ticks when powers of ten are too few, and edge labels stay inside the chart.
  * Direct end labels are drawn only when they fit in the right margin and do not collide;
  * otherwise the legend carries identity.
  * Returns { update(newOpts) } so widgets can re-render with new data.
@@ -127,16 +259,16 @@ export function lineChart(root, opts) {
     if (series.length > 1) {
       box.append(h('div', { class: 'viz-legend' }, series.map((s, i) => h('span', { style: `--c:${seriesColor(i)}` }, s.name))));
     }
-    const m = { l: 52, r: series.length > 1 && series.length <= 4 ? 84 : 16, t: 10, b: 38 };
+    const m = { l: 52, r: o.marginRight ?? (series.length > 1 && series.length <= 4 ? 84 : 16), t: 10, b: 38 };
     const W = Math.max(width, 240), H = height;
     const all = series.flatMap((s) => s.points);
     const tf = (v) => (o.logY ? Math.log10(Math.max(v, 1e-12)) : v);
     const gx = (v) => (o.logX ? Math.log10(Math.max(v, 1e-12)) : v);
-    let x0 = Math.min(...all.map((p) => p[0])), x1 = Math.max(...all.map((p) => p[0]));
+    let x0 = o.xMin ?? Math.min(...all.map((p) => p[0])), x1 = o.xMax ?? Math.max(...all.map((p) => p[0]));
     let y0 = o.yMin ?? Math.min(...all.map((p) => p[1]), ...(o.refLines || []).map((r) => r.y));
     let y1 = o.yMax ?? Math.max(...all.map((p) => p[1]), ...(o.refLines || []).map((r) => r.y));
     if (x0 === x1) x1 = x0 + 1;
-    const yt = o.logY ? null : niceTicks(y0, y1, 5);
+    const yt = o.logY ? null : autoTicks(y0, y1, 5);
     if (yt) { y0 = Math.min(y0, yt[0]); y1 = Math.max(y1, yt[yt.length - 1]); }
     const ty0 = tf(y0), ty1 = tf(y1) === ty0 ? ty0 + 1 : tf(y1);
     const gx0 = gx(x0), gx1 = gx(x1) === gx(x0) ? gx(x0) + 1 : gx(x1);
@@ -144,18 +276,21 @@ export function lineChart(root, opts) {
     const sy = (y) => m.t + (1 - (tf(y) - ty0) / (ty1 - ty0)) * (H - m.t - m.b);
     const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img', 'aria-label': o.ariaLabel || o.yLabel || '折线图' });
     const grid = svg('g', { class: 'grid' }), axis = svg('g', { class: 'axis' });
-    const yTicks = yt || (() => { const out = []; for (let e = Math.floor(ty0); e <= Math.ceil(ty1); e++) out.push(10 ** e); return out; })();
+    const yTicks = yt || spread(logTicks(y0, y1).filter((v) => tf(v) >= ty0 - 1e-9 && tf(v) <= ty1 + 1e-9),
+      (v) => -sy(v), () => 11, 3);
     for (const v of yTicks) {
       if (tf(v) < ty0 - 1e-9 || tf(v) > ty1 + 1e-9) continue;
       grid.append(svg('line', { x1: m.l, x2: W - m.r, y1: sy(v), y2: sy(v) }));
       axis.append(svg('text', { x: m.l - 6, y: sy(v) + 4, 'text-anchor': 'end' }, fy(v)));
     }
-    const xTicks = o.xTicks || (o.logX
-      ? (() => { const out = []; for (let e = Math.ceil(gx0 - 1e-9); e <= gx1 + 1e-9; e++) out.push(10 ** e); return out; })()
-      : niceTicks(x0, x1, Math.max(2, Math.floor((W - m.l - m.r) / 90))));
+    const inX = (v) => v >= Math.min(x0, x1) && v <= Math.max(x0, x1);
+    const xTicks = o.xTicks || spread((o.logX ? logTicks(x0, x1) : autoTicks(x0, x1, Math.max(2, Math.floor((W - m.l - m.r) / 90))))
+      .filter(inX), sx, (v) => textWidth(fx(v)), 6);
     for (const v of xTicks) {
-      if (v < x0 || v > x1) continue;
-      axis.append(svg('text', { x: sx(v), y: H - m.b + 16, 'text-anchor': 'middle' }, fx(v)));
+      if (!inX(v)) continue;
+      // A label centred on a tick at the plot's edge may not fit inside the SVG: shift it in (gpu figure 3).
+      const half = textWidth(fx(v)) / 2;
+      axis.append(svg('text', { x: Math.min(Math.max(sx(v), half), W - half), y: H - m.b + 16, 'text-anchor': 'middle' }, fx(v)));
     }
     if (o.xLabel) axis.append(svg('text', { class: 'axis-title', x: (m.l + W - m.r) / 2, y: H - 4, 'text-anchor': 'middle' }, o.xLabel));
     s.append(grid, axis);
@@ -180,17 +315,17 @@ export function lineChart(root, opts) {
       const d = ser.points.map((p, j) => `${j ? 'L' : 'M'}${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join('');
       s.append(svg('path', { d, fill: 'none', stroke: seriesColor(i), 'stroke-width': ser.width || 2,
         'stroke-dasharray': ser.dash || null, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }));
-      if (ser.markers) {
-        for (const p of ser.points) {
-          s.append(svg('circle', { cx: sx(p[0]), cy: sy(p[1]), r: 4, fill: seriesColor(i), stroke: 'var(--paper)', 'stroke-width': 2 }));
-        }
+      const marks = ser.markers === true ? ser.points : (Array.isArray(ser.markers) ? ser.markers : []);
+      // 4 px dots while they have room (every chart that had markers before); dense ones shrink to 1.5 px.
+      const r = +Math.min(4, Math.max(1.5, (W - m.l - m.r) / Math.max(1, marks.length) / 3)).toFixed(2);
+      for (const p of marks) {
+        s.append(svg('circle', { cx: sx(p[0]), cy: sy(p[1]), r, fill: seriesColor(i), stroke: 'var(--paper)', 'stroke-width': Math.min(2, r / 2) }));
       }
     });
     // Direct end labels only when they stay apart; converging lines fall back to the legend.
     const ends = series.map((ser) => ser.points[ser.points.length - 1]).filter(Boolean);
     const ys = ends.map((p) => sy(p[1])).sort((a, b) => a - b);
     const apart = ys.every((y, j) => j === 0 || y - ys[j - 1] >= 13);
-    const textWidth = (t) => [...t].reduce((w, ch) => w + (ch.charCodeAt(0) > 0x2e80 ? 11.5 : 6.6), 0);
     const fits = series.every((ser) => textWidth(ser.name) <= m.r - 8);
     if (series.length > 1 && series.length <= 4 && apart && fits) {
       series.forEach((ser) => {
@@ -215,16 +350,17 @@ export function lineChart(root, opts) {
       tip.show(sx(x) * scale, m.t * scale + 20, () => [
         h('div', { class: 'k' }, `${o.xLabel || 'x'} = ${fx(x)}`),
         ...series.map((ser, i) => {
+          if (!ser.points.length) return null;
           const p = ser.points.reduce((best, q) => (Math.abs(q[0] - x) < Math.abs(best[0] - x) ? q : best), ser.points[0]);
           return h('div', { class: 'row', style: `--c:${seriesColor(i)}` }, h('b', {}, fy(p[1])), ' ', h('span', { class: 'k' }, ser.name));
-        }),
+        }).filter(Boolean),
       ]);
     };
     hit.addEventListener('pointermove', (e) => {
       const rect = s.getBoundingClientRect();
       const px = ((e.clientX - rect.left) / rect.width) * W;
-      const xv = x0 + ((px - m.l) / (W - m.l - m.r)) * (x1 - x0);
-      let k = 0; for (let j = 1; j < xs.length; j++) if (Math.abs(xs[j] - xv) < Math.abs(xs[k] - xv)) k = j;
+      const gv = gx0 + ((px - m.l) / (W - m.l - m.r)) * (gx1 - gx0);     // the pointer, in axis units (log10 on a log axis)
+      let k = 0; for (let j = 1; j < xs.length; j++) if (Math.abs(gx(xs[j]) - gv) < Math.abs(gx(xs[k]) - gv)) k = j;
       showAt(k);
     });
     hit.addEventListener('pointerleave', () => { cross.setAttribute('visibility', 'hidden'); tip.hide(); });
@@ -306,22 +442,29 @@ export function barChart(root, opts) {
   return { update(next) { o = { ...o, ...next }; render(root.clientWidth || 600); } };
 }
 
-/** Sequential (one hue, light→dark) or diverging (blue↔gray↔red) color for t in [0,1] / [-1,1]. */
-export function seqColor(t) {
+const seqIndex = (t) => {
   // Light theme: low = light, high = dark. Dark theme: the ramp runs the other way, so low values
   // recede into the dark surface and high values stand out.
   const k = Math.max(0, Math.min(SEQ.length - 1, Math.round(t * (SEQ.length - 1))));
-  return SEQ[isDark() ? SEQ.length - 1 - k : k];
+  return isDark() ? SEQ.length - 1 - k : k;
+};
+const SEQ_WHITE = SEQ.map((c) => textColorOn(c) === ON_DARK);        // per step: does white text win?
+/** Sequential (one hue, light→dark) color for t in [0,1]; divColor below is the diverging (blue↔gray↔red) one. */
+export function seqColor(t) {
+  return SEQ[seqIndex(t)];
 }
-/** True when seqColor(t) is a dark fill (so a label on it must be white). */
+/** True when a label on seqColor(t) should be white: white has the higher WCAG contrast on that exact fill. */
 export function seqIsDark(t) {
-  return isDark() ? t <= 0.45 : t > 0.55;
+  return SEQ_WHITE[seqIndex(t)];
 }
+/** The diverging fill for t in [−1, 1], as #rrggbb: the oklab mix that color-mix(in oklab, end |t|, mid) gives,
+    computed here so that the label colour can be chosen against the very same colour. */
 export function divColor(t) {
-  const mid = isDark() ? '#383835' : '#f0efec';
-  const a = Math.min(1, Math.abs(t));
+  const mid = isDark() ? DIV_MID_DARK : DIV_MID_LIGHT;
+  const a = Math.round(Math.min(1, Math.abs(t)) * 100) / 100;       // whole percent, as before
+  if (!(a > 0)) return mid;
   const end = t < 0 ? DIV_NEG : DIV_POS;
-  return `color-mix(in oklab, ${end} ${Math.round(a * 100)}%, ${mid})`;
+  return a >= 1 ? end : mixOklab(end, mid, a);
 }
 
 /**
@@ -369,10 +512,9 @@ export function heatmap(root, opts) {
         rect.addEventListener('pointerleave', () => tip.hide()); rect.addEventListener('blur', () => tip.hide());
         s.append(rect);
         if (cell >= 30 && !masked && o.showValues !== false) {
-          // The fills are theme-independent, so the label colour is chosen from the fill, not from --ink.
-          const dark = o.scale === 'div' ? Math.abs(t) > 0.55 : seqIsDark(t);
+          // White or ink, whichever contrasts more with this cell's actual fill (the fills differ by theme).
           s.append(svg('text', { x: lab + cell * (c + 0.5), y: lab + cell * (r + 0.5) + 4, 'text-anchor': 'middle',
-            'font-size': 10, fill: dark ? '#ffffff' : '#1b2233', 'pointer-events': 'none' }, fv(v)));
+            'font-size': 10, fill: textColorOn(fill), 'pointer-events': 'none' }, fv(v)));
         }
       }
     }

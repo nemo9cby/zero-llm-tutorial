@@ -6,6 +6,9 @@
 // wait for every widget to mount, then click "运行本页全部验证" and wait until every
 // verify cell's seal reaches a terminal state. Exit code 1 if any page fails.
 // With --shots, also saves desktop (1280px) and phone (375px) screenshots.
+// With --widget-shots too, one shot per figure.widget: <slug>-fig<N>-<desktop|phone>-<light|dark|darkos>.png,
+// light/dark set by the page's theme toggle, darkos from a second page opened in an OS-level dark colour scheme
+// with no data-theme (widgets that pick their colours only when they mount).
 import { chromium } from 'playwright';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -39,30 +42,72 @@ function serve(root) {
   return new Promise((resolve) => server.listen(0, '127.0.0.1', () => resolve(server)));
 }
 
-// --widget-shots: one screenshot per figure.widget, in light and dark, named <slug>-fig<N>-<width>-<theme>.png
-async function widgetShots(page, slug, width) {
-  const figs = await page.$$('figure.widget');
-  for (const theme of ['light', 'dark']) {
-    await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
-    await page.waitForTimeout(250); // charts re-render on theme change
+// One screenshot per figure.widget, named <slug>-fig<N>-<width>-<theme>.png. The sticky top bar is unstuck
+// while shooting (it would cover the top of tall figures), and a figure taller than the viewport gets a
+// viewport that fits it (an element screenshot taller than the viewport can time out waiting for stability).
+async function shootFigures(page, slug, width, theme) {
+  const unstick = await page.addStyleTag({ content: '.topbar { position: static !important; }' });
+  const viewport = page.viewportSize();
+  try {
+    const figs = await page.$$('figure.widget');
     for (let i = 0; i < figs.length; i++) {
+      for (let tries = 0; tries < 3; tries++) {      // a figure may grow once the viewport does: measure again
+        const box = await figs[i].boundingBox();
+        const need = box ? Math.ceil(box.height) + 96 : 0;     // + the 4rem scroll padding and some air
+        if (need <= page.viewportSize().height) break;
+        await page.setViewportSize({ width: viewport.width, height: need });
+        await page.waitForTimeout(150);
+      }
       await figs[i].scrollIntoViewIfNeeded();
       await figs[i].screenshot({ path: path.join(shotsDir, `${slug}-fig${i + 1}-${width}-${theme}.png`) });
     }
+  } finally {
+    await unstick.evaluate((el) => el.remove());
+    if (page.viewportSize().height !== viewport.height) await page.setViewportSize(viewport);
+  }
+}
+
+// --widget-shots: light and dark set through the page's theme toggle (data-theme)
+async function widgetShots(page, slug, width) {
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
+    await page.waitForTimeout(250); // charts re-render on theme change
+    await shootFigures(page, slug, width, theme);
   }
   await page.evaluate(() => { delete document.documentElement.dataset.theme; });
+}
+
+// Console errors, page errors and failed requests become problems (font requests may fail offline).
+function watch(page, problems, prefix = '') {
+  page.on('console', (m) => { if (m.type() === 'error') problems.push(`${prefix}console: ${m.text()}`); });
+  page.on('pageerror', (e) => problems.push(`${prefix}pageerror: ${e.message}`));
+  page.on('requestfailed', (r) => {
+    const u = r.url();
+    if (!u.includes('fonts.g')) problems.push(`${prefix}requestfailed: ${u} (${r.failure()?.errorText})`);
+  });
+  page.on('response', (r) => { if (r.status() >= 400) problems.push(`${prefix}HTTP ${r.status()}: ${r.url()}`); });
+}
+
+// --widget-shots, darkos: a fresh page (no stored theme) whose OS colour scheme is dark from the first paint.
+async function darkOsShots(browser, base, slug, problems) {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: 'dark' });
+  watch(page, problems, 'darkos ');
+  try {
+    await page.goto(`${base}/${slug}.html`, { waitUntil: 'load' });
+    await page.waitForTimeout(800); // let widget modules import and mount
+    await shootFigures(page, slug, 'desktop', 'darkos');
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.waitForTimeout(300);
+    await shootFigures(page, slug, 'phone', 'darkos');
+  } finally {
+    await page.close();
+  }
 }
 
 async function checkPage(browser, base, slug) {
   const problems = [];
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-  page.on('console', (m) => { if (m.type() === 'error') problems.push(`console: ${m.text()}`); });
-  page.on('pageerror', (e) => problems.push(`pageerror: ${e.message}`));
-  page.on('requestfailed', (r) => {
-    const u = r.url();
-    if (!u.includes('fonts.g')) problems.push(`requestfailed: ${u} (${r.failure()?.errorText})`);
-  });
-  page.on('response', (r) => { if (r.status() >= 400) problems.push(`HTTP ${r.status()}: ${r.url()}`); });
+  watch(page, problems);
 
   await page.goto(`${base}/${slug}.html`, { waitUntil: 'load' });
   await page.waitForTimeout(800); // let widget modules import and mount
@@ -141,6 +186,7 @@ async function checkPage(browser, base, slug) {
     if (flags.has('--widget-shots')) await widgetShots(page, slug, 'phone');
   }
   await page.close();
+  if (shotsDir && flags.has('--widget-shots') && widgets.length) await darkOsShots(browser, base, slug, problems);
   return { slug, widgets: widgets.length, cells, problems };
 }
 

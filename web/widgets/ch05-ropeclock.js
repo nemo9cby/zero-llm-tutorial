@@ -2,7 +2,7 @@
    下：同一个 q、k 放在不同位置时的分数矩阵 S[m, n]：RoPE 下沿对角线不变（Toeplitz），
    换成“加到 q、k 上的绝对位置向量”后条纹消失。 */
 import { h } from './_lib.js';
-import { heatmap, seriesColor } from './_plot.js';
+import { heatmap, seriesColor, onThemeChange } from './_plot.js';
 import { injectStyle, slider, radioButtons, rng, svg } from './ch05-common.js';
 
 export const invFreq = (d, base) => Array.from({ length: d / 2 }, (_, i) => base ** (-2 * i / d));
@@ -39,11 +39,6 @@ export function mount(root, config = {}) {
 .w-ch05-clock .dial { text-align: center; font-size: 11px; color: var(--ink-2); line-height: 1.35; }
 .w-ch05-clock .dial svg { width: 52px; height: 52px; display: block; margin: 0 auto; }
 .w-ch05-clock .heat { margin-top: .4rem; max-width: 420px; }
-/* 暗色主题下发散色阶的中点也是深色：格子里的数字一律用白色（_plot.js 只在 |t| > 0.55 时才用白色） */
-:root[data-theme="dark"] .w-ch05-clock .heat svg text[fill="#1b2233"] { fill: #ffffff; }
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .w-ch05-clock .heat svg text[fill="#1b2233"] { fill: #ffffff; }
-}
 `));
 
   // ---- panel A: the multi-hand clock
@@ -103,4 +98,5 @@ export function mount(root, config = {}) {
 
   drawDials();
   drawHeat();
+  onThemeChange(() => drawDials());              // the hands use the palette; the heat map redraws itself
 }

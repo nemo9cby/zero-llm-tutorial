@@ -5,19 +5,19 @@ order: 160
 kind: extra
 title: CodeBot 工作台：一个 prompt 的一生
 nav_title: CodeBot 工作台
-lede: 第 I 部训练出来的 CodeBot，现在就在这个标签页里运行。输入一段文字，看它被切成 token、穿过 6 个 Transformer 块、变成 1,000 个 logits，再从中抽出下一个 token；把预训练、SFT、GRPO 三个检查点换来换去，比一比同一个问题的三种回答。在 4 个参考 prompt 上，浏览器算出的数字可以与 PyTorch 记录的结果逐项对拍。
+lede: 第 I 部训练出来的 CodeBot，现在就在这个标签页里运行。输入一段文字，看它被切成 token、穿过 6 个 Transformer 块、变成 1,000 个 logits，再从中抽出下一个 token；把预训练、SFT、GRPO 三个 checkpoint 换来换去，比一比同一个问题的三种回答。在 4 个参考 prompt 上，浏览器算出的数字可以与 PyTorch 记录的结果逐项对拍。
 pyodide_packages: [numpy]
 ---
 
-第 I 部用三章做出了 CodeBot。第 1 章的分词器把代码切成 token，第 2 章的 GPT 根据前面的 token 算出下一个 token 的概率，第 3 章先预训练、再做 SFT、最后用 GRPO 强化，得到了三个检查点。可是一路走来，模型一直待在终端里：我们写下 `model(ids)`，拿到一个形状为 (1, C, 1000) 的张量，中间发生的一切都看不见。
+第 I 部用三章做出了 CodeBot。第 1 章的分词器把代码切成 token，第 2 章的 GPT 根据前面的 token 算出下一个 token 的概率，第 3 章先预训练、再做 SFT、最后用 GRPO 强化，得到了三个 checkpoint。可是一路走来，模型一直待在终端里：我们写下 `model(ids)`，拿到一个形状为 (1, C, 1000) 的张量，中间发生的一切都看不见。
 
-这一页把 CodeBot 搬进浏览器，把中间的每一步摊开来看。权重是本书在一张 RTX 3060 Ti 上原样运行原书 ch03 脚本训练出来的。推理代码是一份不依赖任何框架的 JavaScript（矩阵乘法交给一个很小的 WebAssembly SIMD 内核），在后台线程里运行。用同一份 int8 权重做 greedy 生成，它得到的 token 与 PyTorch 逐个相同（P.9 节）。
+这一页把 CodeBot 搬进浏览器，把中间的每一步摊开来看。权重是本书在一张 RTX 3060 Ti 上原样运行原书 ch03 脚本训练出来的。推理代码是一份不依赖任何框架的 JavaScript（矩阵乘法交给一个很小的 WebAssembly SIMD 内核），在后台线程里运行。用同一份 int8 权重做**贪心解码**（greedy decoding，每一步都取概率最大的 token），它生成的 token 与 PyTorch 逐个相同（P.9 节）。
 
-路线是这样的。先看结果（P.1），再把权重装进浏览器（P.2）。然后跟着一个 prompt 走完它的一生：文字变成 token（P.3），穿过 6 个 Transformer 块（P.4），在 Attention 里互相“交流”（P.5），最后 1,000 个 logits 变成下一个 token（P.6）。接着看一个接一个地生成时，KV cache 省下了什么，256 个位置的上限又意味着什么（P.7）。最后，我们把三个检查点放在一起比较（P.8），并亲手确认这份 JavaScript 与 PyTorch 算得一样（P.9）。
+路线是这样的。先看结果（P.1），再把权重装进浏览器（P.2）。然后跟着一个 prompt 走完它的一生：文字变成 token（P.3），穿过 6 个 Transformer 块（P.4），在 Attention 里互相“交流”（P.5），最后 1,000 个 logits 变成下一个 token（P.6）。接着看一个接一个地生成时，KV cache 省下了什么，256 个位置的上限又意味着什么（P.7）。最后，我们把三个 checkpoint 放在一起比较（P.8），并亲手确认这份 JavaScript 与 PyTorch 算得一样（P.9）。
 
 ## P.1 先来看结果
 
-下面就是工作台。它进入视野时会下载 SFT 检查点（11.3 MB），然后按图中的设置回答“read a file line by line”。你可以改动指令、切换检查点、拖动采样参数，再点“生成”。
+下面就是工作台。它进入视野时会下载 SFT checkpoint（11.3 MB），然后按图中的设置回答“read a file line by line”。你可以改动指令、切换 checkpoint、拖动采样参数，再点“生成”。
 
 ```widget playground-bench caption="CodeBot 工作台。勾选模板时，输入会被套进 ch03 的 Alpaca 格式；生成的 token 底色越深，说明它被抽中时的概率越低。把鼠标移到某个 token 上，能看到当时的前 5 个候选。"
 {"checkpoint": "sft", "prompt": "read a file line by line", "template": true, "temperature": 0.8, "topK": 40, "topP": 0.95, "maxNewTokens": 128, "seed": 1}
@@ -30,9 +30,9 @@ pyodide_packages: [numpy]
 
 Top-k 与 Top-p 是工作台按第 3 章的写法补上的（[3.2.3 节](ch03.html#s3-2-3)）。工作台默认用温度 0.8、Top-k 40、Top-p 0.95，最多生成 128 个 token。想要与 `04_chat.py` 相同的抽样分布，把温度拖到 1、Top-k 拖到“不限”、Top-p 拖到 1 即可（这几道工序 P.6 节再细看）。
 
-不妨先切换到“预训练”，点一下“生成”。预训练模型只会续写，它多半会在模板后面写起以 `#` 开头的注释（P.2.3 节的验证单元里有两段这样的续写）。换回“SFT”或“GRPO”，模型就会照着模板作答，答完输出 `<|endoftext|>`。再试试示例里的 `3+4=`：把温度拖到 0（greedy），分别问 SFT 和 GRPO，两者的回答不一样。P.8 节会细看这件事。
+不妨先切换到“预训练”，点一下“生成”。预训练模型只会续写，它多半会在模板后面写起以 `#` 开头的注释（P.2.3 节的验证单元里有两段这样的续写）。换回“SFT”或“GRPO”，模型就会照着模板作答，答完输出 `<|endoftext|>`。再试试示例里的 `3+4=`：把温度拖到 0（贪心解码），分别问 SFT 和 GRPO，两者的回答不一样。P.8 节会细看这件事。
 
-那么，这三个检查点是从哪里来的呢？它们不是原书作者公开在 Hugging Face 上的官方权重，而是本书自己训练的：在本机的 RTX 3060 Ti 上，用 `gpu/run_local.py` 依次原样运行 `ch03/01_pretrain.py`、`03_sft.py` 和 `09_grpo.py`（[G.4 节](gpu.html#sG-4)）。运行报告记下了每个脚本的用时和最终的指标，导出权重时，这些记录被原样抄进了每个检查点的清单文件（`manifest.json`）。下面的验证单元把两边对一对：
+那么，这三个 checkpoint 是从哪里来的呢？它们不是原书作者公开在 Hugging Face 上的官方权重，而是本书自己训练的：在本机的 RTX 3060 Ti 上，用 `gpu/run_local.py` 依次原样运行 `ch03/01_pretrain.py`、`03_sft.py` 和 `09_grpo.py`（[G.4 节](gpu.html#sG-4)）。运行报告记下了每个脚本的用时和最终的指标，导出权重时，这些记录被原样抄进了每个 checkpoint 的清单文件（`manifest.json`）。下面的验证单元把两边对一对：
 
 ```verify id=P.1-a title="清单里的训练记录与运行报告一致" files=data/runs/codebot-3060ti/report.json,data/playground/pretrain/manifest.json,data/playground/sft/manifest.json,data/playground/grpo/manifest.json
 import json
@@ -65,7 +65,7 @@ CodeBot 有 11,121,640 个参数（[2.10 节](ch02.html#s2-10)）。用 float32 
 
 除了参数本身（`state_dict`），文件里还有重建模型所需的 7 个超参数。导出工具从中读出决定形状的 6 个，`dropout_rate` 在推理时用不到。
 
-44.5 MB 放在本地硬盘上不算什么，放进网页就太重了：三个检查点合计 133 MB。于是，我们把绝大多数参数压成 1 个字节的整数，也就是 **int8 量化**（quantization）。先算一笔账：
+44.5 MB 放在本地硬盘上不算什么，放进网页就太重了：三个 checkpoint 合计 133 MB。于是，我们把绝大多数参数压成 1 个字节的整数，也就是 **int8 量化**（quantization）。先算一笔账：
 
 ```verify id=P.2-a title="参数量与字节数：float32 是 44.5 MB，int8 按行量化是 11.3 MB"
 V, C, E, L, FF = 1000, 256, 384, 6, 1536            # vocab_size, max_context_len, embed_dim, n_layer, ff_dim
@@ -75,7 +75,7 @@ n_params = sum(r * c for r, c in mats) + sum(vecs)
 f32_bytes = 4 * n_params
 q8_bytes = sum(r * c + 4 * r for r, c in mats) + 4 * sum(vecs)   # 每个元素 1 字节，每行再加 4 字节的 scale
 print(f"参数 {n_params:,} 个，其中 2 维权重占 {1 - sum(vecs) / n_params:.1%}，一维参数（LayerNorm 与偏置）{sum(vecs):,} 个")
-print(f"float32：{f32_bytes:,} 字节（{f32_bytes / 1e6:.1f} MB），三个检查点合计 {3 * f32_bytes / 1e6:.0f} MB")
+print(f"float32：{f32_bytes:,} 字节（{f32_bytes / 1e6:.1f} MB），三个 checkpoint 合计 {3 * f32_bytes / 1e6:.0f} MB")
 print(f"int8 按行量化：{q8_bytes:,} 字节（{q8_bytes / 1e6:.1f} MB），约为 float32 的 1/{f32_bytes / q8_bytes:.2f}")
 assert n_params == 11_121_640 and q8_bytes == 11_277_120
 assert sum(vecs) == 22_504 and round(1 - sum(vecs) / n_params, 3) == 0.998 and round(3 * f32_bytes / 1e6) == 133
@@ -146,9 +146,9 @@ assert per_tensor > 10 * per_row and within2 > 0.9 and within1 > 0.7
 
 ### P.2.3 量化改变了多少
 
-权重变了一点点，模型的输出会变多少呢？导出时，我们用原书的 `codebot.model.GPT` 在 PyTorch 里跑了 4 个 prompt：续写 `def add(a, b):`、对话模板下的 `print hello` 和 `3+4=`，以及一段 251 个 token 的 TinyCodes 代码。每个 prompt 跑两遍，一遍用原始的 float32 权重，一遍用 int8 还原出来的权重，把最后一个位置的 logits 和 greedy 生成的 token 都记了下来（`ref.json`）：
+权重变了一点点，模型的输出会变多少呢？导出时，我们用原书的 `codebot.model.GPT` 在 PyTorch 里跑了 4 个 prompt：续写 `def add(a, b):`、对话模板下的 `print hello` 和 `3+4=`，以及一段 251 个 token 的 TinyCodes 代码。每个 prompt 跑两遍，一遍用原始的 float32 权重，一遍用 int8 还原出来的权重，把最后一个位置的 logits 和贪心生成的 token 都记了下来（`ref.json`）：
 
-```verify id=P.2-d title="int8 量化：12 个参考 prompt 的最后一个位置上，logits 最多偏移 0.29；greedy 序列有时会在中途分岔" files=data/playground/pretrain/ref.json,data/playground/sft/ref.json,data/playground/grpo/ref.json,data/tokenizers/codebot.json
+```verify id=P.2-d title="int8 量化：12 个参考 prompt 的最后一个位置上，logits 最多偏移 0.29；贪心生成的序列有时会在中途分岔" files=data/playground/pretrain/ref.json,data/playground/sft/ref.json,data/playground/grpo/ref.json,data/tokenizers/codebot.json
 refs = {n: json.load(open(f"data/playground/{n}/ref.json", encoding="utf-8")) for n in ["pretrain", "sft", "grpo"]}
 spec = json.load(open("data/tokenizers/codebot.json", encoding="utf-8"))
 vocab = {i: bytes([i]) for i in range(256)}        # 把 id 还原成文字：第 1 章的合并规则，倒过来查表
@@ -171,7 +171,7 @@ for n, ref in refs.items():
         eos = b.index(EOS) if EOS in b else None   # 参考序列遇到 <|endoftext|> 也不停，这里记下它第一次出现的位置
         worst = max(worst, d)
         forks[n, p["name"]] = (same, len(a), eos)
-        print(f"{n:8} {p['name']:5} max|Δlogit| = {d:.3f}，greedy 的前 {same:2d}/{len(a)} 个 token 相同"
+        print(f"{n:8} {p['name']:5} max|Δlogit| = {d:.3f}，贪心生成的前 {same:2d}/{len(a)} 个 token 相同"
               + (f"（第 {eos + 1} 个是 <|endoftext|>）" if eos is not None else ""))
 chat_p = next(p for p in refs["pretrain"]["prompts"] if p["name"] == "chat")
 print("预训练模型续写对话模板，float32：", repr(decode(chat_p["f32"]["greedy"])))
@@ -182,9 +182,9 @@ assert all(same == total or (eos is not None and same > eos)       # SFT 与 GRP
            for (n, _), (same, total, eos) in forks.items() if n != "pretrain")
 ```
 
-在这 12 个 prompt 的最后一个位置上，logits 最多偏移了 0.29。对大多数位置来说，这点偏移改变不了谁排第一，所以 greedy 生成的 token 往往完全相同。可一旦遇到两个候选几乎打平的位置，第一名就可能易主，此后的序列跟着分岔。预训练模型在对话模板后面的续写，第 14 个 token 起就不一样了：两边写的都还是以 `#` 开头的注释行，只是内容不同了（上面打印的两段）。
+在这 12 个 prompt 的最后一个位置上，logits 最多偏移了 0.29。对大多数位置来说，这点偏移改变不了谁排第一，所以贪心生成的 token 往往完全相同。可一旦遇到两个候选几乎打平的位置，第一名就可能易主，此后的序列跟着分岔。预训练模型在对话模板后面的续写，第 14 个 token 起就不一样了：两边写的都还是以 `#` 开头的注释行，只是内容不同了（上面打印的两段）。
 
-SFT 和 GRPO 续写 `def add(a, b):` 时也分了岔，不过都在 `<|endoftext|>` 之后。参考序列遇到 `<|endoftext|>` 也不停，好让每个检查点比较同样多的 token；按原书 `generate()` 的规则，生成在那里就结束了，两边的回答其实相同。
+SFT 和 GRPO 续写 `def add(a, b):` 时也分了岔，不过都在 `<|endoftext|>` 之后。参考序列遇到 `<|endoftext|>` 也不停，好让每个 checkpoint 比较同样多的 token；按原书 `generate()` 的规则，生成在那里就结束了，两边的回答其实相同。
 
 0.29 只是这 12 个位置上的最大值。换成 TinyCodes 里的任意位置，偏移可以到 0.4 左右，大约 1% 的位置第一名易主：
 
@@ -195,7 +195,7 @@ SFT 和 GRPO 续写 `def add(a, b):` 时也分了岔，不过都在 `<|endoftext
 
 ### P.2.4 分片、按需下载与校验
 
-导出工具把一个检查点写成一个文件夹，里面有这几样东西：
+导出工具把一个 checkpoint 写成一个文件夹，里面有这几样东西：
 
 | 文件 | 内容 |
 |---|---|
@@ -203,9 +203,9 @@ SFT 和 GRPO 续写 `def add(a, b):` 时也分了岔，不过都在 `<|endoftext
 | `weights-00.bin` … `weights-05.bin` | 6 个分片，每个不超过 2 MB |
 | `ref.json` | PyTorch 的参考结果 |
 
-工作台只在某张图第一次用到某个检查点时才下载它，6 个分片并行下载，进度显示在图里。下载完成后，先核对每个分片的大小和 SHA-256，再交给模型。（浏览器只在“安全上下文”（secure context）里提供计算 SHA-256 的接口，例如 https 页面或本机的 localhost；其他情况下只核对大小。见 [MDN 的说明](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto)，查证于 2026-10。）
+工作台只在某张图第一次用到某个 checkpoint 时才下载它，6 个分片并行下载，进度显示在图里。下载完成后，先核对每个分片的大小和 SHA-256，再交给模型。（浏览器只在“安全上下文”（secure context）里提供计算 SHA-256 的接口，例如 https 页面或本机的 localhost；其他情况下只核对大小。见 [MDN 的说明](https://developer.mozilla.org/en-US/docs/Web/API/SubtleCrypto)，查证于 2026-10。）
 
-我们自己的三个检查点，就是用这样的命令导出的（下面是 SFT 的那一条）。把 `--ckpt` 换成原书的官方权重（`tools/fetch_data.py` 会把它们下载到 `third_party/dlfs6/codebot/`），再换一个 `--name`，工作台的检查点开关里就会多出一项：
+我们自己的三个 checkpoint，就是用这样的命令导出的（下面是 SFT 的那一条）。把 `--ckpt` 换成原书的官方权重（`tools/fetch_data.py` 会把它们下载到 `third_party/dlfs6/codebot/`），再换一个 `--name`，工作台的 checkpoint 开关里就会多出一项：
 
 ```shell
 uv run python tools/export_codebot.py --ckpt runs/codebot-3060ti/work/codebot/model_sft.pt --name sft \
@@ -217,7 +217,7 @@ uv run python tools/export_codebot.py --ckpt third_party/dlfs6/codebot/model_sft
 uv run python tools/build.py
 ```
 
-导出工具写的是 `web/data/playground/`，页面读的是构建出来的站点，所以导出之后要重新构建一次（最后一条命令），新的检查点才会出现在开关里。
+导出工具写的是 `web/data/playground/`，页面读的是构建出来的站点，所以导出之后要重新构建一次（最后一条命令），新的 checkpoint 才会出现在开关里。
 
 ```localcheck verify/test_playground.py::test_exporter_handles_official_checkpoint title="同一条命令（把 sft 换成 grpo）导出官方 GRPO 权重：清单、分片与参考结果都齐全"
 ```
@@ -294,7 +294,7 @@ token id 有了，接下来进入模型。`GPT.forward` 只有十几行：
 
 第 0 层为什么会“预测自己”？这与权重共享有关。第 0 层的残差流基本就是这个 token 自己的 embedding，`unembed` 又用同一张表给每个 token 打分，分数是两个向量的点积。直观上，在 384 维的空间里，一个向量与自己的点积，往往远大于它与别的向量的点积（严格地讲，中间还隔着最后一个 LayerNorm 的 γ、β 和 `unembed` 的偏置；下面的随机实验把它们省掉了）。
 
-如果你读过《深度学习进阶：自然语言处理》6.5.3 节，会认出这就是那里讲的权重共享，同一章的 BetterRnnlm 也让输入和输出共用同一张表。在 PyTorch 记录的 24 个例子（12 个 prompt，各有 float32、int8 两份权重）里，第 0 层“预测自己”无一例外。随机初始化的嵌入矩阵也有这个倾向，只是自己的概率没那么高；换成不共享的输出层，这个现象就消失了：
+如果你读过《深度学习进阶：自然语言处理》6.5.3 节，会认出这就是那里讲的权重共享，同一章的 BetterRnnlm 也让输入和输出共用同一张表。在 PyTorch 记录的 24 个例子（12 个 prompt，各有 float32、int8 两份权重）里，第 0 层“预测自己”无一例外。随机初始化的 embedding 矩阵也有这个倾向，只是自己的概率没那么高；换成不共享的输出层，这个现象就消失了：
 
 ```verify id=P.4-a title="第 0 层的 logit lens 预测“当前 token 自己”：24 个例子无一例外；随机初始化时，只有共享权重才这样"
 hits = total = 0
@@ -321,7 +321,7 @@ emb = rng.normal(0, 0.02, size=(1000, 384))       # 与 CodeBot 的初始化相�
 pos = rng.normal(0, 0.02, size=384)
 X = emb + pos                                     # 每个 token 都放在同一个位置上
 H = (X - X.mean(1, keepdims=True)) / np.sqrt(X.var(1, keepdims=True) + 1e-5)   # LayerNorm（省去 γ、β）
-S = H @ emb.T                                     # 共享权重：unembed 用的就是嵌入表
+S = H @ emb.T                                     # 共享权重：unembed 用的就是 embedding 表
 P = np.exp(S - S.max(1, keepdims=True))
 P /= P.sum(1, keepdims=True)
 self_top = np.mean(S.argmax(1) == np.arange(1000))
@@ -332,14 +332,14 @@ print(f"随机初始化，不共享权重：{untied:.1%} 的 token 把自己排�
 assert self_top > 0.99 and np.median(np.diag(P)) < 0.5 and untied < 0.01
 ```
 
-上面这 24 个例子，最后一个 token 只有换行和冒号两种。别的 token 也会“预测自己”吗？我们把 1,000 个 token 逐一放到 256 个位置上，用浏览器里的 int8 权重检查了一遍（三个检查点都是）。预训练数据 TinyCodes 里出现过的 839 个 token，在每个位置上都把自己排在第一，概率最低的也超过 0.5。从没出现过的 161 个 token 则不然，每一个都在某些位置上被别的 token 抢走了第一。它们大多是非 ASCII 的字节（128 个）：TinyCodes 全是 ASCII，而汉字的 UTF-8 编码用的正是这些字节。在图 P-3 里输入“不”试试：它被切成 3 个字节 token，第 0 层的第一名并不是最后那个字节。
+上面这 24 个例子，最后一个 token 只有换行和冒号两种。别的 token 也会“预测自己”吗？我们把 1,000 个 token 逐一放到 256 个位置上，用浏览器里的 int8 权重检查了一遍（三个 checkpoint 都是）。预训练数据 TinyCodes 里出现过的 839 个 token，在每个位置上都把自己排在第一，概率最低的也超过 0.5。从没出现过的 161 个 token 则不然，每一个都在某些位置上被别的 token 抢走了第一。它们大多是非 ASCII 的字节（128 个）：TinyCodes 全是 ASCII，而汉字的 UTF-8 编码用的正是这些字节。在图 P-3 里输入“不”试试：它被切成 3 个字节 token，第 0 层的第一名并不是最后那个字节。
 
 ```localcheck verify/test_playground.py::test_layer0_lens_self_prediction title="1,000 个 token × 256 个位置：TinyCodes 里出现过的 839 个 token 在第 0 层都把自己排在第一，从没出现过的 161 个都有例外"
 ```
 
 换句话说，对见过的 token，第 0 层的“预测”只是把输入原样照了一遍镜子。6 个块要做的事，就是把这个向量一步步推向“下一个 token”的方向。
 
-```localcheck verify/test_playground.py::test_reference_rederived_with_torch title="用 PyTorch 重算 ref.json：logits、greedy 生成、logit lens 与注意力权重"
+```localcheck verify/test_playground.py::test_reference_rederived_with_torch title="用 PyTorch 重算 ref.json：logits、贪心生成、logit lens 与注意力权重"
 ```
 
 ## P.5 Attention 在看哪里
@@ -351,13 +351,13 @@ assert self_top > 0.99 and np.median(np.diag(P)) < 0.5 and untied < 0.01
 
 `weights` 的形状是（batch, 头, 查询位置, 被看的位置），每一行是一个 softmax 分布，因果掩码让每个位置只能看见它自己和前面的 token（[2.6 节](ch02.html#s2-6)）。CodeBot 有 6 层、每层 6 个头（[2.8 节](ch02.html#s2-8)），所以对一段输入，一共有 36 张这样的图：
 
-```widget playground-attn caption="当前输入在 6 层 × 6 个头里的注意力权重。点缩略图可以放大。第 1 层第 1 个头的权重集中在紧贴对角线下方的那条斜线上：每个 token 大约一半的注意力给了前一个 token。"
-{"checkpoint": "pretrain", "prompt": "def add(a, b):\n    return a + b", "template": false, "layer": 1, "head": 1}
+```widget playground-attn caption="当前输入在 6 层 × 6 个头里的注意力权重（层和头都从 0 开始编号）。点缩略图可以放大。L0H0 的权重集中在紧贴对角线下方的那条斜线上：每个 token 大约一半的注意力给了前一个 token。"
+{"checkpoint": "pretrain", "prompt": "def add(a, b):\n    return a + b", "template": false, "layer": 0, "head": 0}
 ```
 
-不同的头看的地方很不一样。有的头把注意力分散在很多位置上，有的头盯着某几个关键的 token。第 1 层第 1 个头最好认：它的权重集中在对角线正下方那一条，也就是说，每个 token 都把相当大的一部分注意力给了紧挨着它的前一个 token。这种头常被称为“前一个 token 头”（previous-token head，见 [Olsson et al., 2022](https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/index.html)，查证于 2026-10）。用 PyTorch 记录的权重确认一下：
+不同的头看的地方很不一样。有的头把注意力分散在很多位置上，有的头盯着某几个关键的 token。图中的层和头都从 0 开始编号，与代码和[第 2 章](ch02.html#s2-8)的记法相同：L0H0 是第一层的第一个头。（注意它与 P.4.2 的 logit lens 数法不同：lens 的“第 0 层”还没经过任何块，L0 则是第一个块本身。）L0H0 最好认：它的权重集中在对角线正下方那一条，也就是说，每个 token 都把相当大的一部分注意力给了紧挨着它的前一个 token。这种头常被称为“前一个 token 头”（previous-token head，见 [Olsson et al., 2022](https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/index.html)，查证于 2026-10）。用 PyTorch 记录的权重确认一下：
 
-```verify id=P.5-a title="注意力权重：每行和为 1，对角线以上全是 0；第 1 层第 1 个头偏爱前一个 token"
+```verify id=P.5-a title="注意力权重：每行和为 1，对角线以上全是 0；L0H0 偏爱前一个 token"
 code = next(p for p in refs["pretrain"]["prompts"] if p["name"] == "code")
 att = np.array(code["q8"]["attention"])           # （层, 头, 查询位置, 被看的位置）
 L_, H_, n, _ = att.shape
@@ -366,13 +366,13 @@ assert np.allclose(att.sum(-1), 1, atol=1e-5) and np.all(np.triu(att, 1) == 0)
 t = np.arange(1, n)
 prev = att[:, :, t, t - 1].mean(-1)               # 每个头：平均有多少注意力给了前一个 token
 uniform = np.mean(1 / (t + 1))                    # 平均分配时的期望值
-print(f"给前一个 token 的平均权重：均匀分配 {uniform:.3f}，第 1 层第 1 个头 {prev[0, 0]:.3f}")
+print(f"给前一个 token 的平均权重：均匀分配 {uniform:.3f}，L0H0 {prev[0, 0]:.3f}")
 assert prev[0, 0] > 2 * uniform
 ```
 
-8 个 token 的例子还太短，均匀分配也有 0.245。换成 251 个 token 的长 prompt，均匀分配只剩 0.02，而这个头仍然把 46% 到 48% 的注意力给了前一个 token，三个检查点都是如此：
+8 个 token 的例子还太短，均匀分配也有 0.245。换成 251 个 token 的长 prompt，均匀分配只剩 0.02，而这个头仍然把 46% 到 48% 的注意力给了前一个 token，三个 checkpoint 都是如此：
 
-```localcheck verify/test_playground.py::test_previous_token_head title="251 个 token 的长 prompt：第 1 层第 1 个头给前一个 token 的平均权重在 0.45 到 0.49 之间，均匀分配只有 0.02"
+```localcheck verify/test_playground.py::test_previous_token_head title="251 个 token 的长 prompt：L0H0 给前一个 token 的平均权重在 0.45 到 0.49 之间，均匀分配只有 0.02"
 ```
 
 ## P.6 从 logits 到下一个 token
@@ -383,7 +383,7 @@ $$
 p_i = \frac{\exp(z_i / T)}{\sum_j \exp(z_j / T)}
 $$
 
-这里，$z_i$ 是第 $i$ 个 token 的 logit。用第 3 章的手算例子来说，logits 为 $[2, 1, 0.5, 0, -1]$ 时，第一名的概率在 $T = 1$ 时是 0.563，$T = 0.5$ 时升到 0.829，$T = 2$ 时降到 0.375（验证 P.6-b 会算一遍）。原书的 `generate()` 只有这一道工序。工作台按第 3 章的写法又加了两道（[3.2.3 节](ch03.html#s3-2-3)）：Top-k 只留概率最大的 $k$ 个，Top-p 再留下累计概率首次达到 $p$ 的最少几个，每截一次都重新归一化，最后按剩下的分布抽一个。温度为 0 时不抽样，直接取 argmax（greedy）。
+这里，$z_i$ 是第 $i$ 个 token 的 logit。用第 3 章的手算例子来说，logits 为 $[2, 1, 0.5, 0, -1]$ 时，第一名的概率在 $T = 1$ 时是 0.563，$T = 0.5$ 时升到 0.829，$T = 2$ 时降到 0.375（验证 P.6-b 会算一遍）。原书的 `generate()` 只有这一道工序。工作台按第 3 章的写法又加了两道（[3.2.3 节](ch03.html#s3-2-3)）：Top-k 只留概率最大的 $k$ 个，Top-p 再留下累计概率首次达到 $p$ 的最少几个，每截一次都重新归一化，最后按剩下的分布抽一个。温度为 0 时不抽样，直接取 argmax（贪心解码）。
 
 ```widget playground-next caption="预训练模型在 for i in 之后的下一个 token。range 一个就占了八成（第 3 章用官方权重测得 86%，这里是本书自己训练的权重）；调低温度，分布变尖，调高温度，长尾被抬起来。灰色的候选是被 Top-k / Top-p 截掉的。"
 {"checkpoint": "pretrain", "prompt": "for i in", "template": false, "temperature": 1, "topK": 0, "topP": 1, "seed": 0}
@@ -403,7 +403,7 @@ def softmax(x, T=1.0):
 def filter_dist(logits, T=1.0, top_k=0, top_p=1.0, order="kp"):
     """温度 → softmax → 按 order 依次做 Top-k（k）与 Top-p（p），每一步都在剩下的 token 里量。
     工作台的顺序是 "kp"：Top-k → 重新归一化 → Top-p → 重新归一化。"""
-    if T == 0:                                    # greedy：概率全给 argmax
+    if T == 0:                                    # 贪心解码：概率全给 argmax
         return np.eye(len(logits))[int(np.argmax(logits))]
     p = softmax(logits, T)
     keep = np.argsort(-p, kind="stable")
@@ -420,7 +420,7 @@ def filter_dist(logits, T=1.0, top_k=0, top_p=1.0, order="kp"):
 logits = np.array([2.0, 1.0, 0.5, 0.0, -1.0])
 cases = [({}, "不过滤"), ({"top_k": 2}, "Top-k = 2"), ({"top_p": 0.9}, "Top-p = 0.9"), ({"top_p": 0.7}, "Top-p = 0.7"),
          ({"top_k": 2, "top_p": 0.7}, "先 Top-k = 2，再 Top-p = 0.7"),
-         ({"top_k": 2, "top_p": 0.7, "order": "pk"}, "先 Top-p = 0.7，再 Top-k = 2"), ({"T": 0}, "温度 0（greedy）")]
+         ({"top_k": 2, "top_p": 0.7, "order": "pk"}, "先 Top-p = 0.7，再 Top-k = 2"), ({"T": 0}, "温度 0（贪心解码）")]
 for kw, label in cases:
     print(f"{label} → {np.round(filter_dist(logits, **kw), 3).tolist()}")
 assert np.count_nonzero(filter_dist(logits, top_p=0.9)) == 4
@@ -429,7 +429,7 @@ assert np.count_nonzero(filter_dist(logits, top_k=2, top_p=0.7)) == 1   # 先 To
 assert np.count_nonzero(filter_dist(logits, top_k=2, top_p=0.7, order="pk")) == 2   # 反过来：还是 2 个
 ```
 
-工作台的抽样用了一个带种子的随机数生成器（mulberry32），同样的种子、同样的设置，抽出的 token 序列总是相同的。原书的 `generate()` 用 `torch.multinomial` 抽样，用的是另一个随机数生成器。即使两边都固定种子，抽出的随机数也不一样，所以随机抽样的结果无法与 PyTorch 逐个对比；P.9 节对拍的是不涉及随机性的 greedy 生成。
+工作台的抽样用了一个带种子的随机数生成器（mulberry32），同样的种子、同样的设置，抽出的 token 序列总是相同的。原书的 `generate()` 用 `torch.multinomial` 抽样，用的是另一个随机数生成器。即使两边都固定种子，抽出的随机数也不一样，所以随机抽样的结果无法与 PyTorch 逐个对比；P.9 节对拍的是不涉及随机性的贪心生成。
 
 图中还显示了分布的熵：
 
@@ -472,7 +472,7 @@ assert abs(H_max / np.log(2) - np.log2(1000)) < 1e-12 and round(H_max, 3) == 6.9
 
 每一轮，`model(ids)` 都把整个序列从头算一遍，只为了取最后一个位置的 logits。前面那些位置的 K 和 V，上一轮明明已经算过了。第 5 章为 StoryBot 引入的 **KV cache**，就是把它们存起来，每一轮只算新来的那一个 token（[5.5 节](ch05.html#s5-5)）。
 
-工作台也是这样做的：先用一次 **prefill** 把整个 prompt 算完，之后每生成一个 token，只做一步 **decode**。这样做必须保证一件事：结果与从头重算完全相同。下面用一个 2 层的迷你 GPT 来确认。它保留了 CodeBot 结构上的要点：可学习的位置 embedding、先 LayerNorm 再 Attention、输出层与嵌入表共享权重；简单起见，省去了偏置和 LayerNorm 的参数。
+工作台也是这样做的：先用一次 **prefill** 把整个 prompt 算完，之后每生成一个 token，只做一步 **decode**。这样做必须保证一件事：结果与从头重算完全相同。下面用一个 2 层的迷你 GPT 来确认。它保留了 CodeBot 结构上的要点：可学习的位置 embedding、先 LayerNorm 再 Attention、输出层与 embedding 表共享权重；简单起见，省去了偏置和 LayerNorm 的参数。
 
 ```verify id=P.7-a title="KV cache 与从头重算的 logits 相同；超出位置 embedding 的行数就无法继续"
 rng = np.random.default_rng(0)
@@ -498,7 +498,7 @@ def full(ids):                                    # 不用 cache：每次从头�
         Q, K, Vs = h @ Pm["Wq"][l], h @ Pm["Wk"][l], h @ Pm["Wv"][l]
         x = x + np.stack([attend(Q[t], K[: t + 1], Vs[: t + 1]) for t in range(len(ids))]) @ Pm["Wo"][l]
         x = x + gelu(norm(x) @ Pm["W1"][l]) @ Pm["W2"][l]
-    return norm(x[-1]) @ Pm["tok"].T              # 权重共享：unembed 用的是同一张嵌入表
+    return norm(x[-1]) @ Pm["tok"].T              # 权重共享：unembed 用的是同一张 embedding 表
 
 def step(i, t, cache):                            # 有 cache：只算位置 t 的这一个 token
     x = Pm["tok"][i] + Pm["pos"][t]
@@ -523,7 +523,7 @@ else:
     raise AssertionError(f"位置 {T_} 不该有位置 embedding")
 ```
 
-工作台的 JavaScript 更进一步：prefill 用的矩阵乘法和 decode 用的矩阵向量乘法，按完全相同的顺序累加，所以两条路算出的 logits 逐位相同，不只是“差别很小”。因此，用不用 KV cache，生成的 token 都一模一样。Node 运行的测试在合成的小模型上和三个真实检查点上都检查了这一点，P.9 节的本地验证会把这些测试跑一遍。
+工作台的 JavaScript 更进一步：prefill 用的矩阵乘法和 decode 用的矩阵向量乘法，按完全相同的顺序累加，所以两条路算出的 logits 逐位相同，不只是“差别很小”。因此，用不用 KV cache，生成的 token 都一模一样。Node 运行的测试在合成的小模型上和三个真实的 checkpoint 上都检查了这一点，P.9 节的本地验证会把这些测试跑一遍。
 
 ### P.7.2 256 的墙
 
@@ -599,11 +599,11 @@ assert positions_computed(22, 1000) == 196_096 and positions_computed(22, 1000, 
 CS336 的第 10 讲专门讲推理。它从算术强度讲起：prefill 一次处理很多 token，decode 一次只处理一个。接着讲怎样把 KV cache 变小（GQA、MLA 等），怎样把模型变小（量化、剪枝、蒸馏）。最后讲怎样让推理服务更快：投机采样、continuous batching 与 PagedAttention（[讲义](https://cs336.stanford.edu/lectures/?trace=lecture_10)，源码 [lecture_10.py](https://github.com/stanford-cs336/lectures/blob/main/lecture_10.py)，查证于 2026-10）。这部分没有对应的作业，作业 5 直接使用 vLLM。DLFS6 里，CodeBot 的 `utils.generate` 每一步重算整个上下文，StoryBot 和 WebBot 的版本才用上了 KV cache。本页的 P.2 与 P.7 分别是量化和 prefill/decode 的最小演示。
 :::
 
-## P.8 三个检查点，三种回答
+## P.8 三个 checkpoint，三种回答
 
-一个 prompt 的一生走完了。现在把三个检查点放在一起：同一串 token、同样的 greedy 解码，只有权重不同。
+一个 prompt 的一生走完了。现在把三个 checkpoint 放在一起：同一串 token、同样的贪心解码，只有权重不同。
 
-```widget playground-compare caption="三个检查点回答同一个 prompt。3+4= 这一题，预训练模型写起了注释，SFT 模型答 6，GRPO 模型答 7。下方逐题比较 SFT 与 GRPO：81 道练过的个位数加法，以及 GRPO 没练过的两组题（切换题组即可）。"
+```widget playground-compare caption="三个 checkpoint 回答同一个 prompt。3+4= 这一题，预训练模型写起了注释，SFT 模型答 6，GRPO 模型答 7。下方逐题比较 SFT 与 GRPO：81 道练过的个位数加法，以及 GRPO 没练过的两组题（切换题组即可）。"
 {"prompt": "3+4=", "template": true, "maxNewTokens": 48, "set": "train"}
 ```
 
@@ -622,9 +622,9 @@ CS336 的第 10 讲专门讲推理。它从算术强度讲起：prefill 一次�
 ```listing ch03/09_grpo.py#L188-L205
 ```
 
-评估每 10 轮做一次（第 189 行），问的正是那 81 道题。注意第 194～195 行：`generate()` 返回的是“提示 + 回答”的整段文字，奖励函数拿到的也是这一整段（[勘误 E32](errata.html#e32)）。另外，最后一次评估在第 490 轮，模型却是在第 499 轮之后才保存的（第 205 行）。
+评估每 10 轮做一次（第 189 行），问的正是那 81 道题。注意第 194～195 行：`generate()` 返回的是“提示 + 回答”的整段文字，奖励函数拿到的也是这一整段（[勘误 E32](errata.html#e32)）。另外，最后一次评估在第 491 轮（`i = 490`），模型却要等第 500 轮做完才保存（第 205 行）。
 
-我们在 PyTorch 里把 81 道题全部问了一遍，greedy 解码，直到模型输出 `<|endoftext|>`（每个回答都在 64 个 token 之内停下，所以与原书默认的上限 1000 等价）。判分与训练时的奖励相同：只把回答交给 `calculate_reward`。除了本书自己的两个检查点，还问了原书的官方权重，并加了两组 GRPO 没练过的题：含 0 的 19 道，以及两位数加一位数的 81 道。
+我们在 PyTorch 里把 81 道题全部问了一遍，用贪心解码，直到模型输出 `<|endoftext|>`（每个回答都在 64 个 token 之内停下，所以与原书默认的上限 1000 等价）。判分与训练时的奖励相同：只把回答交给 `calculate_reward`。除了本书自己的两个 checkpoint，还问了原书的官方权重，并加了两组 GRPO 没练过的题：含 0 的 19 道，以及两位数加一位数的 81 道。
 
 ::: think GRPO 没练过的题，它会怎么回答？
 GRPO 只练过 1 到 9 的个位数加法。它没见过含 0 的题（比如 0+5=），也没见过两位数（比如 11+3=）。先猜一猜，再看下面验证单元输出里以“GRPO 的回答：”开头的那一行。
@@ -633,7 +633,7 @@ GRPO 只练过 1 到 9 的个位数加法。它没见过含 0 的题（比如 0+
 `0+5=` 它答 `10`。含 0 的 19 道题，它一道也没答对，0 从来没有出现在训练的题目里。两位数的题更说明问题：`11+3=` 它答 `4`，`12+5=` 答 `6`，`15+4=` 答 `5`。81 道两位数的题里，有 48 道的回答恰好是 1 + b，就好像它只读了第一个数的第一位。模型并没有学会“加法”，它学会的是这 81 道题里的 70 道。
 :::
 
-```verify id=P.8-a title="81 道练过的加法与两组没练过的题：各个检查点答对多少" files=data/playground/addition.json
+```verify id=P.8-a title="81 道练过的加法与两组没练过的题：各个 checkpoint 答对多少" files=data/playground/addition.json
 import re
 
 add = json.load(open("data/playground/addition.json", encoding="utf-8"))
@@ -646,7 +646,7 @@ assert res("ours-sft-f32")["n_correct"] == 44 and res("ours-grpo-f32")["n_correc
 assert res("official-sft-f32")["n_correct"] == 44 and res("official-grpo-f32")["n_correct"] == 67
 diff = [(n, s, p, a, b) for n in ["sft", "grpo"] for s in add["sets"]
         for p, a, b in zip(add["sets"][s], res(f"ours-{n}-q8", s)["responses"], res(f"ours-{n}-f32", s)["responses"]) if a != b]
-print(f"int8 与 float32 的 {2 * sum(len(v) for v in add['sets'].values())} 对回答里，不同的（检查点, 题组, 题, int8, float32）：", diff)
+print(f"int8 与 float32 的 {2 * sum(len(v) for v in add['sets'].values())} 对回答里，不同的（checkpoint, 题组, 题, int8, float32）：", diff)
 assert diff == [("sft", "teens", "14+6=", "7", "9")]
 assert all(res(name, s)["n_correct"] == 0 for name in add["models"] for s in ["zero", "teens"])
 pick = lambda s, p: res("ours-grpo-f32", s)["responses"][add["sets"][s].index(p)]
@@ -657,7 +657,7 @@ print(f"两位数的题里，GRPO 回答恰好是 1 + b 的：{one_plus_b}/81；
 assert [pick("teens", p) for p in ["11+3=", "12+5=", "15+4="]] == ["4", "6", "5"]
 assert pick("zero", "0+5=") == "10" and one_plus_b == 48
 
-i34 = add["sets"]["train"].index("3+4=")              # 图 P-7 的例子：三个检查点对 3+4= 的 greedy 回答
+i34 = add["sets"]["train"].index("3+4=")              # 图 P-7 的例子：三个 checkpoint 对 3+4= 的贪心解码回答
 math_pretrain = decode(next(p for p in refs["pretrain"]["prompts"] if p["name"] == "math")["q8"]["greedy"])
 print("3+4= →", {"预训练": math_pretrain[:22], "SFT": res("ours-sft-q8")["responses"][i34], "GRPO": res("ours-grpo-q8")["responses"][i34]})
 assert math_pretrain.startswith("#") and res("ours-sft-q8")["responses"][i34] == "6" and res("ours-grpo-q8")["responses"][i34] == "7"
@@ -676,7 +676,7 @@ print(f"连提示一起交给奖励函数：GRPO 在含 0 的题上答对 {n_rig
 assert n_right("ours-grpo-f32", "zero", True) == 1 and pick("zero", "0+3=") == ""
 ```
 
-先看“练过的 81 道”一列（train）。本书的 SFT 模型答对 44 道，GRPO 模型答对 70 道（86.4%），与进度条最后显示的数字相同。不过，这是两次测量恰好一致：进度条上的 86.4% 来自第 490 轮的评估，之后又更新了 9 轮才保存模型，我们重测的是保存下来的模型。
+先看“练过的 81 道”一列（train）。本书的 SFT 模型答对 44 道，GRPO 模型答对 70 道（86.4%），与进度条最后显示的数字相同。不过，这是两次测量恰好一致：进度条上的 86.4% 来自第 491 轮（`i = 490`）的评估，之后又更新了 9 轮才保存模型，我们重测的是保存下来的模型。
 
 官方权重是 44 道和 67 道，与第 3 章测得的一样（[3.4.2 节](ch03.html#s3-4-2)）。int8 的两行（`-q8`）在 81 道练过的题上，与 float32 的回答逐题相同；全部 362 对回答里只有一对不同（SFT 模型对 `14+6=` 的回答，int8 是 7，float32 是 9，都不对）。在浏览器里点“逐题测试”，得到的也是 44 和 70，而且每一道题的回答都与 PyTorch 用同一份 int8 权重算出的相同（P.9 节的本地验证会在 Node 里把 181 道题重算一遍）。
 
@@ -686,7 +686,7 @@ assert n_right("ours-grpo-f32", "zero", True) == 1 and pick("zero", "0+3=") == "
 ```
 
 ::: confusion 进度条上的 86.4%，能说明模型学会了加法吗？
-GRPO 训练结束时，进度条上的 `acc` 是 86.4%，很容易把它当成“模型的加法能力”。可是 `09_grpo.py` 评估用的，正是训练时反复练习的那 81 道题，而且这 81 道题连同答案，早就出现在 SFT 的数据里了（[验证 3.3-a](ch03.html#v-3.3-a)）。这个数字说明的是“练过的题答对了多少”，相当于把作业题原样拿来当考试。
+GRPO 训练结束时，进度条上的 `acc` 是 86.4%，很容易把它当成“模型的加法能力”。可是 `09_grpo.py` 评估用的，正是训练时反复练习的那 81 道题，而且这 81 道题连同答案，早就出现在 SFT 的数据里了（[验证 I.3-b](part1.html#v-I.3-b)）。这个数字说明的是“练过的题答对了多少”，相当于把作业题原样拿来当考试。
 
 要知道模型学到了什么，得拿它没见过的题来考，也就是留出评估（held-out evaluation）。上面加的两组题就是最简单的留出集：结果是 0 分。
 
@@ -701,17 +701,17 @@ CS336 的作业 5 也做 GRPO，但评估方式不同：在留出的验证集上
 
 ## P.9 与 PyTorch 对拍
 
-最后，我们来确认工作台里的这份 JavaScript，算的确实是原书的 CodeBot。点下面的按钮，工作台会把 P.2.3 节那 4 个 prompt 在你的浏览器里重算一遍，与 PyTorch 记录的结果逐项比较：最后一个位置的 1,000 个 logits、greedy 生成的 16 到 32 个 token、`def add(a, b):` 的 36 张注意力图，以及每一层的 logit lens。
+最后，我们来确认工作台里的这份 JavaScript，算的确实是原书的 CodeBot。点下面的按钮，工作台会把 P.2.3 节那 4 个 prompt 在你的浏览器里重算一遍，与 PyTorch 记录的结果逐项比较：最后一个位置的 1,000 个 logits、贪心生成的 16 到 32 个 token、`def add(a, b):` 的 36 张注意力图，以及每一层的 logit lens。
 
 ```widget playground-parity caption="与 PyTorch 对拍。int8 一栏与使用同一份 int8 权重的 PyTorch 比较，检验的是实现；float32 一栏与原始权重比较，差别来自量化。"
 {"checkpoint": "grpo", "tolerance": 0.0001}
 ```
 
-参考结果有两份，各回答一个问题。与“同一份 int8 权重的 PyTorch”比较，检验 JavaScript 的实现对不对：这时 logits 最多差 1.5×10⁻⁵ 左右，greedy 的 token 全部相同。与“原始 float32 权重的 PyTorch”比较，看到的是量化带来的差别：logits 差到 0.1 到 0.3，greedy 序列有时会在中途分岔（P.2.3 节）。
+参考结果有两份，各回答一个问题。与“同一份 int8 权重的 PyTorch”比较，检验 JavaScript 的实现对不对：这时 logits 最多差 1.5×10⁻⁵ 左右，贪心生成的 token 全部相同。与“原始 float32 权重的 PyTorch”比较，看到的是量化带来的差别：logits 差到 0.1 到 0.3，贪心生成的序列有时会在中途分岔（P.2.3 节）。
 
-浏览器里的按钮，检查的只是你这台设备上的这一次运行。为了让每次修改代码之后都能复查，同样的比较也写成了测试：JavaScript 一侧用 Node 运行，PyTorch 一侧由 pytest 重新生成参考结果（P.4 节的本地验证）。下面这个本地验证把 Node 的测试跑一遍，再核对它们报告的数字：三个检查点、12 个参考 prompt 的 logits，greedy 生成的 token，以及 P.8 节的 181 道加法题。
+浏览器里的按钮，检查的只是你这台设备上的这一次运行。为了让每次修改代码之后都能复查，同样的比较也写成了测试：JavaScript 一侧用 Node 运行，PyTorch 一侧由 pytest 重新生成参考结果（P.4 节的本地验证）。下面这个本地验证把 Node 的测试跑一遍，再核对它们报告的数字：三个 checkpoint、12 个参考 prompt 的 logits，贪心生成的 token，以及 P.8 节的 181 道加法题。
 
-```localcheck verify/test_playground.py::test_javascript_matches_pytorch needs="Node.js" title="用 Node 运行工作台的 JavaScript：logits 与同一份 int8 权重的 PyTorch 相差不到 2×10⁻⁵，每个检查点 112 个 greedy token、181 道加法的回答全部相同"
+```localcheck verify/test_playground.py::test_javascript_matches_pytorch needs="Node.js" title="用 Node 运行工作台的 JavaScript：logits 与同一份 int8 权重的 PyTorch 相差不到 2×10⁻⁵，每个 checkpoint 贪心生成的 112 个 token、181 道加法的回答全部相同"
 ```
 
 那么，用的是同一份权重，为什么还会差 10⁻⁵ 呢？原因是浮点舍入。同样的运算，换一种顺序、换一种精度来做，舍入的结果就不一样，而两边舍入的地方并不相同：PyTorch 调用的矩阵库有它自己的加法顺序；工作台的 LayerNorm 和 softmax 先用 float64 算，再存回 float32；GELU 里的 erf 用的是一个近似公式（Abramowitz–Stegun 7.1.26）。
@@ -743,9 +743,9 @@ print(f"12 个参考 prompt 里，第一名与第二名 logit 的最小差距：
 assert min(gaps) > 1e-3
 ```
 
-纯 JavaScript 后端也是 4 路累加，只是 JavaScript 的数是 float64，舍入又发生在别的地方。在 9 个较短的参考 prompt 上，它与 PyTorch 同样只差 10⁻⁵ 量级，greedy token 同样全部相同（上面的本地验证；图 P-8 也可以切换后端试试）。
+纯 JavaScript 后端也是 4 路累加，只是 JavaScript 的数是 float64，舍入又发生在别的地方。在 9 个较短的参考 prompt 上，它与 PyTorch 同样只差 10⁻⁵ 量级，贪心生成的 token 同样全部相同（上面的本地验证；图 P-8 也可以切换后端试试）。
 
-只要第一名与第二名之间的差距比这种舍入误差大，greedy 选出的 token 就不会变。12 个参考 prompt 的最后一个位置上，这个差距最小是 0.004，是 10⁻⁵ 的几百倍。当然，这只是 12 个位置；生成过程中每一步是否都有这样的余量，要靠上面的对拍来回答：每个检查点的 112 个 greedy token 全部相同。
+只要第一名与第二名之间的差距比这种舍入误差大，贪心解码选出的 token 就不会变。12 个参考 prompt 的最后一个位置上，这个差距最小是 0.004，是 10⁻⁵ 的几百倍。当然，这只是 12 个位置；生成过程中每一步是否都有这样的余量，要靠上面的对拍来回答：每个 checkpoint 贪心生成的 112 个 token 全部相同。
 
 想自己从头复查一遍，就运行这两条命令：
 
@@ -758,16 +758,16 @@ uv run pytest verify/test_playground.py
 
 这一页，我们跟着一个 prompt 把 CodeBot 从头到尾走了一遍。文字先套上第 3 章的模板，再被第 1 章的分词器切成 token；每个 token 查表得到向量，加上位置 embedding，再穿过 6 个块，每个块都只往残差流上“加”一点东西；最后一个位置的向量变成 1,000 个 logits，经过温度、Top-k 和 Top-p，抽出下一个 token。为了让这一切在浏览器里跑起来，权重被按行量化成 int8，推理用 KV cache 一步一步地做，而 CodeBot 的可学习位置 embedding，给它立了一堵 256 个位置的墙。
 
-三个检查点的比较说明了第 3 章三个阶段各自的作用：预训练学会续写，SFT 学会格式，GRPO 把练过的题答对，但也只限于练过的题。
+三个 checkpoint 的比较说明了第 3 章三个阶段各自的作用：预训练学会续写，SFT 学会格式，GRPO 把练过的题答对，但也只限于练过的题。
 
 本章所学的内容：
 
-- 工作台的三个检查点出自本书自己的训练：清单里的训练记录与运行报告一致，分片与 checkpoint 也逐行核对过（[验证 P.1-a](#v-P.1-a)、[P.2.2 节的本地验证](#sP-2-2)）。
-- CodeBot 的 11,121,640 个参数，按行量化成 int8 后是 11.3 MB，约为 float32 的四分之一（[验证 P.2-a](#v-P.2-a)）；每个权重的误差不超过半个 scale，一行离群也不会拖累别的行。logits 仍会偏移：12 个参考 prompt 的最后一个位置上最多 0.29，TinyCodes 的任意位置上可以到 0.4 左右；greedy 序列可能在近乎打平的位置分岔（[验证 P.2-b](#v-P.2-b)、[验证 P.2-c](#v-P.2-c)、[验证 P.2-d](#v-P.2-d)、[P.2.3 节的本地验证](#sP-2-3)）。
-- logit lens 的第 0 层几乎总是“预测”当前 token 自己：TinyCodes 里出现过的 839 个 token 无一例外，从没出现过的 token（例如汉字的 UTF-8 字节）则不一定；这与权重共享有关（[验证 P.4-a](#v-P.4-a)、[P.4.2 节的本地验证](#sP-4-2)）。第 1 层第 1 个头是一个“前一个 token 头”（[验证 P.5-a](#v-P.5-a)）。
+- 工作台的三个 checkpoint 出自本书自己的训练：清单里的训练记录与运行报告一致，分片与 checkpoint 也逐行核对过（[验证 P.1-a](#v-P.1-a)、[P.2.2 节的本地验证](#sP-2-2)）。
+- CodeBot 的 11,121,640 个参数，按行量化成 int8 后是 11.3 MB，约为 float32 的四分之一（[验证 P.2-a](#v-P.2-a)）；每个权重的误差不超过半个 scale，一行离群也不会拖累别的行。logits 仍会偏移：12 个参考 prompt 的最后一个位置上最多 0.29，TinyCodes 的任意位置上可以到 0.4 左右；贪心生成的序列可能在近乎打平的位置分岔（[验证 P.2-b](#v-P.2-b)、[验证 P.2-c](#v-P.2-c)、[验证 P.2-d](#v-P.2-d)、[P.2.3 节的本地验证](#sP-2-3)）。
+- logit lens 的第 0 层几乎总是“预测”当前 token 自己：TinyCodes 里出现过的 839 个 token 无一例外，从没出现过的 token（例如汉字的 UTF-8 字节）则不一定；这与权重共享有关（[验证 P.4-a](#v-P.4-a)、[P.4.2 节的本地验证](#sP-4-2)）。L0H0 是一个“前一个 token 头”（[验证 P.5-a](#v-P.5-a)）。
 - Top-p 量的是 Top-k 剩下的部分，所以两者的先后顺序会改变结果；熵用自然对数算，单位是 nats（[验证 P.6-a](#v-P.6-a)、[验证 P.6-b](#v-P.6-b)）。
 - KV cache 与从头重算的结果相同。越过 256 之后，从左边截断让缓存整体作废：位置平移了，被截掉的 token 也已混进第 2 层起的 K、V，所以每个 token 都要重算整个窗口（[验证 P.7-a](#v-P.7-a)、[验证 P.7-b](#v-P.7-b)、[验证 P.7-c](#v-P.7-c)）。
 - GRPO 把 81 道练过的题从 44 道提高到 70 道，没练过的题一道也答不对（只看回答来判分）；训练中的准确率不能代替留出评估（[验证 P.8-a](#v-P.8-a)）。
-- 同一份 int8 权重下，JavaScript 与 PyTorch 只差 10⁻⁵ 量级的浮点舍入，远小于第一名领先的幅度，所以 greedy 生成的 token 逐个相同（[验证 P.9-a](#v-P.9-a)、[P.9 节的本地验证](#sP-9)）。
+- 同一份 int8 权重下，JavaScript 与 PyTorch 只差 10⁻⁵ 量级的浮点舍入，远小于第一名领先的幅度，所以贪心生成的 token 逐个相同（[验证 P.9-a](#v-P.9-a)、[P.9 节的本地验证](#sP-9)）。
 
 工作台里的 CodeBot 是在 GPU 上训练好的，我们只是看着它推理。训练本身能不能也搬进浏览器呢？下一页，我们就在这个标签页里，从零训练一个迷你 GPT。

@@ -21,7 +21,7 @@ pyodide_packages: [numpy]
 
 ## Y.1 术语表
 
-术语按主题分组。“首次出现”指向本书里第一次正式讲解它的小节；中文译名沿用正文的写法，正文里直接用英文的术语（token、Attention、softmax 等）这里也保留英文。最后一组是一词多义的词，它们在 Y.4 里逐个拆开。
+术语按主题分组。“首次出现”指向本书里第一次正式讲解它的小节；中文一列沿用正文的写法：正文里直接用英文的术语，写成“英文（中文译名）”，如 Attention（注意力）、KV cache（KV 缓存）；token、logits 这样正文从不翻译、也没有统一译名的词，只写英文。最后一组是一词多义的词，它们在 Y.4 里逐个拆开。
 
 ### 分词
 
@@ -32,9 +32,9 @@ pyodide_packages: [numpy]
 | 词表、词表大小 | vocabulary, vocabulary size (V) | 全部 token 的集合与个数：CodeBot 1,000、StoryBot 10,000、WebBot 50,000 | [1.1](ch01.html#s1-1) |
 | 码位 | code point | Unicode 给每个字符的编号，从 0 到 0x10FFFF | [1.1](ch01.html#s1-1) |
 | UTF-8 | UTF-8 | 把一个码位写成 1–4 个字节的变长编码 | [1.2](ch01.html#s1-2)、[附录 A](appendix-a.html) |
-| 字节对编码 | byte pair encoding (BPE) | 反复把最常见的相邻两个 token 合并成一个新 token | [1.3](ch01.html#s1-3) |
+| BPE（字节对编码） | byte pair encoding (BPE) | 反复把最常见的相邻两个 token 合并成一个新 token | [1.3](ch01.html#s1-3) |
 | 合并规则 | merge rules | BPE 学到的合并表；DLFS6 存成 `{(id1, id2): new_id}` | [1.3](ch01.html#s1-3) |
-| 平局规则 | tie-break | 两对出现次数相同时选哪一对 | [1.3](ch01.html#s1-3)（专栏） |
+| 平票规则 | tie-break | 两对出现次数相同时选哪一对 | [1.3](ch01.html#s1-3)（专栏） |
 | 特殊 token | special token | 不由 BPE 学出、表示文档边界等含义的 token，如 `<\|endoftext\|>` | [1.5](ch01.html#s1-5) |
 | 预分词 | pre-tokenization | 先用正则把文本切成“词”，再在每个词内部做 BPE | [1.6](ch01.html#s1-6) |
 | 压缩率 | compression ratio | 字节数 ÷ token 数，越大说明一个 token 装的文字越多 | [1.8](ch01.html#s1-8) |
@@ -45,29 +45,29 @@ pyodide_packages: [numpy]
 
 | 中文 | English | 一句话 | 首次出现 |
 |---|---|---|---|
-| 注意力 | Attention | 按相似度给各个位置加权，混合它们的值 | [2.1](ch02.html#s2-1) |
+| Attention（注意力） | Attention | 按相似度给各个位置加权，混合它们的值 | [2.1](ch02.html#s2-1) |
 | 查询、键、值 | query, key, value (Q, K, V) | “拿什么去查”“和什么比”“取回什么” | [2.1](ch02.html#s2-1)–[2.2](ch02.html#s2-2) |
 | 缩放 | scaling (1/√d) | 点积除以 √d，让 softmax 的尖锐程度不随维数变化 | [2.3](ch02.html#s2-3)、[附录 B](appendix-b.html) |
 | logits | logits | softmax 之前的分数，每个 token 一个 | [2.4](ch02.html#s2-4) |
 | 位置编码 | positional encoding | 把 token 的先后顺序告诉模型 | [2.5](ch02.html#s2-5) |
 | 因果掩码 | causal mask | 让每个位置只能看见它自己和它前面的位置 | [2.6](ch02.html#s2-6) |
-| 多头注意力 | multi-head attention | 把注意力拆成 H 个头并行计算，再拼接起来 | [2.8](ch02.html#s2-8) |
+| 多头 Attention（多头注意力） | multi-head attention | 把注意力拆成 H 个头并行计算，再拼接起来 | [2.8](ch02.html#s2-8) |
 | 残差流 | residual stream | 每一层都往上“加”自己的结果的那条主干；它的宽度就是 `embed_dim` | [2.9](ch02.html#s2-9) |
-| 层归一化 | LayerNorm | 对每个 token 的向量减去均值、除以标准差 | [2.9](ch02.html#s2-9) |
-| 前馈网络 | feed-forward network (FFN) | 每个位置各自通过的全连接层；它中间那层的宽度是 `ff_dim` | [2.9](ch02.html#s2-9) |
+| LayerNorm（层归一化） | LayerNorm | 对每个 token 的向量减去均值、除以标准差 | [2.9](ch02.html#s2-9) |
+| FFN（前馈网络） | feed-forward network (FFN) | 每个位置各自通过的全连接层；它中间那层的宽度是 `ff_dim` | [2.9](ch02.html#s2-9) |
 | GELU | GELU | CodeBot 的 FFN 用的激活函数，平滑版的 ReLU | [2.9](ch02.html#s2-9) |
 | dropout | dropout | 训练时随机把一部分值置 0、其余按比例放大；eval 模式下关闭 | [2.10](ch02.html#s2-10)、[5.3](ch05.html#s5-3) |
-| 权重共享 | weight tying | 输入嵌入与输出层共用一个矩阵（CodeBot） | [2.10](ch02.html#s2-10) |
-| 旋转位置编码 | rotary position embedding (RoPE) | 按位置旋转 Q 与 K，让点积只与相对位置有关 | [5.1](ch05.html#s5-1) |
+| 权重共享 | weight tying | 输入 embedding 与输出层共用一个矩阵（CodeBot） | [2.10](ch02.html#s2-10) |
+| RoPE（旋转位置编码） | rotary position embedding (RoPE) | 按位置旋转 Q 与 K，让点积只与相对位置有关 | [5.1](ch05.html#s5-1) |
 | Swish、SiLU | Swish, SiLU | $x\,\sigma(x)$：SwiGLU 的门控用它 | [5.2](ch05.html#s5-2) |
 | SwiGLU | SwiGLU | 用 SiLU 作门控的 FFN，有三个权重矩阵 | [5.2](ch05.html#s5-2) |
 | RMSNorm | RMSNorm | 只除以均方根、不减均值的归一化 | [5.3](ch05.html#s5-3) |
-| KV 缓存 | KV cache | 生成时把算过的 K、V 存起来，每步只算新 token | [5.5](ch05.html#s5-5) |
+| KV cache（KV 缓存） | KV cache | 生成时把算过的 K、V 存起来，每步只算新 token | [5.5](ch05.html#s5-5) |
 | Prefill、Decode | prefill, decode | 生成的两个阶段：先把整段提示一次算完，之后每步只送进一个新 token | [5.5](ch05.html#s5-5) |
 | scaling law | scaling law | loss 随参数量、数据量变化的经验规律 | [8.1](ch08.html#s8-1) |
-| FlashAttention | FlashAttention | 分块计算注意力，不显式存下 C×C 的分数矩阵 | [8.2](ch08.html#s8-2) |
-| 分组查询注意力 | grouped-query attention (GQA) | 几个查询头共用一组 K、V，KV 缓存因此变小 | [8.3](ch08.html#s8-3) |
-| 混合专家 | mixture of experts (MoE) | 每个 token 只经过少数几个“专家”FFN | [8.4](ch08.html#s8-4) |
+| Flash Attention | FlashAttention | 分块计算注意力，不显式存下 C×C 的分数矩阵 | [8.2](ch08.html#s8-2) |
+| GQA（分组查询注意力） | grouped-query attention (GQA) | 几个查询头共用一组 K、V，KV cache 因此变小 | [8.3](ch08.html#s8-3) |
+| MoE（混合专家） | mixture of experts (MoE) | 每个 token 只经过少数几个“专家”FFN | [8.4](ch08.html#s8-4) |
 | torch.compile | torch.compile | 把模型捕获成计算图再编译，相邻的运算融合成一个 kernel，少读写显存 | [8.5](ch08.html#s8-5) |
 
 ### 训练
@@ -83,18 +83,19 @@ pyodide_packages: [numpy]
 | padding、−100 标签 | padding, ignore index (−100) | 把一个 batch 的序列补到同样长；标签为 −100 的位置不计入 loss | [3.3](ch03.html#s3-3) |
 | AdamW | AdamW | 把权重衰减与梯度更新分开的 Adam | [6.1](ch06.html#s6-1)–[6.2](ch06.html#s6-2)、[附录 D](appendix-d.html) |
 | 学习率调度 | learning-rate schedule | 学习率随步数的变化。第 3 章的三个训练脚本和第 6 章的 DPO 用恒定的学习率；StoryBot、WebBot 的预训练先 warmup，再线性衰减到 0 | [6.3](ch06.html#s6-3) |
-| 预热、D2Z | warmup, decay to zero (D2Z) | 学习率先从 0 线性升到峰值，再线性降到 0 | [6.3](ch06.html#s6-3) |
+| warmup（预热）、D2Z | warmup, decay to zero (D2Z) | 学习率先从 0 线性升到峰值，再线性降到 0 | [6.3](ch06.html#s6-3) |
 | 混合精度 | mixed precision | 用 bf16 或 fp16 计算，用 fp32 保存参数 | [6.4](ch06.html#s6-4) |
 | bf16、fp16 | bfloat16, float16 | 两种 16 位浮点：bf16 保留 fp32 的 8 位指数，范围大、精度低；fp16 精度较高，范围只到 65,504 | [6.4](ch06.html#s6-4) |
 | 梯度裁剪 | gradient clipping | 梯度的总范数超过阈值时整体缩小 | [3.9](ch03.html#s3-9)、[6.5](ch06.html#s6-5) |
 | 梯度累积 | gradient accumulation | 累积几个 micro-batch 的梯度后再更新一次 | [9.1](ch09.html#s9-1) |
 | 梯度检查点 | gradient checkpointing | 前向时少存激活，反向时重新计算 | [9.2](ch09.html#s9-2) |
-| 分布式数据并行 | distributed data parallel (DDP) | 每张卡一份模型，各算一部分数据，再平均梯度 | [9.3](ch09.html#s9-3) |
+| DDP（分布式数据并行） | distributed data parallel (DDP) | 每张卡一份模型，各算一部分数据，再平均梯度 | [9.3](ch09.html#s9-3) |
 | 全局 batch | global batch size (gbs) | 一次参数更新在所有卡上用到的样本数：micro-batch × 累积次数 × 卡数 | [9.3](ch09.html#s9-3)、[Y.4](#y4-batch) |
 | 进程编号 | `RANK`、`LOCAL_RANK`、`WORLD_SIZE` | `torchrun` 给每个进程设的环境变量：全局编号、本机内的编号、进程总数 | [9.3](ch09.html#s9-3) |
 | ZeRO | ZeRO | 把优化器状态（以及梯度、参数）分片存到各张卡上 | [9.4](ch09.html#s9-4) |
 | Muon | Muon | 先把更新量正交化再应用的优化器 | [9.5](ch09.html#s9-5) |
 | Weights & Biases | Weights & Biases (wandb) | 把训练曲线记到网上的服务；第 9 章的脚本用它记录 | [9.6](ch09.html#s9-6) |
+| 对拍 | parity check | 把同一个输入交给两份实现（比如本书的 NumPy 版与原书的 PyTorch 版），逐项比较输出，差别应当只在浮点舍入的范围内 | [T.5](train-in-browser.html#sT-5) |
 
 ```localcheck verify/test_reference.py::test_cs336_clipping_and_lr_schedules title="“学习率调度”一行：从原书的 6 个训练脚本读出，只有 StoryBot、WebBot 的预训练按步调整学习率"
 ```
@@ -103,9 +104,9 @@ pyodide_packages: [numpy]
 
 | 中文 | English | 一句话 | 首次出现 |
 |---|---|---|---|
-| 温度 | temperature | logits 除以 T 再做 softmax；T = 0 就是贪心 | [3.2](ch03.html#s3-2) |
+| 温度 | temperature | logits 除以 T 再做 softmax；T = 0 就是贪心解码 | [3.2](ch03.html#s3-2) |
 | Top-k、Top-p | top-k, top-p sampling | 只在概率最高的 k 个、或累计概率 p 以内的 token 里采样 | [3.2](ch03.html#s3-2) |
-| 监督微调 | supervised fine-tuning (SFT) | 在“指令 → 回答”的数据上继续训练 | [3.3](ch03.html#s3-3) |
+| SFT（监督微调） | supervised fine-tuning (SFT) | 在“指令 → 回答”的数据上继续训练 | [3.3](ch03.html#s3-3) |
 | 策略 | policy | 给定上下文、输出下一个 token 的分布，也就是语言模型本身 | [3.5](ch03.html#s3-5) |
 | 轨迹 | trajectory | 状态与动作交替组成的序列；对语言模型来说，就是一个完整的回答 | [3.5](ch03.html#s3-5) |
 | 奖励 | reward | 给一次完整回答的分数 | [3.5](ch03.html#s3-5) |
@@ -116,13 +117,13 @@ pyodide_packages: [numpy]
 | rollout | rollout | 用当前策略为一道题采出的一条完整回答，连同它的奖励；GRPO 每道题采 G 条 | [3.7](ch03.html#s3-7)、[3.9](ch03.html#s3-9) |
 | 同策略、离策略 | on-policy, off-policy | 用当前策略采的样本更新它自己；或者用旧策略采的样本去更新新策略 | [3.8](ch03.html#s3-8) |
 | 重要性采样、裁剪 | importance sampling, clipping | 离策略时给每个样本乘上概率比 π_new / π_old；再把这个比限制在 [1−ε, 1+ε] 之内 | [3.8](ch03.html#s3-8) |
-| GRPO | group relative policy optimization | 以同一道题的一组回答的平均奖励作基线 | [3.7](ch03.html#s3-7)、[3.9](ch03.html#s3-9) |
+| GRPO（组相对策略优化） | group relative policy optimization | 以同一道题的一组回答的平均奖励作基线 | [3.7](ch03.html#s3-7)、[3.9](ch03.html#s3-9) |
 | Dr. GRPO | Dr. GRPO | 不除以标准差、不按长度归一化的 GRPO | [3.7](ch03.html#s3-7)（专栏） |
-| LLM 评审 | LLM-as-a-Judge | 用另一个 LLM 给生成结果打分 | [6.6](ch06.html#s6-6) |
-| RLHF | reinforcement learning from human feedback | 先用人类偏好训练奖励模型，再做强化学习 | [6.7](ch06.html#s6-7) |
+| LLM-as-a-Judge（LLM 评审） | LLM-as-a-Judge | 用另一个 LLM 给生成结果打分 | [6.6](ch06.html#s6-6) |
+| RLHF（基于人类反馈的强化学习） | reinforcement learning from human feedback | 先用人类偏好训练奖励模型，再做强化学习 | [6.7](ch06.html#s6-7) |
 | KL 散度 | KL divergence | 两个分布相差多少：非负，只在两者相同时为 0，而且不对称 | [6.7](ch06.html#s6-7)、[附录 E](appendix-e.html) |
-| Bradley–Terry 模型 | Bradley–Terry model | 把“A 比 B 好”的概率写成两者奖励之差的 sigmoid | [6.7](ch06.html#s6-7)、[附录 E](appendix-e.html) |
-| DPO | direct preference optimization | 直接用偏好对优化策略，不需要显式的奖励模型 | [6.7](ch06.html#s6-7)、[附录 E](appendix-e.html) |
+| Bradley-Terry 模型 | Bradley-Terry model | 把“A 比 B 好”的概率写成两者奖励之差的 sigmoid | [6.7](ch06.html#s6-7)、[附录 E](appendix-e.html) |
+| DPO（直接偏好优化） | direct preference optimization | 直接用偏好对优化策略，不需要显式的奖励模型 | [6.7](ch06.html#s6-7)、[附录 E](appendix-e.html) |
 
 ### 一词多义
 
@@ -130,7 +131,7 @@ pyodide_packages: [numpy]
 |---|---|---|---|
 | 探针 | probe | 可解释性研究里的线性探针；训练前先跑一遍的“第 0 步”评估 | [Y.4](#y4-probe) |
 | epoch | epoch | 按 token 数、或按 `DataLoader` 的样本数过一遍；强化学习里还指同一批 rollout 拿来更新几遍 | [Y.4](#y4-epoch) |
-| step | step | 一次参数更新、梯度累积里的一个 micro-step、GRPO 的一次迭代、生成时的一个 decode step | [Y.4](#y4-step) |
+| step | step | 一次参数更新、梯度累积里的一个 micro-step、GRPO 的一轮、生成时的一个 decode step | [Y.4](#y4-step) |
 | 上下文 | context | 一次前向计算能看见的 token 数；也常指整段对话历史和累计消耗的 token | [Y.4](#y4-context) |
 | batch | batch | micro-batch、全局 batch；强化学习里的题数与回答条数 | [Y.4](#y4-batch) |
 | critic | critic | PPO 里的价值网络；也是 veRL 指标名的一个分组前缀，与有没有价值网络无关 | [Y.3](#sY-3) |
@@ -273,7 +274,7 @@ assert round(1 - rough / blocks, 2) == 0.25
 | advantage 的均值 | 按 token 平均：组内按回答平均是 0，但长回答的 token 多、权重大，所以一般不是 0；答错的回答更长时偏负。它不是学习信号 | 没有记录 | — | `critic/advantages/mean` | — |
 | 回答长度 | 长度漂移、被截断的比例 | 没有记录 | Val average response length | `response_length/mean`、`response_length/clip_ratio` | `env/all/ac_tokens_per_turn` |
 | 学习率 | 确认调度按预期在走 | 固定 7e-6 | — | `actor/lr` | `optim/lr` |
-| 评估准确率 | 训练集上的准确率不等于泛化 | 每 10 步在 81 道**训练题**上 greedy 解码 | Val rewards (total, format)，在留出集上 | `val-core/<数据源>/<acc 或 reward>/mean@N` | — |
+| 评估准确率 | 训练集上的准确率不等于泛化 | 每 10 轮在 81 道**训练题**上贪心解码 | Val rewards (total, format)，在留出集上 | `val-core/<数据源>/<acc 或 reward>/mean@N` | — |
 
 ```verify id=Y.3-a title="表里的每个指标名都能在源码或讲义原文里找到" files=data/glossary/sources.json
 verl = " ".join(l for lines in src["verl"]["lines"].values() for l in lines)   # src 来自验证 Y.2-a
@@ -374,7 +375,7 @@ $$\frac{\hat p + \dfrac{z^2}{2n} \pm z\sqrt{\dfrac{\hat p(1-\hat p)}{n} + \dfrac
 
 这里，$\hat p = k/n$ 是观测到的通过率，$n$ 是题数，$z = 1.96$ 对应 95%。手算 5/8：$\hat p = 0.625$，$z^2/n = 0.480$，中心是 $(0.625 + 0.240) \div 1.480 = 0.584$，半宽是 $1.96 \times \sqrt{0.0293 + 0.0150} \div 1.480 = 0.279$，区间就是 $[0.31, 0.86]$。
 
-作者发布的 SFT 权重在 81 道加法题上 greedy 答对 44 道（54.3%），我们按书自己训练的 SFT 检查点也是 44 道（[勘误 E15](errata.html#e15) 的本地验证）。这个通过率的区间是 [0.44, 0.65]：
+作者发布的 SFT 权重在 81 道加法题上贪心解码答对 44 道（54.3%），我们按书自己训练的 SFT checkpoint 也是 44 道（[勘误 E15](errata.html#e15) 的本地验证）。这个通过率的区间是 [0.44, 0.65]：
 
 ```verify id=Y.4-a title="5/8 的 95% Wilson 区间是 [0.31, 0.86]（中心 0.584，半宽 0.279）；44/81 是 [0.44, 0.65]"
 def wilson(k, n, z=1.96):
@@ -449,9 +450,9 @@ assert round(500 / math.ceil(1092 / 32), 1) == 14.3 and round(1000 / math.ceil(1
 
 ### step
 
-**step** 至少有四种意思。在 DLFS6 的训练循环里，一次 **iteration** 通常就是一次参数更新（一个 optimizer step）。但有了梯度累积，一次更新要先跑好几个 **micro-step**：WebBot 每次更新累积 4 个 micro-batch，每张卡每步处理 32 × 4 × 1,024 = 131,072 个 token。GRPO 的一次 iteration 包含一次生成和两次更新，也就是两个 optimizer step。生成时的一个 **decode step**，则是让模型多吐出一个 token 的那一次前向计算。
+**step** 至少有四种意思。在 DLFS6 的训练循环里，一次 **iteration** 通常就是一次参数更新（一个 optimizer step）。但有了梯度累积，一次更新要先跑好几个 **micro-step**：WebBot 每次更新累积 4 个 micro-batch，每张卡每步处理 32 × 4 × 1,024 = 131,072 个 token。GRPO 的一次 iteration（本书叫“一轮”）包含一次生成和两次更新，也就是两个 optimizer step。生成时的一个 **decode step**，则是让模型多吐出一个 token 的那一次前向计算。
 
-```verify id=Y.4-d title="一个 step 里有多少东西：WebBot 每次更新 131,072 个 token；GRPO 每次迭代最多 32 道题 × 8 = 256 条回答、2 次更新"
+```verify id=Y.4-d title="一个 step 里有多少东西：WebBot 每次更新 131,072 个 token；GRPO 每轮最多 32 道题 × 8 = 256 条回答、2 次更新"
 micro_batch, accum, ctx = 32, 4, 1024                      # ch09/01_pretrain.py
 print(f"WebBot：每次更新 = {accum} 个 micro-step，每张卡 {micro_batch * accum * ctx:,} 个 token")
 prompts, G, updates = 32, 8, 2                            # ch03/09_grpo.py
@@ -486,13 +487,13 @@ DLFS6 的 `generate()` 也有类似的区分：生成的总长度可以超过 25
 
 卡数来自 `torchrun` 给每个进程设的环境变量：`WORLD_SIZE` 是进程总数，`RANK` 是全局编号（0 到 `WORLD_SIZE − 1`），`LOCAL_RANK` 是本机内的编号，用来选 GPU。原书用 `LOCAL_RANK == 0` 判断谁来记日志、存模型，多台机器时每台都有一个这样的进程（[验证 9.3-c](ch09.html#v-9.3-c)）。
 
-强化学习还要再多数一层：每一步取几道题，每道题采几个回答。两者之积才是这一步要打分、要更新的回答条数，也就是 rollout 的条数。CS336 的讲义特意提醒，它的 `rollout_batch_size` 和 `train_batch_size` 数的是回答，不是题。三家的名字对照如下：
+强化学习还要再多数一层：每一轮取几道题，每道题采几个回答。两者之积才是这一轮要打分、要更新的回答条数，也就是 rollout 的条数。CS336 的讲义特意提醒，它的 `rollout_batch_size` 和 `train_batch_size` 数的是回答，不是题。三家的名字对照如下：
 
 | 数的是什么 | DLFS6 `09_grpo.py` | CS336 A5（2026） | veRL |
 |---|---|---|---|
-| 每一步取几道题 | `batch_size` = 32 | `rollout_batch_size` ÷ `group_size` = 32 | `data.train_batch_size` |
+| 每一轮取几道题 | `batch_size` = 32 | `rollout_batch_size` ÷ `group_size` = 32 | `data.train_batch_size` |
 | 每道题采几个回答 | `group_size` = 8 | `group_size` = 8 | `actor_rollout_ref.rollout.n` |
-| 这一步采样、打分的回答条数 | 32 × 8 = 256；81 道题按 32、32、17 分批，每三步有一步只有 17 × 8 = 136 条 | `rollout_batch_size` = 256 | 题数 × `rollout.n` |
+| 这一轮采样、打分的回答条数 | 32 × 8 = 256；81 道题按 32、32、17 分批，每三轮有一轮只有 17 × 8 = 136 条 | `rollout_batch_size` = 256 | 题数 × `rollout.n` |
 | 一次参数更新用多少条回答 | 全部，同一批数据更新 2 次（`n_update_per_generation`） | `train_batch_size` = 256，分 32 次累积（`gradient_accumulation_steps`）；离策略的实验每次只用 8 条 | `ppo_mini_batch_size` × `rollout.n` |
 
 ```verify id=Y.4-f title="GRPO 的一批：81 道题分成 32、32、17，即 256、256、136 条回答；CS336 与 veRL 都按“题数 × 每题的回答数”来数" files=data/glossary/sources.json

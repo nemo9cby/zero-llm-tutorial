@@ -33,7 +33,7 @@ pyodide_packages: [numpy]
 
 这张表说了两件事。第一，CodeBot 在本机跑起来毫无压力；StoryBot 估计也能在本机跑完，不过我们还没有完整跑过（[G.4](#sG-4)）。第二，WebBot 的计算量是 StoryBot 的两百多倍，这一级必须上云，而且值得先花几毛钱做一次“探针”：只跑真实训练的前 200 步，读出速度（[G.2](#sG-2) 的最后一部分细说）。我们的探针花了约 0.27 美元，读出的速度比事前的估算慢 13%，全程因此从 9.1 小时变成了约 10.4 小时。
 
-真正跑过的运行，都记在下面这块“运行记录”里。每份报告回答三个问题：在哪里跑的（机器、GPU、PyTorch 版本），跑的是哪份代码（教程和原书的两个提交号），结果如何（每个脚本的用时、最后的指标和费用）。其中 `codebot-grpo-evalfix-3060ti` 是一次勘误实验：起点是 `codebot-3060ti` 的 SFT 检查点，只在 GRPO 的更新循环前加了一行 `model.eval()`（[勘误 E01](errata.html#e01)）。计划了但还没跑的运行，也连同命令一起列在后面。
+真正跑过的运行，都记在下面这块“运行记录”里。每份报告回答三个问题：在哪里跑的（机器、GPU、PyTorch 版本），跑的是哪份代码（教程和原书的两个提交号），结果如何（每个脚本的用时、最后的指标和费用）。其中 `codebot-grpo-evalfix-3060ti` 是一次勘误实验：起点是 `codebot-3060ti` 的 SFT checkpoint，只在 GRPO 的更新循环前加了一行 `model.eval()`（[勘误 E01](errata.html#e01)）。计划了但还没跑的运行，也连同命令一起列在后面。
 
 ```widget gpu-runboard caption="运行记录：每次运行都带着自己的出处。原书提交与子模块一致，说明跑的正是本书引用的那份代码。"
 {}
@@ -90,9 +90,9 @@ print("dW = X^T dY 与数值微分一致（最大差小于 1e-6）")
 
 ### 参数量 N
 
-严格地讲，6ND 里的 $N$ 应该是“每个 token 都要乘一遍的矩阵权重”，我们把它记作 $n_{\text{mm}}$。embedding 只是查表，不做乘法，不算在内；RMSNorm、LayerNorm 和 bias 的参数很少，也可以忽略。剩下的就是每一层的 Attention 与 FFN 的线性层，再加上最后把向量变回词表大小的 unembed。
+严格地讲，6ND 里的 $N$ 应该是“每个 token 都要乘一遍的矩阵权重”，我们把它记作 $n_{\text{mm}}$。embedding 只是查表，不做乘法，不算在内；RMSNorm、LayerNorm 和 bias 的参数很少，也可以忽略。剩下的就是每一层的 Attention 与 FFN 的线性层，再加上最后把向量变回词表大小的输出层。
 
-以 CodeBot 为例：每层 Attention 有 $4d^2$ 个权重，GELU 的 FFN 有 $2d \cdot d_{\text{ff}}$ 个，$d = 384$、$d_{\text{ff}} = 1536$，6 层合计 $6 \times (589{,}824 + 1{,}179{,}648) = 10{,}616{,}832$；再加 unembed 的 $1000 \times 384 = 384{,}000$，得到 $n_{\text{mm}} = 11{,}000{,}832$。
+以 CodeBot 为例：每层 Attention 有 $4d^2$ 个权重，GELU 的 FFN 有 $2d \cdot d_{\text{ff}}$ 个，$d = 384$、$d_{\text{ff}} = 1536$，6 层合计 $6 \times (589{,}824 + 1{,}179{,}648) = 10{,}616{,}832$；再加输出层的 $1000 \times 384 = 384{,}000$，得到 $n_{\text{mm}} = 11{,}000{,}832$。
 
 下面的函数按同样的思路处理三台机器人。它读的 `bots.json` 是我们从原书脚本抄出的结构与超参数，本地测试会实例化真实模型、逐个核对。
 
@@ -138,7 +138,7 @@ assert abs(emb_share - 0.504) < 0.001
 ```localcheck verify/test_gpu.py::test_param_counts_match_the_real_models title="实例化原书的三个 GPT 类，参数量与 n_mm 和上面完全一致" needs="PyTorch"
 ```
 
-WebBot 的 1.52 亿参数里，embedding 和 unembed 就占了一半（各 3,840 万），这是 5 万词表的代价。
+WebBot 的 1.52 亿参数里，embedding 和输出层就占了一半（各 3,840 万），这是 5 万词表的代价。
 
 ### token 数 D
 
@@ -656,7 +656,7 @@ assert abs(eight / one_gpu - 1) < 0.01
 ```
 
 ::: cs336 A2 分布式数据并行
-CS336 作业 2 要求自己实现 DDP：先写朴素版，再写“反向传播时就开始通信”的重叠版，然后是优化器状态分片（简化的 ZeRO-1）和 FSDP。它的测试用 `mp.spawn` 在 CPU 的 gloo 后端上起 2 个进程，所以没有多卡也能做。原书直接用 PyTorch 自带的 `DistributedDataParallel`，并用 `no_sync()` 让梯度累积期间不通信。来源：[A2 仓库与 handout](https://github.com/stanford-cs336/assignment2-systems)。
+CS336 作业 2 要求自己实现 DDP：先写朴素版，再写“反向传播时就开始通信”的重叠版，然后是优化器状态分片（简化的 ZeRO-1）和 FSDP。它的测试用 `mp.spawn` 在 CPU 的 gloo 后端上起 2 个进程，所以没有多卡也能做。原书直接用 PyTorch 自带的 `DistributedDataParallel`，本想用 `no_sync()` 让梯度累积期间不通信；可是 `no_sync()` 只包住了 backward，前向在它外面，所以每个 micro-step 照样做一次 all-reduce（[9.3 节](ch09.html#s9-3)用 2 个 gloo 进程数过，[勘误 E49](errata.html#e49)）。来源：[A2 仓库与 handout](https://github.com/stanford-cs336/assignment2-systems)。
 :::
 
 ## G.4 本机：RTX 3060 Ti 与 Windows
@@ -693,7 +693,7 @@ uv run python -c "import torch; print(torch.__version__, torch.cuda.get_device_n
 
 ### 记录一次运行
 
-直接 `python ch03/01_pretrain.py` 当然可以，但本书的运行都通过 `gpu/run_local.py` 来跑。它先把子模块里的原书代码复制到 `runs/<运行名>/work/`，在副本里原样运行脚本，所以检查点不会写进 `third_party/dlfs6`；同时把日志、tqdm 里的 loss、生成的图和一份运行报告记下来：
+直接 `python ch03/01_pretrain.py` 当然可以，但本书的运行都通过 `gpu/run_local.py` 来跑。它先把子模块里的原书代码复制到 `runs/<运行名>/work/`，在副本里原样运行脚本，所以 checkpoint 不会写进 `third_party/dlfs6`；同时把日志、tqdm 里的 loss、生成的图和一份运行报告记下来：
 
 ```shell
 uv run python gpu/run_local.py --run codebot-3060ti --job codebot      # 预训练 → 生成 → SFT → GRPO
@@ -770,7 +770,7 @@ Modal 是一个“把 Python 函数搬到云端 GPU 上执行”的平台。我�
 
 [^modalprice]: [Modal 价格页](https://modal.com/pricing)（2026-10 查证）。
 
-几个概念先说清楚。**Image** 是容器镜像，我们用 Debian 加上与本教程 `uv.lock` 相同版本的 PyTorch 等包。**Volume** 是持久存储，数据集、检查点和运行报告都放在一个名为 `zero-llm` 的 Volume 里。**Function** 是被装饰的函数，`gpu="H100:8"` 就是一台机器上的 8 张 H100。
+几个概念先说清楚。**Image** 是容器镜像，我们用 Debian 加上与本教程 `uv.lock` 相同版本的 PyTorch 等包。**Volume** 是持久存储，数据集、checkpoint 和运行报告都放在一个名为 `zero-llm` 的 Volume 里。**Function** 是被装饰的函数，`gpu="H100:8"` 就是一台机器上的 8 张 H100。
 
 ```python gpu/modal_app.py
 image = (
@@ -860,7 +860,7 @@ Modal 的文档写得很直白：所有函数默认都可能被抢占，而用�
 [^preempt]: [Modal 文档：抢占](https://modal.com/docs/guide/preemption)（2026-10 查证）。
 [^timeout]: [Modal 文档：超时](https://modal.com/docs/guide/timeouts)（2026-10 查证）。
 
-原书脚本没有断点续训，被打断就只能从头再来。我们的 `run_job` 做了两件事来减少损失。第一，一个作业里的几个脚本是分开记录的，每跑完一个就把检查点和报告存进 Volume；重启后，已经完成的脚本（同一个脚本、同样的补丁）直接跳过。第二，脚本本身出错时只记录、不抛异常，免得重试机制把同一个 bug 重跑两遍、多付两次钱。
+原书脚本没有断点续训，被打断就只能从头再来。我们的 `run_job` 做了两件事来减少损失。第一，一个作业里的几个脚本是分开记录的，每跑完一个就把 checkpoint 和报告存进 Volume；重启后，已经完成的脚本（同一个脚本、同样的补丁）直接跳过。第二，脚本本身出错时只记录、不抛异常，免得重试机制把同一个 bug 重跑两遍、多付两次钱。
 
 ```python gpu/modal_app.py
 @app.function(gpu="L4", volumes={VOL_MOUNT: vol}, timeout=24 * 3600, single_use_containers=True,
@@ -875,19 +875,19 @@ def run_job(plan: dict, run: str, meta: dict, force: bool = False) -> dict:
 ```localcheck verify/test_gpu.py::test_modal_run_job_with_a_fake_volume title="在本机用假的 Volume 执行 run_job 的函数体：运行、记录、续跑时跳过已完成的脚本、pull 回 web/data/runs" needs="modal"
 ```
 
-### StoryBot 的 DPO：检查点的键名要改
+### StoryBot 的 DPO：checkpoint 的键名要改
 
-`storybot-dpo` 作业可以不先预训练，直接从原书发布在 Hugging Face 上的 StoryBot 检查点出发。不过这份检查点有个坑：它保存时，SwiGLU 那一层叫 `mlp`，而仓库里的 `storybot/model.py` 后来把它改名成了 `ffn`。原样加载会在 `load_state_dict` 报 Missing key（[勘误 E02](errata.html#e02)）。我们的作业在把检查点放进工作区时，把键名里的 `.mlp.` 换成 `.ffn.`，并把这件事写进报告。如果同一次运行里已经跑过自己的预训练，就直接用自己的检查点，不需要改名。
+`storybot-dpo` 作业可以不先预训练，直接从原书发布在 Hugging Face 上的 StoryBot checkpoint 出发。不过这份 checkpoint 有个坑：它保存时，SwiGLU 那一层叫 `mlp`，而仓库里的 `storybot/model.py` 后来把它改名成了 `ffn`。原样加载会在 `load_state_dict` 报 Missing key（[勘误 E02](errata.html#e02)）。我们的作业在把 checkpoint 放进工作区时，把键名里的 `.mlp.` 换成 `.ffn.`，并把这件事写进报告。如果同一次运行里已经跑过自己的预训练，就直接用自己的 checkpoint，不需要改名。
 
-```localcheck verify/test_gpu.py::test_hf_storybot_checkpoint_needs_the_key_rename title="原样加载 HF 检查点会失败；改名后加载成功，验证集 loss 远低于随机初始化的 ln 10000" needs="PyTorch"
+```localcheck verify/test_gpu.py::test_hf_storybot_checkpoint_needs_the_key_rename title="原样加载 HF 上的 checkpoint 会失败；改名后加载成功，验证集 loss 远低于随机初始化的 ln 10000" needs="PyTorch"
 ```
 
-::: think GRPO 只有 500 步，为什么比 2 万步的预训练还慢？
+::: think GRPO 只有 500 轮，为什么比 2 万步的预训练还慢？
 :::
 ::: answer
-先看运行记录 `codebot-3060ti`：预训练 2 万步用了 41.9 分钟，GRPO 500 步用了 89.7 分钟。GRPO 的时间几乎都花在“生成”上，而生成是一条一条、一个 token 一个 token 地来的。`ch03/09_grpo.py` 每一步取一批题，每题采样 8 个回答。81 道题按 32、32、17 循环（见[勘误 E07](errata.html#e07)），所以 RL 里一步的 batch 是 256 条轨迹，每三步有一步只有 136 条。每 10 步还要用贪心解码把 81 道题全部答一遍（[3.9 节](ch03.html#s3-9)）。
+先看运行记录 `codebot-3060ti`：预训练 2 万步用了 41.9 分钟，GRPO 500 轮用了 89.7 分钟。GRPO 的时间几乎都花在“生成”上，而生成是一条一条、一个 token 一个 token 地来的。`ch03/09_grpo.py` 每一轮取一批题，每题采样 8 个回答。81 道题按 32、32、17 循环（见[勘误 E07](errata.html#e07)），所以 RL 里一轮的 batch 是 256 条轨迹，每三轮有一轮只有 136 条。每 10 轮还要用贪心解码把 81 道题全部答一遍（[3.9 节](ch03.html#s3-9)）。
 
-```verify id=G.5-b title="GRPO 的 500 步里，一共要生成多少个回答" files=data/runs/codebot-3060ti/report.json
+```verify id=G.5-b title="GRPO 的 500 轮里，一共要生成多少个回答" files=data/runs/codebot-3060ti/report.json
 # 抄自 ch03/09_grpo.py
 batch_size, group_size, max_iters = 32, 8, 500
 eval_interval, n_problems = 10, 81
@@ -914,7 +914,7 @@ assert (round(pre / 60, 1), round(grpo / 60, 1)) == (41.9, 89.7)
 assert grpo > 2 * pre and round(grpo) == 5_379
 ```
 
-```localcheck verify/test_gpu.py::test_grpo_constants_match_the_book title="五个常数与 ch03/09_grpo.py 一致；真实的 DataLoader 加 cycle，500 步取到 13,510 道题；generate 每次只喂一条序列、每步重算整段上下文" needs="PyTorch"
+```localcheck verify/test_gpu.py::test_grpo_constants_match_the_book title="五个常数与 ch03/09_grpo.py 一致；真实的 DataLoader 加 cycle，500 轮取到 13,510 道题；generate 每次只喂一条序列、每步重算整段上下文" needs="PyTorch"
 ```
 
 CodeBot 的 `generate` 一次只处理一条序列，也没有 KV cache，每生成一个 token 都要把整段上下文重算一遍。每次只算一条序列的下一个 token，GPU 再大也没有可以并行的活。换到 H100 上，每个 token 的那一串小 kernel 照样要一个个启动，所以我们估计也快不了多少（这一点没有在 H100 上测过）。GRPO 最划算的地方就是本机：在 3060 Ti 上约一个半小时（5,379 秒），不花钱。
@@ -1056,7 +1056,7 @@ uv run python gpu/register_run.py webbot-8xh100
 
 每次运行的目录里有这样几种文件，都由 `run_local.py`（或 Modal 上的同一套代码）生成：
 
-- **`report.json`**：教程与原书的提交号、主机（平台、GPU、PyTorch 与 CUDA 版本）、费用，以及每个脚本的开始时间、用时、退出码、最后的指标、吞吐、改动（patches）和起点检查点的来历。
+- **`report.json`**：教程与原书的提交号、主机（平台、GPU、PyTorch 与 CUDA 版本）、费用，以及每个脚本的开始时间、用时、退出码、最后的指标、吞吐、改动（patches）和起点 checkpoint 的来历。
 - **`<脚本名>.metrics.jsonl`**：从 tqdm 进度条解析出的指标，每行一个 `{"it": …, "loss": …}`；`it` 是 tqdm 的计数，下面细说。
 - **脚本自己画的图**：文件名沿用脚本里写的，例如 `loss_pretrain.png`、`webbot_val_loss.png`。
 - **`../index.json`**：登记过的运行，以及每次运行里哪些脚本有指标。
@@ -1068,9 +1068,9 @@ uv run python gpu/register_run.py webbot-8xh100
 
 指标从哪来？原书的脚本不写日志文件（第 9 章的 wandb 也被我们默认关掉了），只有 tqdm 进度条上的 `loss=…`。`run_local.py` 用两个正则表达式把它们从日志里读出来。
 
-下面拿真实日志里相邻的三行试一试。先要知道，tqdm 的计数是已经做完的步数，同一个计数会打印两次。循环变量 `i = 9` 的这一步做完，计数变成 10，tqdm 刷新一次，这时的 postfix 还是 `i = 9` 写的；接着 `i = 10` 这一步做完，`set_postfix` 写入它的值，而计数要等下一步开始才加 1，所以仍是 10。
+下面拿 GRPO 的真实日志里相邻的三行试一试。先要知道，tqdm 的计数是已经做完的轮数（GRPO 的循环每走一次是一轮），同一个计数会打印两次。循环变量 `i = 9` 的这一轮做完，计数变成 10，tqdm 刷新一次，这时的 postfix 还是 `i = 9` 写的；接着 `i = 10` 这一轮做完，`set_postfix` 写入它的值，而计数要等下一轮开始才加 1，所以仍是 10。
 
-GRPO 在 `i = 10` 这一步更新之后做了评估（`i % 10 == 0`），于是第二行的 acc 从 53.1% 跳到了 61.7%。第三行是计数变成 11 时的刷新，带的还是 `i = 10` 的值。
+GRPO 在 `i = 10` 这一轮更新之后做了评估（`i % 10 == 0`），于是第二行的 acc 从 53.1% 跳到了 61.7%。第三行是计数变成 11 时的刷新，带的还是 `i = 10` 的值。
 
 ```verify id=G.7-a title="从 tqdm 的进度条里读出指标：正则与 run_local.py 相同，结果与运行记录一致" files=data/runs/codebot-3060ti/09_grpo.metrics.jsonl
 import re
@@ -1113,12 +1113,12 @@ assert (rows[10], rows[11]) == (first, third)
 assert rows[0] == {**rows[1], "it": 0}
 ```
 
-`run_local.py` 每个计数只留第一行，所以运行记录里 it = k 的那一行，是第 k 步（`i = k − 1`）写下的读数：`i = 10` 测得的 61.7%，记在 it = 11。唯一的例外在开头：计数 0 没有刷新的那一行，记下的就是第 1 步的值，所以 it = 0 和 it = 1 两行相同。原书的准确率图以 `i` 为横轴（0、10、20……），同一次评估在那张图上落在 10。拿运行记录和原书的图对照时，要记得这一步之差。
+`run_local.py` 每个计数只留第一行，所以运行记录里 it = k 的那一行，是第 k 轮（`i = k − 1`）写下的读数：`i = 10` 测得的 61.7%，记在 it = 11。其他脚本的记录也这样数，it = k 就是第 k 步。唯一的例外在开头：计数 0 没有刷新的那一行，记下的就是第 1 轮的值，所以 it = 0 和 it = 1 两行相同。原书的准确率图以 `i` 为横轴（0、10、20……），同一次评估在那张图上落在 10。拿运行记录和原书的图对照时，要记得这一轮之差。
 
-```localcheck verify/test_gpu.py::test_parse_tqdm_keeps_the_first_line_of_each_counter title="run_local.py 每个计数只留第一行，与运行记录一致，每份记录的 it = 0 与 it = 1 相同；原书在 i 这一步更新之后评估，准确率图的横轴就是 i"
+```localcheck verify/test_gpu.py::test_parse_tqdm_keeps_the_first_line_of_each_counter title="run_local.py 每个计数只留第一行，与运行记录一致，每份记录的 it = 0 与 it = 1 相同；原书在 i 这一轮更新之后评估，准确率图的横轴就是 i"
 ```
 
-```localcheck verify/test_gpu.py::test_run_local_records_a_run_end_to_end title="在临时目录里用一个假的原书脚本跑通 run_local.py：报告、指标、索引，以及补丁和起点检查点的记录"
+```localcheck verify/test_gpu.py::test_run_local_records_a_run_end_to_end title="在临时目录里用一个假的原书脚本跑通 run_local.py：报告、指标、索引，以及补丁和起点 checkpoint 的记录"
 ```
 
 在章节里引用一次运行，只要一个 `runcurve` 组件，指明运行名和脚本名即可（上面 G.4 的曲线就是这样嵌进来的）。还没跑的运行不会让页面出错，组件会显示应该执行的命令。
@@ -1142,6 +1142,6 @@ assert rows[0] == {**rows[1], "it": 0}
 - WebBot 单卡 H100 事前按 MFU 35% 估 9.1 小时、36 美元；200 步探针（约 0.27 美元）实测每步 0.317 秒、每次评估 56 秒、MFU 31%，推得全程约 10.4 小时、28–45 美元（[验证 G.2-g](#v-G.2-g)、[验证 G.2-j](#v-G.2-j)）。
 - 原样用 torchrun 启动 8 卡，总 token 和费用都是单卡的 8 倍。保持总 token 不变有两种改法：`max_iters` 除以 8 最省钱，但全局 batch 变成 8 倍、更新次数变成 1/8；每卡 batch 除以 8 与单卡的优化过程完全相同，但评估让 7 张卡空等，费用翻倍（[验证 G.3-a](#v-G.3-a)、[验证 G.3-b](#v-G.3-b)）。
 - Windows 驱动在显存不够时不报错，而是悄悄借用系统内存，所以要把这个回退关掉；WebBot 原样训练至少要 8.37 GiB，8 GB 的 3060 Ti 放不下（[验证 G.4-a](#v-G.4-a)）。
-- GRPO 的 500 步要一条一条地生成 108,080 个回答，所以在本机比 2 万步的预训练还慢一倍多（[验证 G.5-b](#v-G.5-b)）。
+- GRPO 的 500 轮要一条一条地生成 108,080 个回答，所以在本机比 2 万步的预训练还慢一倍多（[验证 G.5-b](#v-G.5-b)）。
 
 有了这本账，就可以放心地去跑了。先从本机的 CodeBot 开始，跑完回到这一页，看看你的那一行是否出现在运行记录里。

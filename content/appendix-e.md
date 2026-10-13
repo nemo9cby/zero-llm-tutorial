@@ -15,7 +15,7 @@ pyodide_packages: [numpy]
 
 真正的计算只有最后两步：算出 `logits`，再取 `-F.logsigmoid`。这短短几行里藏着几个问题：$\beta$ 为什么出现在 sigmoid 里面？“当前模型减参考模型”的对数概率差是什么意思？RLHF 里那个需要对所有可能回答求和、根本算不出来的配分函数，又是怎么消失的？
 
-本附录一步一步回答这些问题。我们先写出带 KL 正则的目标，推导出它的最优策略 $\pi^*$；然后把最优策略反过来，把奖励写成策略的函数，这就是“隐式奖励”；接着代入 Bradley–Terry 偏好模型，看配分函数怎样抵消；最后得到 DPO 的损失，并在一个只有 4 个回答的小例子上确认：用 DPO 训练到最优，得到的正是 RLHF 的最优策略。推导沿用 DPO 原论文第 4 节与附录 A.1 的思路（[Rafailov et al., 2023](https://arxiv.org/abs/2305.18290)，2026-10 查证）。
+本附录一步一步回答这些问题。我们先写出带 KL 正则的目标，推导出它的最优策略 $\pi^*$；然后把最优策略反过来，把奖励写成策略的函数，这就是“隐式奖励”；接着代入 Bradley-Terry 偏好模型，看配分函数怎样抵消；最后得到 DPO 的损失，并在一个只有 4 个回答的小例子上确认：用 DPO 训练到最优，得到的正是 RLHF 的最优策略。推导沿用 DPO 原论文第 4 节与附录 A.1 的思路（[Rafailov et al., 2023](https://arxiv.org/abs/2305.18290)，2026-10 查证）。
 
 ## E.1 问题设定：带 KL 正则的目标
 
@@ -197,9 +197,9 @@ assert np.allclose(r_hat + beta * np.log(Z), r)
 assert np.allclose(r_hat[:, None] - r_hat[None, :], r[:, None] - r[None, :])
 ```
 
-## E.4 Bradley–Terry 模型与 Z 的消去
+## E.4 Bradley-Terry 模型与 Z 的消去
 
-[6.7.2 节](ch06.html#s6-7-2)介绍了偏好数据的 **Bradley–Terry 模型**（下面简称 BT 模型）：给定同一个问题的两个回答 $y_w$ 和 $y_l$，人们更喜欢 $y_w$ 的概率是
+[6.7.2 节](ch06.html#s6-7-2)介绍了偏好数据的 **Bradley-Terry 模型**（下面简称 BT 模型）：给定同一个问题的两个回答 $y_w$ 和 $y_l$，人们更喜欢 $y_w$ 的概率是
 
 $$
 \begin{aligned}
@@ -294,7 +294,7 @@ assert abs(init - np.log(2)) < 1e-12 and abs(hand - 0.5981) < 1e-4
 assert abs(grad_w - (-0.1 * sigmoid(-0.2))) < 1e-8
 ```
 
-真实的 StoryBot 上是不是也一样？下面的本地测试从 `ch06/08_dpo.py` 里取出 `DPODataset`、`get_sequence_logprobs` 和 `compute_dpo_loss` 这三个部件，用 Hugging Face 上发布的两个 StoryBot 检查点来算。策略和参考必须不同，否则损失恒为 $\ln 2$，所以我们拿预训练第 5000 步的中间检查点当策略，预训练完成的模型当参考。在前 4 对真实的偏好数据上，原书的 PyTorch 损失与本页的 NumPy `dpo_loss` 一致。测试还确认了三件事。第一，`08_dpo.py` 的 `model` 和 `ref_model` 都从预训练完成的同一个检查点加载，所以训练开始时策略等于参考。第二，策略等于参考时，损失恰为 $\ln 2$。第三，把问题部分也算进对数概率，损失不变：同一个问题在两条回答里贡献的对数概率完全相同，在差值里抵消了。
+真实的 StoryBot 上是不是也一样？下面的本地测试从 `ch06/08_dpo.py` 里取出 `DPODataset`、`get_sequence_logprobs` 和 `compute_dpo_loss` 这三个部件，用 Hugging Face 上发布的两个 StoryBot checkpoint 来算。策略和参考必须不同，否则损失恒为 $\ln 2$，所以我们拿预训练第 5000 步的中间 checkpoint 当策略，预训练完成的模型当参考。在前 4 对真实的偏好数据上，原书的 PyTorch 损失与本页的 NumPy `dpo_loss` 一致。测试还确认了三件事。第一，`08_dpo.py` 的 `model` 和 `ref_model` 都从预训练完成的同一个 checkpoint 加载，所以训练开始时策略等于参考。第二，策略等于参考时，损失恰为 $\ln 2$。第三，把问题部分也算进对数概率，损失不变：同一个问题在两条回答里贡献的对数概率完全相同，在差值里抵消了。
 
 ```localcheck verify/test_appendix.py::test_e_dpo_loss needs="PyTorch" title="真实 StoryBot：原书的 compute_dpo_loss = 本页的 dpo_loss；初始为 ln 2"
 ```
@@ -305,7 +305,7 @@ GRPO 训练时确实要让模型自己生成回答（3.9 节），所以很容�
 
 ## E.6 偏好服从 BT 模型时，DPO 训练到最后就是 π*
 
-推导告诉我们，DPO 与 RLHF 瞄准的是同一个最优策略。用小例子来确认：假设偏好数据无穷多，每一对回答都按 Bradley–Terry 模型和真实奖励 $r$ 给出偏好。4 个回答两两配对，一共 6 对；同一对的两种标注都会出现，$y_w$ 赢的比例是 $P_{wl} = P(y_w \succ y_l)$。这时 DPO 的期望损失（对 6 对取平均）是
+推导告诉我们，DPO 与 RLHF 瞄准的是同一个最优策略。用小例子来确认：假设偏好数据无穷多，每一对回答都按 Bradley-Terry 模型和真实奖励 $r$ 给出偏好。4 个回答两两配对，一共 6 对；同一对的两种标注都会出现，$y_w$ 赢的比例是 $P_{wl} = P(y_w \succ y_l)$。这时 DPO 的期望损失（对 6 对取平均）是
 
 $$
 \begin{aligned}
@@ -428,7 +428,7 @@ CS336 作业 5 的补充部分（安全与 RLHF）要求实现逐样本的 DPO �
 
 ## 小结
 
-本附录从带 KL 正则的目标 $\mathbb E[r] - \beta\,\mathrm{KL}(\pi\,\|\,\pi_{\text{ref}})$ 出发，把它改写成 $-\beta\,\mathrm{KL}(\pi\,\|\,\pi^*) + \beta\log Z$，于是最优策略一眼可见：$\pi^* \propto \pi_{\text{ref}}\,e^{r/\beta}$。对它取对数，奖励就可以写成策略的函数 $\beta\log(\pi^*/\pi_{\text{ref}}) + \beta\log Z$；代入只看奖励差的 Bradley–Terry 模型，算不出来的 $\beta\log Z$ 正好抵消。把 $\pi^*$ 换成待训练的 $\pi_\theta$，做最大似然，就是 DPO 的损失。
+本附录从带 KL 正则的目标 $\mathbb E[r] - \beta\,\mathrm{KL}(\pi\,\|\,\pi_{\text{ref}})$ 出发，把它改写成 $-\beta\,\mathrm{KL}(\pi\,\|\,\pi^*) + \beta\log Z$，于是最优策略一眼可见：$\pi^* \propto \pi_{\text{ref}}\,e^{r/\beta}$。对它取对数，奖励就可以写成策略的函数 $\beta\log(\pi^*/\pi_{\text{ref}}) + \beta\log Z$；代入只看奖励差的 Bradley-Terry 模型，算不出来的 $\beta\log Z$ 正好抵消。把 $\pi^*$ 换成待训练的 $\pi_\theta$，做最大似然，就是 DPO 的损失。
 
 DPO 训练不需要采样，只需要给固定的回答对算对数概率；初始损失是 $\ln 2$；梯度对“看错”的样本加权更大。在偏好服从 BT 模型、数据足够的理想情况下，它收敛到的正是 RLHF 的最优策略。DLFS6 的标注却是确定性的，这时损失没有有限的最小点，训练只会把隐式奖励之差越推越大，$\beta$ 也拴不住策略。
 
@@ -438,7 +438,7 @@ DPO 训练不需要采样，只需要给固定的回答对算对数概率；初�
 - 带 KL 正则的目标等于 $-\beta\,\mathrm{KL}(\pi\,\|\,\pi^*) + \beta\log Z$，最优策略是 $\pi^* \propto \pi_{\text{ref}}\,e^{r/\beta}$，最大值是 $\beta\log Z$（[验证 E-c](#v-E-c)）。
 - $\beta$ 越大 $\pi^*$ 越接近 $\pi_{\text{ref}}$，越小越集中在奖励最高的回答上（[验证 E-d](#v-E-d)）。
 - 隐式奖励 $\beta\log(\pi^*/\pi_{\text{ref}})$ 与真实奖励只差常数 $\beta\log Z$（[验证 E-e](#v-E-e)）。
-- Bradley–Terry 偏好概率只看奖励差，所以 $Z$ 在 DPO 里抵消（[验证 E-f](#v-E-f)）。
+- Bradley-Terry 偏好概率只看奖励差，所以 $Z$ 在 DPO 里抵消（[验证 E-f](#v-E-f)）。
 - DPO 损失初始为 $\ln 2$；梯度权重是 $\beta\,\sigma(-z)$（[验证 E-g](#v-E-g)）。
 - 偏好服从 BT 模型时，DPO 训练的结果就是 RLHF 的最优策略；标注是确定性的（DLFS6 正是这样）时，损失没有有限的最小点，真实运行的损失从 $\ln 2$ 一路降到 0.0045（[验证 E-h](#v-E-h)、[验证 E-i](#v-E-i)、[验证 E-j](#v-E-j)）。
 

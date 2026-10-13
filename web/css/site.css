@@ -29,7 +29,9 @@
 
   --serif: "Source Serif 4", "Noto Serif SC", "Songti SC", "SimSun", serif;
   --mono: "JetBrains Mono", "Noto Sans SC", ui-monospace, "Cascadia Code", monospace;
-  --measure: 40em;
+  /* 680 px = 40 em of the 17 px body text. In rem, so that tables, callouts and code blocks (smaller fonts)
+     get the same column as the paragraphs instead of 40 of their own, smaller em. */
+  --measure: 42.5rem;
   --margin-col: 6.5rem;
   color-scheme: light;
 }
@@ -57,7 +59,9 @@
 
 * { box-sizing: border-box; }
 *, *::before, *::after { font-variant-ligatures: none !important; }
-html { -webkit-text-size-adjust: 100%; }
+/* Every scroll to a target (a #v-… or #fig-… link, a heading, a footnote, keyboard focus) stops below the
+   3rem sticky top bar instead of under it. */
+html { -webkit-text-size-adjust: 100%; scroll-padding-top: 4rem; }
 body {
   margin: 0; background: var(--paper); color: var(--ink);
   font: 17px/1.85 var(--serif); font-feature-settings: "palt" 0;
@@ -95,10 +99,11 @@ button:hover { border-color: var(--ink-3); }
 .nav-chapters > li > a { display: flex; gap: .6rem; color: var(--ink-2); text-decoration: none; padding: .15rem 0; }
 .nav-chapters > li.current > a { color: var(--ink); font-weight: 600; }
 .nav-num { min-width: 1.4em; text-align: right; color: var(--ink-3); font-variant-numeric: tabular-nums; }
-.nav-chapters > li.kind-part { margin-top: 1.1rem; }
-.nav-chapters > li.kind-part > a { color: var(--ink); font-weight: 700; font-size: .84rem; letter-spacing: .02em; }
-.nav-chapters > li.kind-appendix:first-of-type, .nav-chapters > li.kind-extra { margin-top: .15rem; }
-.nav-chapters > li.kind-part + li.kind-chapter { margin-top: .3rem; }
+.nav-chapters > li.kind-part, .nav-chapters > li.nav-group { margin-top: 1.1rem; }
+.nav-chapters > li.kind-part > a, .nav-group-label { color: var(--ink); font-weight: 700; font-size: .84rem; letter-spacing: .02em; }
+.nav-group-label { display: block; padding: .15rem 0; }   /* 附录, 实践与参考: labels like the parts, but not links */
+.nav-chapters > li.kind-extra { margin-top: .15rem; }
+.nav-chapters > li.kind-part + li.kind-chapter, .nav-chapters > li.nav-group + li { margin-top: .3rem; }
 .nav-chapters ol { margin: .25rem 0 .6rem 2rem; border-left: 1px solid var(--rule); }
 .nav-chapters ol a { display: block; padding: .1rem 0 .1rem .75rem; color: var(--ink-2); text-decoration: none; }
 .nav-chapters ol a:hover { color: var(--ai); }
@@ -116,20 +121,39 @@ button:hover { border-color: var(--ink-3); }
 }
 .chapter-head h1 { font-size: 2.3rem; line-height: 1.3; margin: 0; font-weight: 900; letter-spacing: .01em; }
 .chapter-lede { color: var(--ink-2); font-size: 1.05rem; margin-top: 1rem; }
-h2 { font-size: 1.45rem; font-weight: 800; line-height: 1.4; margin: 3.5rem 0 1rem; scroll-margin-top: 4rem; }
-h3 { font-size: 1.12rem; font-weight: 700; margin: 2.2rem 0 .6rem; scroll-margin-top: 4rem; }
+h2 { font-size: 1.45rem; font-weight: 800; line-height: 1.4; margin: 3.5rem 0 1rem; }
+h3 { font-size: 1.12rem; font-weight: 700; margin: 2.2rem 0 .6rem; }
 p { margin: 0 0 1.1em; }
 strong { font-weight: 600; }
 code { font-family: var(--mono); font-variant-ligatures: none; font-size: .86em; background: var(--paper-2); padding: .05em .3em; border-radius: 3px; }
+/* Inline code keeps runs of spaces (a token such as "a  b" is shown as written) and still wraps at spaces.
+   Only the collapsing longhand is set: whether to wrap at all stays inherited, so code inside a .nowrap span
+   still keeps to one line. break-spaces rather than preserve: a space at the end of a line keeps its width
+   inside the line instead of hanging past the column edge. */
+:not(pre) > code { white-space-collapse: break-spaces; }
+/* build.py glues a leading space, or a run of spaces, to the character after it (span.glue), so no line ends right
+   after it: ` reversible` stays one box instead of an empty box at a line end and the word on the next line. */
+:not(pre) > code .glue { white-space: pre; }
 hr { border: 0; border-top: 1px solid var(--rule); margin: 3rem 0; }
 table { position: relative; border-collapse: collapse; margin: 1.5rem 0; font-size: .92rem; line-height: 1.6; display: block; overflow-x: auto; }
 th, td { border-bottom: 1px solid var(--rule); padding: .4rem .8rem .4rem 0; text-align: left; vertical-align: top; min-width: 4.5em; }
 th:first-child, td:first-child { min-width: 6em; }
 .nowrap { white-space: nowrap; }
-.chapter p code, .chapter li code, .chapter td code, .chapter a { overflow-wrap: anywhere; }
+.chapter p code, .chapter li code, .chapter .callout-title code, .chapter h2 code, .chapter h3 code,
+.chapter a { overflow-wrap: anywhere; }
+/* In tables, identifiers stay whole (no column collapses to a few letters); a wide table scrolls in its own box. */
+.chapter td code, .chapter th code { overflow-wrap: normal; }
 th { font-weight: 600; border-bottom-color: var(--ink-3); }
 blockquote { margin: 1.5rem 0; padding-left: 1rem; border-left: 2px solid var(--rule); color: var(--ink-2); }
 .math-block { position: relative; margin: 1.2rem 0; overflow-x: auto; overflow-y: hidden; }
+/* Equation numbers (\tag): KaTeX pins the number to the right edge, on top of any formula wider than the column
+   minus the number. Lay the row out as [spacer | formula | number] instead: the two outer boxes share the free
+   space, so the formula stays centred while there is room; the number never shrinks below its own width, so a
+   wide formula moves left and then scrolls with its number. Heights and baselines are KaTeX's own. */
+.math-block .katex-display > .katex > .katex-html:has(> .tag) { display: flex; align-items: baseline; width: max-content; min-width: 100%; }
+.math-block .katex-display > .katex > .katex-html:has(> .tag)::before { content: ""; flex: 1 1 0; }
+.math-block .katex-display > .katex > .katex-html > .tag { position: static; flex: 1 1 0; text-align: right; }
+.math-block .katex-display > .katex > .katex-html > .tag > .mord { margin-left: 1em; }
 /* Edge shadows that appear only while the content is scrollable (wide derivations and tables on phones). */
 .math-block, .chapter table {
   background:
@@ -152,6 +176,13 @@ pre.code, pre.cmd {
   padding: .9rem 1rem; overflow-x: auto; margin: 1rem 0 1.4rem; tab-size: 4;
 }
 pre.code code, pre.cmd code { background: none; padding: 0; font-size: inherit; }
+/* Listings are numbered from their first source line (build.py sets counter-reset and --ln-digits), so "L91-L109"
+   in the text can be found. The numbers are generated content: they are neither selected nor copied. */
+pre.numbered .line::before {
+  counter-increment: line; content: counter(line);
+  display: inline-block; width: calc(var(--ln-digits, 3) * 1ch); margin-right: 1.5ch; text-align: right;
+  color: color-mix(in srgb, var(--ink-2) 60%, var(--ink-3)); user-select: none; -webkit-user-select: none;
+}
 figure { margin: 1.8rem 0; }
 figure.listing figcaption {
   display: flex; flex-wrap: wrap; gap: .25rem 1rem; align-items: baseline;
@@ -287,8 +318,10 @@ figure.widget figcaption { margin-top: .8rem; font-size: .88rem; color: var(--in
 @media (max-width: 900px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
   .nav-toggle { display: inline-block; }
+  /* align-self: stretch undoes the desktop rule's `start`: browsers now align fixed boxes too, and `start` sized the
+     overlay to its list (taller than a phone screen, so the last entries could not be scrolled to). */
   .nav {
-    display: none; position: fixed; inset: 3rem 0 0 0; z-index: 4; height: auto;
+    display: none; position: fixed; inset: 3rem 0 0 0; z-index: 4; height: auto; align-self: stretch;
     background: var(--paper); border-right: 0;
   }
   .nav.open { display: block; }
