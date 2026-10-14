@@ -1144,14 +1144,17 @@ assert rows[0] == {**rows[1], "it": 0}
 ```localcheck verify/test_gpu_runner.py::test_run_local_refuses_a_dirty_tree_unless_allowed title="临时的 git 仓库里：有未提交的改动时 run_local.py 拒绝开跑，什么也不写；加 --allow-dirty 才跑，每一步记下 git diff HEAD 的 SHA-256 与改动的文件；提交之后照常运行"
 ```
 
-已有的四次运行都早于这条规矩，前两次本机运行就带着没提交的代码：`codebot-3060ti` 开跑时运行器 `run_local.py` 还没有提交，`codebot-grpo-evalfix-3060ti` 开跑时它的作业定义也还没有提交。上面的运行记录给这两次标出了第一个包含那份代码的提交，重跑时检出它即可。
+已有的四次运行都早于这条规矩，前两次本机运行就带着没提交的代码：`codebot-3060ti` 开跑时运行器 `run_local.py` 还没有提交，`codebot-grpo-evalfix-3060ti` 开跑时它的作业定义也还没有提交。上面的运行记录给这两次标出了第一个包含那份代码的提交。重跑时检出它，并给 `--run` 换一个新的运行名（见下面第三条）。
 
 ```localcheck verify/test_gpu.py::test_run_reports_point_at_commits_that_contain_their_code title="每份报告的教程提交里都有跑它的代码；两处例外在 plan.json 里标了真正的提交，用 git 核对它是第一个包含那份代码的提交"
 ```
 
 第三，一份报告只描述一种机器。已经有报告的运行名，不能换到另一种机器上接着跑，也不能在本机（或租来的机器）与 Modal 之间换着续写；运行器会拒绝，并要求换一个新的运行名。第四，花了钱的运行都记下费用，下一个人在动手之前就知道要花多少；这个数是按容器计时乘以标价算的，是一个下限。
 
-```localcheck verify/test_gpu_runner.py::test_append_refuses_another_host_or_provider title="已有报告的运行名：换一种 GPU 或 PyTorch，或者在 Modal 与本机之间换着续写，都会被拒绝并要求新的运行名；同一种机器只是内核或驱动版本不同，照常追加"
+```localcheck verify/test_gpu_runner.py::test_append_refuses_another_host_or_provider title="已有报告的运行名：换一种 GPU 或 PyTorch，或者用 run_local.py 续写 Modal 记下的报告，都会被拒绝并要求新的运行名；同一种机器只是内核或驱动版本不同，照常追加"
+```
+
+```localcheck verify/test_gpu_runner.py::test_modal_launch_meta_refuses_a_dirty_tree_and_a_foreign_report needs="modal" title="Modal 一侧：本机记下的运行名，launch 拒绝续写并要求新的运行名，Modal 自己记下的照常续写；工作树有未提交的改动时，不加 --allow-dirty 就拒绝启动"
 ```
 
 ## 小结

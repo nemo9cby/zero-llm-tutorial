@@ -89,9 +89,9 @@ test('the rough 12·L·d² is explained when it is more than 5 % off', () => {
   const olmo = translate(src.hf.olmo2_0425_1b.config).derived;
   assert.equal(olmo.blocks, 1_073_807_360);
   assert.equal(olmo.roughNonEmbedding, 805_306_368);
-  assert.match(roughNote(olmo), /每层约 16d²：注意力 4d²，FFN 12d²（3 个矩阵），所以粗估低了约 25%/);
+  assert.match(roughNote(olmo), /每层约 16d²：Attention 4d²，FFN 12d²（3 个矩阵），所以粗估低了约 25%/);
   const qwen = translate(src.hf.qwen25_math_1p5b.config).derived;
-  assert.match(roughNote(qwen), /注意力 2\.33d²，FFN 17\.5d²/);
+  assert.match(roughNote(qwen), /Attention 2\.33d²，FFN 17\.5d²/);
   assert.equal(roughNote(translate(src.hf.gpt2.config).derived), null);           // 0.02 % off
   const story = translate({ vocab_size: 10000, max_position_embeddings: 256, hidden_size: 512, num_attention_heads: 16,
     num_hidden_layers: 4, intermediate_size: 1344, rope_theta: 10000 }).derived;

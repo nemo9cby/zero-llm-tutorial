@@ -19,10 +19,14 @@
   这些词正文直接用英文：token、BPE、Transformer、Attention、softmax、logits、embedding、LayerNorm、RMSNorm、
   RoPE、SwiGLU、GELU、KV cache、SFT、RLHF、GRPO、PPO、DPO、AdamW、batch、epoch、checkpoint、warmup。
   译名用常用译法（智能体、回报、折扣因子、策略梯度），首次出现时可注明《深度学习入门4》的译法。
-- **统一用词**（用于正文、标题、图注和验证单元的标题；代码、代码清单、URL、标识符和对原书或论文的引文保持原样）：
+- **统一用词**（用于正文、标题、图注、验证单元与 localcheck 的标题，也用于读者看得到的代码文字：验证单元里的注释和
+  打印，localcheck 展示的测试函数里的注释、文档字符串和打印，组件界面上的文字。标识符、字典键、数据、单元 id、URL、
+  代码清单，以及对原书、论文、讲义的引文保持原样；测试断言了打印的文字时，两边一起改）：
   - BPE 的并列取舍叫**平票**、**平票规则**（第 1 章专栏的定义），不叫“平局”。第 6 章偏好数据里的平局（打平、舍入）是另一回事。
   - 模型的存档叫 checkpoint（“三个 checkpoint，三种回答”），不叫“检查点”。第 9 章的梯度检查点（activation checkpointing）是另一个概念，沿用第 9 章的写法。
-  - GRPO 的迭代按“轮”计数（“第 51 轮”）：一轮是一次生成加两次优化器更新，tqdm 显示的 it=k 就是第 k 轮。优化器的更新、预训练和 SFT 的迭代仍然叫“步”。
+  - GRPO 的迭代按“轮”计数（“第 51 轮”）：一轮是一次生成加两次优化器更新，运行记录里的 it=k（tqdm 计数 k 的第一行，见 GPU 手册 G.7）就是第 k 轮。优化器的更新、预训练、SFT 和 DDP 训练的迭代仍然叫“步”，生成时每出一个 token 也叫一步。
+  - “轮”只数 GRPO 的迭代。数据过一遍叫 epoch（名词：每个 epoch、第一个 epoch），数遍数时用“遍”（14.3 遍、过一遍）。“轮”的其他意思不受影响：基准测试的重复（第 r 轮）、对话的轮次、BPE 的合并轮次。
+  - Attention、多头 Attention 是机制的名字（第 2 章引入，之后不再加粗）；注意力权重、注意力分数、注意力头这类复合词照常写“注意力”。
   - 词嵌入写作 token embedding（第 2 章首次出现时写 **词嵌入**（token embedding）），位置嵌入写作位置 embedding，嵌入层写作 embedding 层。输出端的投影叫输出层（代码里是 `unembed`），不叫“反嵌入”。
   - warmup 直接写英文（代码里是 `warmup_iters`）；第 6 章首次出现时写 **学习率预热**（warmup）。
   - Attention 首字母大写。Flash Attention 指这项技术和 8.2 节（官方目录的写法）；FlashAttention、FlashAttention-2/-3 只在指论文或库时使用。
@@ -88,6 +92,11 @@ pyodide_packages: [numpy]   # 本页验证单元需要的 Pyodide 包（numpy、
 - 跨书引用固定句式：“如果你读过《深度学习入门4：强化学习》9.3 节，……”（书名与节号取自
   `research/style-*.md` 的 concept anchors；中文版书名：《深度学习入门：基于Python的理论与实现》、
   《深度学习进阶：自然语言处理》、《深度学习入门2：自制框架》、《深度学习入门4：强化学习》）。
+- 提示框标题（`::: kind 标题`）里可以写行内代码、`$…$` 公式和链接；强调、图片和 HTML 不生效，所以 `embed_dim`
+  里的下划线、`<|endoftext|>` 都原样显示。
+- 代码清单显示从引用的起始行开始的行号（行号不会被复制）。引用范围从代码行开始、在代码行结束，不要把首尾的空行带进来。
+- 行内代码保留空格：开头的空格、连续的空格会和后一个字符粘在一起，不会单独断到行尾，所以 `' add'` 这样的 token
+  可以照原样写，不必改写成 `␣add`。
 
 ## 4. 验证单元规则
 
@@ -109,8 +118,16 @@ pyodide_packages: [numpy]   # 本页验证单元需要的 Pyodide 包（numpy、
 
 - 文件：`web/widgets/<slug>-<name>.js`（共享组件不加前缀，放 `_` 开头的库文件里，章节作者不要改共享库，
   需要改就在返回报告里提出）。导出 `mount(root, config)`。
-- 只用 `_lib.js`（DOM）与 `_plot.js`（SVG 图表）；不引入外部库；颜色只用 CSS 变量（`var(--ai)` 等），
+- 共享库只有 `_lib.js`（DOM）、`_plot.js`（SVG 图表与主题助手），以及 `_bpe.js`、`_gpt.js`、`_tinygpt.js`；同一页的
+  组件可以共用一个辅助模块（如 `ch03-common.js`）。不引入外部库；颜色只用 CSS 变量（`var(--ai)` 等），
   明暗主题都要清楚；窄屏 375px 不出现横向滚动；所有控件可用键盘操作并有 `aria-label`。
+- 跟随主题：调色板颜色用 `_plot.js` 的 `seriesVars(el)` 设好 `--series-k`，样式里写 `var(--series-k)`（`color-mix()`
+  里也一样）；在 JS 里算出的颜色（画布、按十六进制填色的 SVG）通过 `onThemeChange(fn)` 重画。不要在挂载时把
+  `seriesColor()` 的值写死进样式，也不要自己写 MutationObserver：它们看不到操作系统的明暗切换。
+- 图表：对数数据把原值交给 `lineChart` 的 `logX`/`logY`，不要先取 log10 再画在线性轴上；`lineChart` 还有 `xMin`/`xMax`、
+  `marginRight` 和 `markers`（`true`，或要标记的点的数组）。
+- 按需加载的组件，加载时显示“进入视野时才……”“正在下载”“正在准备”“正在加载”“正在载入”“正在读取”这类提示，或在
+  状态元素上设 `aria-busy="true"`：`check_pages.mjs` 截图前会等它加载完（最多 30 秒）。
 - 组件里的计算如果与正文结论有关，**要有同一结论的验证单元**（组件给直觉，验证单元钉死结论）。
 - 组件需要的样式写在组件里（`root.style` 或以 `w-<slug>-` 为前缀的 `<style>`），不要改 `site.css`。
 
@@ -134,7 +151,7 @@ CS336 的要求、DLFS6 的差异以及差异带来的后果。所有关于 CS33
 - [ ] 每个技术断言都有 A 层或 B 层验证；`uv run python tools/build.py --only <slug> --out build/preview-<slug>` 通过。
 - [ ] `uv run pytest verify/test_<slug>.py` 通过。
 - [ ] `node tools/check_pages.mjs build/preview-<slug> <slug>` 通过（页面无报错，全部验证单元在真实 Pyodide 中盖章）。
-- [ ] 组件在明暗主题、桌面与 375px 宽度下都可用。
+- [ ] 组件在明暗主题、桌面与 375px 宽度下都可用（`check_pages.mjs --widget-shots` 会截浅色、切换后的深色和操作系统深色三种图）。
 - [ ] 小结有“本章所学的内容”，每条都链接到验证单元。
 - [ ] 中文通读一遍：没有翻译腔、没有配置清单式长句、没有未回答的设问。
 
@@ -147,4 +164,9 @@ CS336 的要求、DLFS6 的差异以及差异带来的后果。所有关于 CS33
 - 全站构建会检查每一个站内链接（页面与 `#锚点` 都必须存在），改动节标题编号前先搜索引用它的地方。
   没有编号的标题，锚点由标题文字的哈希生成（`h-` 加 8 位），改字也会改锚点。
 - 验证单元的 id 一旦被其他页面链接，就保持不变：新增的单元用新字母，不要给已有的单元重新编号。
+- 子模块必须是 LF。已经检出成 CRLF 的，先 `git -C third_party/dlfs6 config core.autocrlf false`，再
+  `git -C third_party/dlfs6 rm -r -q --cached .` 和 `git -C third_party/dlfs6 reset -q --hard`；只执行 `checkout -- .` 不可靠
+  （见 README 第 2 步与 `verify/test_ch00.py::test_checkout_alone_leaves_crlf_files`）。
+- 内存紧张的机器上，pytest 一个测试文件一个进程：整套测试在一个进程里会涨到约 8 GB（会话级 fixture 缓存着各章的模型），
+  内存不够时后半段会出现分配失败造成的 F/E，单独重跑那个文件就能分辨。
 - Edit/Write 工具会把参数里的 `\uXXXX` 转义变成字面字符。JS 里需要转义时写 `\u{XXXX}`，或者在代码里用 `String.fromCodePoint` 构造。

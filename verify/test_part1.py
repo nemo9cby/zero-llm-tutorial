@@ -1,6 +1,6 @@
 """第 I 部扉页（CodeBot）：本地验证。
 
-TinyCodes 的统计在完整语料上重算；终点预览用官方 SFT / GRPO 检查点在 CPU 上贪心解码，
+TinyCodes 的统计在完整语料上重算；终点预览用官方 SFT / GRPO checkpoint 在 CPU 上贪心解码，
 与 web/data/part1/preview.json 逐字比较。不运行原书脚本，只导入它们的模块。
 """
 import json

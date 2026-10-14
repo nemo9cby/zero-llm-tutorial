@@ -39,7 +39,7 @@ export function translate(cfg) {
   const kv = get('kv');
   if (kv.value == null && heads != null) {
     kv.value = heads;
-    kv.note = '缺省：与头数相同（普通多头注意力）';
+    kv.note = '缺省：与头数相同（普通的多头 Attention）';
   }
   const hd = get('headDim');
   if (hd.value == null && width != null && heads) {
@@ -85,8 +85,8 @@ export function roughNote(derived) {
   const { blocks, roughNonEmbedding: rough, shares } = derived;
   if (blocks == null || rough == null || !shares || Math.abs(blocks / rough - 1) <= 0.05) return null;
   const pct = Math.round(Math.abs(1 - rough / blocks) * 100);
-  return `粗估 12·L·d² 假设每层注意力 4d²、FFN 8d²（两个 d × 4d 的矩阵）。这个模型每层约 ${num(shares.attn + shares.ffn)}d²：`
-    + `注意力 ${num(shares.attn)}d²，FFN ${num(shares.ffn)}d²（${shares.ffMatrices} 个矩阵），`
+  return `粗估 12·L·d² 假设每层 Attention 4d²、FFN 8d²（两个 d × 4d 的矩阵）。这个模型每层约 ${num(shares.attn + shares.ffn)}d²：`
+    + `Attention ${num(shares.attn)}d²，FFN ${num(shares.ffn)}d²（${shares.ffMatrices} 个矩阵），`
     + `所以粗估${rough < blocks ? '低' : '高'}了约 ${pct}%。`;
 }
 

@@ -3,11 +3,11 @@
 GRPODataset / calculate_reward / compute_probs / grpo_loss 都是原书的函数，用 _ch03_dlfs6.load_defs
 直接从 third_party/dlfs6/ch03/09_grpo.py 里取出。唯一的改动是批量采样（81 个 prompt 都是 22 个 token，
 不需要 padding），统计上等价于逐条调用 256 次 generate()。超参数与脚本相同：lr 7e-6、G=8、batch 32、
-eps 0.2、每批数据更新 2 次、clip_grad_norm 1.0、AdamW。每轮写一行 JSON 指标，每 10 轮加一次 greedy 准确率。
+eps 0.2、每批数据更新 2 次、clip_grad_norm 1.0、AdamW。每轮写一行 JSON 指标，每 10 轮加一次贪心解码的准确率。
 
 批量采样每条回答最多生成 max_new_tokens = 40 个 token（原书的 generate() 默认 1000）。写满 40 个 token 还没停下的
 回答会被截断，按已经写出的文字打分；除此之外，两者在统计上等价。所以每轮都记下被截断的回答条数（truncated，
-greedy 评测的记在 greedy_truncated）：页面上的 6 条运行一共采样 77,760 条回答，被截断的有 8 条，greedy 评测里没有，
+贪心解码评测的记在 greedy_truncated）：页面上的 6 条运行一共采样 77,760 条回答，被截断的有 8 条，贪心解码评测里没有，
 test_ch03.py::test_recorded_grpo_runs 核对这些数字。
 
     CUDA_VISIBLE_DEVICES=-1 uv run python verify/_ch03_grpo_replicate.py --iters 60 --seed 2 --tag base

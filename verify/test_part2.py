@@ -1,6 +1,6 @@
 """第 II 部扉页（StoryBot）：本地验证。
 
-TinyStories 验证集的统计在全量验证集上重算；终点预览用官方的三个预训练检查点（iter 500 / 5000 / 40000）
+TinyStories 验证集的统计在全量验证集上重算；终点预览用官方的三个预训练 checkpoint（iter 500 / 5000 / 40000）
 在 CPU 上以固定种子重新生成，与 web/data/part2/preview.json 逐字比较。
 """
 import json

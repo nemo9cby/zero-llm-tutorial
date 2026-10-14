@@ -49,7 +49,7 @@
 | 70 | ch06 | 第6章 训练【应用篇】：AdamW、混合精度与 DPO | ch06/, storybot/utils.py | repo-ch06-ch09 |
 | 75 | part3 | 第 III 部 挑战篇：制作 WebBot | webbot/ | dlfs6-toc |
 | 80 | ch07 | 第7章 分词器【挑战篇】：WebBot 的分词器 | ch07/ | repo-ch01（ch07 部分） |
-| 90 | ch08 | 第8章 模型【挑战篇】：规模、注意力加速与 MoE | webbot/model.py | repo-ch05, repo-ch06-ch09 |
+| 90 | ch08 | 第8章 模型【挑战篇】：规模、Attention 加速与 MoE | webbot/model.py | repo-ch05, repo-ch06-ch09 |
 | 100 | ch09 | 第9章 训练【挑战篇】：多卡训练 WebBot | ch09/, webbot/utils.py | repo-ch06-ch09 |
 | 110–150 | appendix-a…e | 附录 A UTF-8 编码的原理 / B Attention 缩放效果的证明 / C 带基线策略梯度的无偏性证明 / D Adam 的偏差校正 / E DPO 最优解的推导 | — | dlfs6-toc |
 | 160 | playground | CodeBot 工作台：一个 prompt 的一生 | codebot/ | tech-frontend-gpu |
@@ -110,8 +110,13 @@ site/ build/ runs/    构建产物、预览构建、本机运行的工作目录�
   - ` ```localcheck verify/test_chNN.py::test_xxx ` 指向 pytest 测试，页面展示测试源码和命令；
   - GPU 运行报告：`web/data/runs/<run-id>/report.json` 记下教程与原书的 commit、主机、GPU、Python/torch/CUDA 版本，
     每个脚本的开始时间、墙钟时间、退出码、最终指标、日志末尾和打过的补丁；从别的运行接过 checkpoint 时记下它的
-    sha256；在 Modal 上还记下计费。同一目录里还有从 tqdm 解析的 `<脚本>.metrics.jsonl`、脚本保存的图、生成脚本的
-    输出 `<脚本>.output.txt`。运行记录列在 `web/data/runs/index.json` 里，页面上的训练曲线和样例只从这里读。
+    sha256；在 Modal 上还记下计费。每个脚本还记下跑它的教程代码（`tutorial`：提交号、有没有未提交的改动；有改动时
+    记 `git diff HEAD` 的 SHA-256 与改动的文件）和它写出的每个 checkpoint（`checkpoints`：路径、字节数、SHA-256）。
+    运行器拒绝在有未提交改动的工作树上开跑（`web/data/runs/` 除外；加 `--allow-dirty` 才照跑，并记下 diff 的哈希），
+    也拒绝把步骤追加到另一种机器或另一个平台（本机与 Modal）记下的报告里，要求换一个运行名。同一目录里还有从 tqdm
+    解析的 `<脚本>.metrics.jsonl`、脚本保存的图，以及运行器从日志写出的预训练计时 `timing.json` 和不带进度条的脚本的
+    输出 `<脚本>.output.txt`（这一功能之前的几份是手工摘的，测试从原始日志重新生成并核对）。运行记录列在
+    `web/data/runs/index.json` 里，页面上的训练曲线和样例只从这里读。
 - **外部事实**（CS336 的要求、论文结论、价格）：给 URL，并注明查证日期（2026-10）。
 - **原书注释即断言**：DLFS6 有 38 处写在注释里的期望输出（35 行 `print(...)  # 期望值`，加上 `ch03/03_alpaca.py`
   里 3 个写在下方的注释块），`verify/test_book_comments.py` 把它们全部改写成断言运行：30 处逐字一致，7 处只是写法不同
@@ -131,6 +136,11 @@ site/ build/ runs/    构建产物、预览构建、本机运行的工作目录�
 - 组件契约：`export function mount(root, config)`，只依赖共享库（`_lib.js`、`_plot.js`，以及 `_bpe.js`、`_gpt.js`、
   `_tinygpt.js`）和本页的辅助模块（如 `ch03-common.js`），不引入外部库；颜色只用 CSS 变量，
   支持明暗主题与窄屏（375px），键盘可操作，`prefers-reduced-motion` 时不做动画。
+- 主题与配色：调色板颜色用 `_plot.js` 的 `seriesVars(el)` 设好 `--series-k`，样式里写 `var(--series-k)`；在 JS 里算出的
+  颜色（画布、按十六进制填色的 SVG）通过 `_plot.js` 的 `onThemeChange(fn)` 重画，它同时响应页面的主题按钮和操作系统的
+  明暗设置（在 Node 里跑测试时没有 DOM，它什么也不做）。热力图格子里的数字取白字或墨字里与实际底色 WCAG 对比度更高的那个；
+  暗色主题发散色的红端是 `#e24848`，这样最红的格子也是白字，与旁边的格子一致。对数数据把原值交给 `lineChart` 的
+  `logX`/`logY`（十的幂太少时自动用 1-2-5 刻度，提示框按轴上的距离找最近的点），不要先取 log10 再画在线性轴上。
 
 ## 6. 各章要点（写作时以官方目录为纲，以对应 dossier 为料）
 

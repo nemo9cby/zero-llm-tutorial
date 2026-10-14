@@ -14,15 +14,15 @@ export const PRESETS = {
 export function countParams({ V, ctx, E, L, ff, tied = true, style = 'codebot' }) {
   const attnBias = style === 'gpt2' ? 4 * E : 0;
   const parts = [
-    { key: 'tok', name: tied ? 'token embedding（与 unembed 共享）' : 'token embedding', n: V * E },
+    { key: 'tok', name: tied ? 'token embedding（与输出层共享）' : 'token embedding', n: V * E },
     { key: 'pos', name: '位置 embedding', n: ctx * E },
     { key: 'ln', name: `块内 LayerNorm（${L} × 2 × 2E）`, n: L * 2 * 2 * E },
     { key: 'attn', name: `块内 Attention（${L} × (4E²${attnBias ? ' + 4E' : ''})）`, n: L * (4 * E * E + attnBias) },
     { key: 'ffn', name: `块内 FFN（${L} × (2·E·ff + ff + E)）`, n: L * (E * ff + ff + ff * E + E) },
     { key: 'lnf', name: '最终 LayerNorm（2E）', n: 2 * E },
   ];
-  if (!tied) parts.push({ key: 'unw', name: 'unembed 权重（不共享）', n: V * E });
-  if (style === 'codebot') parts.push({ key: 'unb', name: 'unembed 偏置', n: V });
+  if (!tied) parts.push({ key: 'unw', name: '输出层的权重（不共享）', n: V * E });
+  if (style === 'codebot') parts.push({ key: 'unb', name: '输出层的偏置', n: V });
   const total = parts.reduce((a, p) => a + p.n, 0);
   // Big matrices inside the blocks: 4E² (attention) + 2·E·ff (FFN) per block; equal to 12·L·E² only when ff = 4E.
   return { parts, total, stateDictSum: total + (tied ? V * E : 0), approx12: 12 * L * E * E, approxBlocks: L * (4 * E * E + 2 * E * ff) };

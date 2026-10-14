@@ -31,6 +31,7 @@ git -C third_party/dlfs6 ls-files --eol | grep w/crlf  # 检查：应当没有�
 
 只执行 `git -C third_party/dlfs6 checkout -- .` 不够可靠：它只重写 git 认为改动过的文件，而 git 先看时间戳和大小。
 刚克隆完时多半会重写；克隆过一阵、索引被 git 刷新过之后，CRLF 的文件就会被原样跳过。
+`verify/test_ch00.py::test_checkout_alone_leaves_crlf_files` 在一份临时克隆上重现了这两种情况。
 
 **3. Python 环境与数据：**
 
@@ -49,6 +50,9 @@ export PYTHONUTF8=1 PYTHONIOENCODING=utf-8   # PowerShell：$env:PYTHONUTF8 = "1
 export CUDA_VISIBLE_DEVICES=-1               # 可选：隐藏 GPU（Windows 会丢掉空字符串，写 "" 不起作用）
 uv run pytest                                # 只跑一章：uv run pytest verify/test_ch03.py
 ```
+
+整套测试在一个进程里会用到约 8 GB 内存（各章的模型在整个会话里缓存着）。内存紧张时按文件分开跑，
+例如 `for f in verify/test_*.py; do uv run pytest "$f"; done`。
 
 **5. 构建站点**，同时执行全部 A 层验证单元：
 
@@ -96,6 +100,9 @@ uv run --group gpu python gpu/modal_app.py pull --run storybot-mine       # 结�
 **预算闸门**：`launch` 启动任何东西之前，先打印估算（每个脚本的小时数、合计美元）；估算的上限超过 `--budget`（美元，默认 5），
 它就拒绝启动。离线算账用 `uv run python gpu/costs.py --scenario webbot-x8-trap`（按假设的 MFU；探针的实测见站内 GPU 实战手册）。
 `--run` 请起一个新名字，不要沿用已入库的运行名，免得新的结果混进或覆盖已入库的记录：页面上的验证单元读的正是这些记录。
+运行器自己也有两道检查：工作树里有没提交的改动时（`web/data/runs/` 除外），它拒绝开跑，加 `--allow-dirty` 才照跑，
+并在报告里记下 `git diff HEAD` 的 SHA-256；已经有报告的运行名，换到另一种机器或在本机与 Modal 之间换着续写时，它也拒绝，
+并要求换一个新的运行名。
 
 已入库的运行记录：
 
