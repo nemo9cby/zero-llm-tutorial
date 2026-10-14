@@ -35,6 +35,43 @@ function renderMath() {
   }
 }
 
+// ---------------------------------------------------------------- tables
+// The <wbr> break points in table code are off (site.css) unless the table has .wbr-on, which a table gets only when it
+// overflows without them (each table is its own scroll box: scrollWidth > clientWidth): identifiers stay whole wherever
+// the table fits. Measured again when web fonts finish loading and when a table's width changes (a resized window, a
+// <details> that opens). Switching break points changes a table's height, never its width, so it cannot set off another
+// measurement; the observer only marks tables, and they are measured in the next frame, outside the observer's loop.
+function fitTables() {
+  const tables = [...document.querySelectorAll('.chapter table')].filter((t) => t.querySelector('wbr'));
+  if (!tables.length) return;
+  const widths = new WeakMap();                  // the width each table was last measured at
+  const measure = (list) => {
+    for (const t of list) t.classList.remove('wbr-on');      // all writes, then all reads: one layout per batch
+    const wide = list.filter((t) => t.scrollWidth > t.clientWidth);
+    for (const t of list) widths.set(t, t.clientWidth);
+    for (const t of wide) t.classList.add('wbr-on');
+  };
+  measure(tables);
+  if (document.fonts) {                          // after measure(): the fonts it needs have started loading by now
+    document.fonts.ready.then(() => measure(tables));
+    document.fonts.addEventListener?.('loadingdone', () => measure(tables));    // e.g. inside a <details> opened later
+  }
+  if (typeof ResizeObserver !== 'function') return;
+  const changed = new Set();
+  let frame = 0;
+  const observer = new ResizeObserver((entries) => {
+    for (const e of entries) if (e.target.clientWidth !== widths.get(e.target)) changed.add(e.target);
+    if (!changed.size || frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      const list = [...changed];
+      changed.clear();
+      measure(list);
+    });
+  });
+  for (const t of tables) observer.observe(t);
+}
+
 // ---------------------------------------------------------------- widgets
 async function hydrateWidgets() {
   for (const fig of document.querySelectorAll('figure.widget[data-widget]')) {
@@ -183,5 +220,6 @@ function setupVerify() {
 
 setupChrome();
 renderMath();
+fitTables();                                     // after the math: formulas in cells change the widths
 setupVerify();
 hydrateWidgets();

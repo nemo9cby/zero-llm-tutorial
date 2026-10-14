@@ -202,6 +202,9 @@ def render_verify(code: str, attrs: dict, result: dict | None) -> str:
 
 
 def extract_test_source(spec: str) -> tuple[str, str]:
+    """The source of a test function as whole lines, from its first decorator to its last line (the span that
+    inspect.getsource shows): a comment after the last statement stays. A nested function is dedented by the
+    indentation of its first line."""
     file, _, name = spec.partition("::")
     path = ROOT / file
     if not path.is_file():
@@ -210,7 +213,10 @@ def extract_test_source(spec: str) -> tuple[str, str]:
     tree = ast.parse(text)
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
-            return file, ast.get_source_segment(text, node) or ""
+            first = min([node.lineno] + [d.lineno for d in node.decorator_list])
+            lines = re.split(r"\r\n?|\n", text)[first - 1:node.end_lineno]     # the line breaks ast counts
+            indent = re.match(r"[ \t]*", lines[0]).group()
+            return file, "\n".join(line.removeprefix(indent) for line in lines)
     raise BuildError(f"localcheck: test {name} not found in {file}")
 
 

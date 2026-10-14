@@ -230,6 +230,89 @@ def test_hl_lines_handles_any_text():
     assert all(l.count("<span") == l.count("</span>") for l in lines)
 
 
+# ---------------------------------------------------------------- localcheck sources
+
+LOCALCHECK_SRC = '''import pytest
+
+
+def helper():
+    return 1
+
+
+@pytest.mark.parametrize("n", [
+    1, 2,
+])
+@pytest.mark.slow
+def test_decorated(n):
+    assert n > 0  # 结尾的注释也要显示
+# a comment at column 0 after the function belongs to what follows
+
+
+def test_plain():
+    x = helper()
+    assert x == 1
+
+
+def test_multiline_last_statement():
+    assert helper() in (
+        1, 2,
+    )  # 注释在多行语句的最后一行
+
+
+async def test_async():
+    assert True  # async too
+
+
+def outer():
+    @pytest.mark.slow
+    def test_nested():
+        return 1  # nested
+    return test_nested
+'''
+
+
+@pytest.fixture
+def lc_file(tmp_path, monkeypatch):
+    (tmp_path / "verify").mkdir()
+    (tmp_path / "verify" / "test_x.py").write_text(LOCALCHECK_SRC, encoding="utf-8", newline="\n")
+    monkeypatch.setattr(build, "ROOT", tmp_path)
+    return "verify/test_x.py"
+
+
+def test_localcheck_source_starts_at_the_first_decorator_and_keeps_the_trailing_comment(lc_file):
+    file, src = build.extract_test_source(f"{lc_file}::test_decorated")
+    assert file == lc_file
+    assert src == ('@pytest.mark.parametrize("n", [\n    1, 2,\n])\n@pytest.mark.slow\n'
+                   'def test_decorated(n):\n    assert n > 0  # 结尾的注释也要显示')
+
+
+@pytest.mark.parametrize("name,want", [
+    ("test_plain", "def test_plain():\n    x = helper()\n    assert x == 1"),
+    ("test_multiline_last_statement",
+     "def test_multiline_last_statement():\n    assert helper() in (\n        1, 2,\n    )  # 注释在多行语句的最后一行"),
+    ("test_async", "async def test_async():\n    assert True  # async too"),
+    # a nested function loses the indentation of its first line on every line
+    ("test_nested", "@pytest.mark.slow\ndef test_nested():\n    return 1  # nested"),
+])
+def test_localcheck_source_is_whole_lines(lc_file, name, want):
+    assert build.extract_test_source(f"{lc_file}::{name}")[1] == want
+
+
+def test_localcheck_source_errors_still_raise(lc_file):
+    with pytest.raises(build.BuildError, match="test test_missing not found"):
+        build.extract_test_source(f"{lc_file}::test_missing")
+    with pytest.raises(build.BuildError, match="not found"):
+        build.extract_test_source("verify/test_nope.py::test_plain")
+
+
+def test_localcheck_renders_the_trailing_comment(lc_file):
+    out = build.render_localcheck(f"{lc_file}::test_decorated", {"title": "t"})
+    assert "uv run pytest verify/test_x.py::test_decorated" in out
+    code = re.search(r'<pre class="code"><code>(.*)</code></pre></details>', out, re.S).group(1)
+    assert text_of(code).rstrip("\n").endswith("assert n > 0  # 结尾的注释也要显示")
+    assert text_of(code).startswith('@pytest.mark.parametrize("n", [')
+
+
 def test_verify_localcheck_and_plain_code_are_not_numbered():
     out = render('```verify id=1.1-a title="t"\nx = 1\nassert x == 1\n```\n\n```python\na = 1\nb = 2\n```\n')
     assert 'class="line"' not in out and "numbered" not in out

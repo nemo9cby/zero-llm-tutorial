@@ -73,7 +73,7 @@ content/*.md          章节源文件（Markdown + 自定义指令，见 STYLE.m
 web/                  模板、样式、运行时、交互组件与数据（构建时复制到输出目录，默认 site/）
   template.html       页面骨架
   css/site.css        设计令牌与全部样式（共享，章节作者不要改）
-  js/runtime.js       主题/目录/KaTeX/组件挂载/验证单元
+  js/runtime.js       主题/目录/KaTeX/表格断点/组件挂载/验证单元
   js/pyworker.js      Pyodide Web Worker
   cell_harness.py     验证单元的执行器（浏览器与构建时共用同一份）
   widgets/_lib.js     DOM 工具（共享）
@@ -85,7 +85,7 @@ web/                  模板、样式、运行时、交互组件与数据（构�
   data/<slug>/        验证单元与组件读取的数据；data/runs/<run>/ 是 GPU 运行记录
 tools/build.py        构建：Markdown → HTML，执行全部验证单元（任何一条失败即构建失败；全量构建时站内链接或锚点失效也失败）
 tools/run_cells.py    在 Python 3.14 + NumPy 2.4.6（Pyodide 镜像）中执行验证单元
-tools/check_pages.mjs 无头浏览器检查（Playwright）：报错、横向溢出、组件越界、KaTeX 错误，全部验证单元在真 Pyodide 中盖章；可截图
+tools/check_pages.mjs 无头浏览器检查（Playwright）：报错、组件里的报错（非空的 role=alert）、横向溢出、组件越界、KaTeX 错误，全部验证单元在真 Pyodide 中盖章；可截图
 tools/fetch_data.py   下载官方 checkpoint 与数据，放进 third_party/dlfs6/<bot>/
 tools/export_*.py     导出工作台的 int8 权重（export_codebot）与浏览器用的分词器 JSON（export_tokenizers）
 tests/js/             组件里的 JS 实现（BPE、前向计算、训练器等）的 node --test 测试，与 Python/PyTorch 的参考结果对拍
@@ -107,7 +107,7 @@ site/ build/ runs/    构建产物、预览构建、本机运行的工作目录�
 - **A 层（浏览器，毫秒级）**：` ```verify ` 单元，NumPy-only，用 `assert` 把结论写死。
   构建时执行，失败则整站构建失败（借鉴 CS336 的可执行讲义：发布出来的每条断言都成立过）。
 - **B 层（本地或云端）**：
-  - ` ```localcheck verify/test_chNN.py::test_xxx ` 指向 pytest 测试，页面展示测试源码和命令；
+  - ` ```localcheck verify/test_chNN.py::test_xxx ` 指向 pytest 测试，页面展示测试源码（从装饰器到函数最后一行，含行尾注释）和命令；
   - GPU 运行报告：`web/data/runs/<run-id>/report.json` 记下教程与原书的 commit、主机、GPU、Python/torch/CUDA 版本，
     每个脚本的开始时间、墙钟时间、退出码、最终指标、日志末尾和打过的补丁；从别的运行接过 checkpoint 时记下它的
     sha256；在 Modal 上还记下计费。每个脚本还记下跑它的教程代码（`tutorial`：提交号、有没有未提交的改动；有改动时

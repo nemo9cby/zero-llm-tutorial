@@ -47,13 +47,24 @@ export function mount(root, config) {
   root.append(h('div', { class: 'ctl' }, sG.el, sp.el, drawBtn), h('div', { class: 'ctl' }, stdToggle),
     h('div', { class: 'w-label' }, '这一组的 G 个回答（点击切换 ✓ 答对 / ✗ 答错）：'), chips, chart, stats, flag);
 
+  // The chips are updated in place (only G adds or removes some), so a chip keeps keyboard focus when it is activated.
+  function renderChips() {
+    while (chips.children.length > rewards.length) chips.lastElementChild.remove();
+    rewards.forEach((r, i) => {
+      let b = chips.children[i];
+      if (!b) {
+        b = h('button', { type: 'button' });
+        b.addEventListener('click', () => { rewards[i] = 1 - rewards[i]; render(); });
+        chips.append(b);
+      }
+      b.setAttribute('aria-pressed', String(r === 1));
+      b.setAttribute('aria-label', `回答 ${i + 1}：${r ? '答对' : '答错'}`);
+      b.textContent = `${i + 1} ${r ? '✓' : '✗'}`;
+    });
+  }
+
   function render() {
-    chips.replaceChildren(...rewards.map((r, i) => {
-      const b = h('button', { type: 'button', 'aria-pressed': String(r === 1), 'aria-label': `回答 ${i + 1}：${r ? '答对' : '答错'}` },
-        `${i + 1} ${r ? '✓' : '✗'}`);
-      b.addEventListener('click', () => { rewards[i] = 1 - rewards[i]; render(); });
-      return b;
-    }));
+    renderChips();
     const A = advantages(rewards, { stdNorm });
     const mean = rewards.reduce((a, b) => a + b, 0) / G;
     const allSame = rewards.every((r) => r === rewards[0]);

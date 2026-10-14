@@ -145,6 +145,12 @@ th:first-child, td:first-child { min-width: 6em; }
    puts in table code (after "/", after "_" between letters or digits, after "." before a letter; none inside a .nowrap
    span), at spaces and where the browser always may. A table still too wide scrolls in its own box. */
 .chapter td code, .chapter th code { overflow-wrap: normal; }
+/* The <wbr> points (build.py's and any written by hand) count only in a table that would scroll without them: runtime.js
+   measures every table with them off and gives the ones that overflow .wbr-on. Elsewhere identifiers stay whole, since a
+   break point lowers its column's minimum width and the table layout then narrows that column even when everything
+   fits. display: none removes a <wbr>'s break opportunity (Chromium); copying and find-in-page see the same text either
+   way. Without JavaScript they stay off, and a table too wide for its column scrolls in its own box. */
+.chapter table:not(.wbr-on) wbr { display: none; }
 th { font-weight: 600; border-bottom-color: var(--ink-3); }
 blockquote { margin: 1.5rem 0; padding-left: 1rem; border-left: 2px solid var(--rule); color: var(--ink-2); }
 .math-block { position: relative; margin: 1.2rem 0; overflow-x: auto; overflow-y: hidden; }

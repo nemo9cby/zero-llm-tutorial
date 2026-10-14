@@ -48,7 +48,10 @@ export async function mount(root, config) {
   };
   let mode = config.mode || 'diff';
   let active = 0;                                  // roving tabindex: the one answer cell that takes Tab focus
-  const pick = h('div', { class: 'pick', role: 'group', 'aria-label': '选择要看的模型' });
+  // The model buttons are made once and only their aria-pressed changes, so a button keeps keyboard focus when activated.
+  const modes = [['sft', 'SFT 之后'], ['grpo', '强化学习之后'], ['diff', '前后对比']];
+  const pickButtons = modes.map(([k, label]) => h('button', { type: 'button', onclick: () => { mode = k; render(); } }, label));
+  const pick = h('div', { class: 'pick', role: 'group', 'aria-label': '选择要看的模型' }, pickButtons);
   const grid = h('div', { class: 'grid', role: 'table',
     'aria-label': 'i + j 的回答，行是 i，列是 j；用方向键在格子之间移动' });
   const legend = h('div', { class: 'legend' });
@@ -69,9 +72,7 @@ export async function mount(root, config) {
   });
 
   const render = () => {
-    pick.replaceChildren(...[['sft', 'SFT 之后'], ['grpo', '强化学习之后'], ['diff', '前后对比']]
-      .map(([k, label]) => h('button', { type: 'button', 'aria-pressed': String(k === mode),
-        onclick: () => { mode = k; render(); } }, label)));
+    pickButtons.forEach((b, i) => b.setAttribute('aria-pressed', String(modes[i][0] === mode)));
     const cells = [h('div', { class: 'hd' }, '+')];
     for (let j = 1; j <= 9; j++) cells.push(h('div', { class: 'hd' }, j));
     const count = { sftOk: 0, grpoOk: 0, fixed: 0, broke: 0 };

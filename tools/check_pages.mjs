@@ -4,7 +4,8 @@
 //
 // For each page: load it, fail on console errors / page errors / failed requests,
 // wait for every widget to mount, then click "运行本页全部验证" and wait until every
-// verify cell's seal reaches a terminal state. Exit code 1 if any page fails.
+// verify cell's seal reaches a terminal state. A figure that shows an error in a non-empty
+// [role=alert] fails the page too. Exit code 1 if any page fails.
 // With --shots, also saves desktop (1280px) and phone (375px) screenshots.
 // With --widget-shots too, one shot per figure.widget: <slug>-fig<N>-<desktop|phone>-<light|dark|darkos>.png,
 // light/dark set by the page's theme toggle, darkos from a second page opened in an OS-level dark colour scheme
@@ -46,28 +47,46 @@ function serve(root) {
 // A lazily loaded figure (the workbench fetches its weights only when it comes into view) says that it is loading
 // until it is done; aria-busy="true" inside a figure counts too. Once a figure is in view, wait for that to end, at most
 // LOAD_WAIT_MS, so the shot shows the loaded figure. A figure still loading after that is shot as it is, with a note:
-// the wait never fails a page (a figure that fails to load shows up as a console error or an unmounted widget).
-const LOADING_RE = /进入视野时才|正在下载|正在准备|正在加载/;
+// running out of time never fails a page. A figure that failed says so in a non-empty [role=alert] (the workbench's
+// status line, the trainer) and may keep its loading text: the wait stops there, and the failure is a problem.
+const LOADING_RE = /进入视野时才|正在下载|正在准备|正在加载|正在载入|正在读取/;
 const LOAD_WAIT_MS = 30000;
 async function whenLoaded(page, fig) {
   const mount = await fig.$('.widget-mount');                // the figure without its caption
-  if (!mount) return true;
-  return page.waitForFunction(([el, re]) => !new RegExp(re).test(el.textContent) && !el.querySelector('[aria-busy="true"]'),
-    [mount, LOADING_RE.source], { timeout: LOAD_WAIT_MS, polling: 250 }).then(() => true, () => false);
+  if (!mount) return 'loaded';
+  return page.waitForFunction(([el, re]) => {
+    if ([...el.querySelectorAll('[role="alert"]')].some((a) => a.textContent.trim())) return 'alert';
+    return !new RegExp(re).test(el.textContent) && !el.querySelector('[aria-busy="true"]') && 'loaded';
+  }, [mount, LOADING_RE.source], { timeout: LOAD_WAIT_MS, polling: 250 }).then((r) => r.jsonValue(), () => 'timeout');
+}
+
+// Every figure whose mount holds a non-empty [role=alert] becomes a problem, once per figure and page (a figure is shot
+// up to six times). `where` says when it was seen.
+async function reportAlerts(page, problems, where, prefix = '') {
+  const alerts = await page.$$eval('figure.widget', (figs) => figs.map((f, i) => [i + 1,
+    [...f.querySelectorAll('.widget-mount [role="alert"]')].map((a) => a.textContent.trim()).filter(Boolean).join(' / ')])
+    .filter(([, text]) => text));
+  for (const [n, text] of alerts) {
+    const key = `${prefix}figure ${n} shows an error`;
+    if (!problems.some((p) => p.startsWith(key))) problems.push(`${key} (${where}): ${text.slice(0, 300)}`);
+  }
 }
 
 // One screenshot per figure.widget, named <slug>-fig<N>-<width>-<theme>.png. The sticky top bar is unstuck
 // while shooting (it would cover the top of tall figures), and a figure taller than the viewport gets a
 // viewport that fits it (an element screenshot taller than the viewport can time out waiting for stability).
-async function shootFigures(page, slug, width, theme, notes) {
+async function shootFigures(page, slug, width, theme, problems, notes, prefix = '') {
   const unstick = await page.addStyleTag({ content: '.topbar { position: static !important; }' });
   const viewport = page.viewportSize();
   try {
     const figs = await page.$$('figure.widget');
     for (let i = 0; i < figs.length; i++) {
       await figs[i].scrollIntoViewIfNeeded();         // a lazy figure starts loading here, and may grow once loaded
-      if (!(await whenLoaded(page, figs[i]))) {
+      const state = await whenLoaded(page, figs[i]);
+      if (state === 'timeout') {
         notes.push(`figure ${i + 1} (${width}, ${theme}) was still loading after ${LOAD_WAIT_MS / 1000} s: shot as it was`);
+      } else if (state === 'alert') {
+        await reportAlerts(page, problems, `${width}, ${theme}`, prefix);
       }
       for (let tries = 0; tries < 3; tries++) {      // a figure may grow once the viewport does: measure again
         const box = await figs[i].boundingBox();
@@ -86,11 +105,11 @@ async function shootFigures(page, slug, width, theme, notes) {
 }
 
 // --widget-shots: light and dark set through the page's theme toggle (data-theme)
-async function widgetShots(page, slug, width, notes) {
+async function widgetShots(page, slug, width, problems, notes) {
   for (const theme of ['light', 'dark']) {
     await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
     await page.waitForTimeout(250); // charts re-render on theme change
-    await shootFigures(page, slug, width, theme, notes);
+    await shootFigures(page, slug, width, theme, problems, notes);
   }
   await page.evaluate(() => { delete document.documentElement.dataset.theme; });
 }
@@ -113,10 +132,11 @@ async function darkOsShots(browser, base, slug, problems, notes) {
   try {
     await page.goto(`${base}/${slug}.html`, { waitUntil: 'load' });
     await page.waitForTimeout(800); // let widget modules import and mount
-    await shootFigures(page, slug, 'desktop', 'darkos', notes);
+    await shootFigures(page, slug, 'desktop', 'darkos', problems, notes, 'darkos ');
     await page.setViewportSize({ width: 375, height: 812 });
     await page.waitForTimeout(300);
-    await shootFigures(page, slug, 'phone', 'darkos', notes);
+    await shootFigures(page, slug, 'phone', 'darkos', problems, notes, 'darkos ');
+    await reportAlerts(page, problems, 'darkos', 'darkos ');
   } finally {
     await page.close();
   }
@@ -195,15 +215,16 @@ async function checkPage(browser, base, slug) {
   if (shotsDir) {
     fs.mkdirSync(shotsDir, { recursive: true });
     await page.screenshot({ path: path.join(shotsDir, `${slug}-desktop.png`), fullPage: false });
-    if (flags.has('--widget-shots')) await widgetShots(page, slug, 'desktop', notes);
+    if (flags.has('--widget-shots')) await widgetShots(page, slug, 'desktop', problems, notes);
   }
   await page.setViewportSize({ width: 375, height: 812 });
   await page.waitForTimeout(300);
   await overflow('375px');
   if (shotsDir) {
     await page.screenshot({ path: path.join(shotsDir, `${slug}-phone.png`), fullPage: false });
-    if (flags.has('--widget-shots')) await widgetShots(page, slug, 'phone', notes);
+    if (flags.has('--widget-shots')) await widgetShots(page, slug, 'phone', problems, notes);
   }
+  await reportAlerts(page, problems, 'at the end');  // figures that loaded without being shot (in view at load) too
   await page.close();
   if (shotsDir && flags.has('--widget-shots') && widgets.length) await darkOsShots(browser, base, slug, problems, notes);
   return { slug, widgets: widgets.length, cells, problems, notes };

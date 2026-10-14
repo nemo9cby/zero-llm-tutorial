@@ -3,7 +3,7 @@
    is downloaded once however many figures use it. Without module workers, the engine runs on the page instead. */
 import { h, visible } from './_lib.js';
 import { Tokenizer } from './_bpe.js';
-import { filterDistribution, softmax, argsortDesc, entropy } from './_gpt.js';
+import { filterDistribution, softmax, entropy } from './_gpt.js';
 
 export const DATA = new URL('../data/playground/', import.meta.url);
 const TOKENIZER = new URL('../data/tokenizers/codebot.json', import.meta.url);
@@ -234,14 +234,22 @@ export function slider({ label, min, max, step, value, format = (v) => String(v)
   return { el, input, get value() { return +input.value; }, set(v) { input.value = v; out.textContent = format(+v); } };
 }
 
-/** Download progress + status line for one widget. */
+/** Download progress + status line for one widget. While a checkpoint loads (busy, counted: loads may overlap), the
+    line is aria-busy: assistive technology waits for the final status, and tools/check_pages.mjs waits too. */
 export function statusLine() {
   const bar = h('span');
   const progress = h('div', { class: 'w-pg-progress', role: 'progressbar', 'aria-valuemin': 0, 'aria-valuemax': 100, hidden: true }, bar);
   const text = h('div', { class: 'w-pg-status', 'aria-live': 'polite' });
   const err = h('div', { class: 'w-pg-error', role: 'alert' });
+  const el = h('div', {}, progress, text, err);
+  let loads = 0;
   return {
-    el: h('div', {}, progress, text, err),
+    el,
+    busy(on) {
+      loads = Math.max(0, loads + (on ? 1 : -1));
+      if (loads) el.setAttribute('aria-busy', 'true');
+      else el.removeAttribute('aria-busy');
+    },
     progress(loaded, total) {
       const pct = total ? Math.round((loaded / total) * 100) : 0;
       progress.hidden = loaded >= total;
@@ -256,9 +264,14 @@ export function statusLine() {
 
 /** Load a checkpoint for a widget, reporting progress on its status line. */
 export async function ensureModel(name, status) {
-  const info = await engine().load(name, (l, t) => status?.progress(l, t));
-  status?.progress(1, 1);
-  return info;
+  status?.busy?.(true);
+  try {
+    const info = await engine().load(name, (l, t) => status?.progress(l, t));
+    status?.progress(1, 1);
+    return info;
+  } finally {
+    status?.busy?.(false);
+  }
 }
 
 /** Text of one token for display (whitespace made visible). */
@@ -291,11 +304,18 @@ export function provenanceText(info) {
   return p.source ? `来源：${p.source}` : (p.checkpoint || '');
 }
 
+/** The first n ids by probability p, most probable first. Ties go to the higher logit, then to the lower id: at
+    temperature 0 the distribution is one-hot (and a tiny temperature underflows its tail to 0), and the runners-up
+    are then the next tokens by logit, not the lowest ids. */
+export function candidateOrder(logits, p, n) {
+  return Array.from(p.keys()).sort((i, j) => p[j] - p[i] || logits[j] - logits[i] || i - j).slice(0, n);
+}
+
 /** Next-token candidates: the top raw probabilities at temperature T, marking what top-k / top-p removed. */
 export function candidateBars(tok, logits, { temperature, topK, topP }, n = 8) {
   const dist = filterDistribution(logits, { temperature, topK, topP });
   const raw = temperature > 0 ? softmax(logits, temperature) : dist.probs;
-  const order = argsortDesc(raw).slice(0, n);
+  const order = candidateOrder(logits, raw, n);
   const kept = new Set(dist.kept);
   const max = raw[order[0]] || 1;
   const grid = h('div', { class: 'w-pg-bars', role: 'list', 'aria-label': '下一个 token 的候选' });
