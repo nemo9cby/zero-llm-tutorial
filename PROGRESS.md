@@ -55,11 +55,15 @@
 
 ## 下一步
 
-1. 需要用户决定：`verify/cs336/adapters_dlfs6.py`（把原书实现接到 CS336 A1 测试上）公开推送前是否保留；
-   GitHub Pages 部署（推送前须用户同意）；发布为 Artifact 需要自托管 Pyodide（CDN 在 Artifact 的 CSP 下不可用）。
+1. 需要用户决定：发布为 Artifact 需要自托管 Pyodide（CDN 在 Artifact 的 CSP 下不可用）。
 2. 可选：在空闲机器上重测 `kv_timing_cpu.json` 与浏览器内训练的计时（现有记录标明了当时的 CPU 负载）。
 
 ## 约定与决定
+
+- **部署**（2026-10-14 经用户同意）：公开仓库 github.com/nemo9cby/zero-llm-tutorial（`master`，含 adapters_dlfs6.py），
+  GitHub Pages 从 `gh-pages` 分支发布，地址 https://www.chenboyuan.com/zero-llm-tutorial/ （账户的自定义域名）。
+  更新站点：全量关卡通过后，把 `site/` 复制到临时目录、加 `.nojekyll`、`git init -b gh-pages`、提交后
+  `git push -f git@github.com:nemo9cby/zero-llm-tutorial.git gh-pages`。只发布通过关卡的构建，不在 CI 里重建。
 
 - 浏览器检查用 Playwright（`tools/check_pages.mjs`），不用 gstack browse。
 - `site/`、`build/`、`runs/` 不入库；运行数据在 `web/data/runs/`；playground 只附带本书自己训练的权重（34 MB）。

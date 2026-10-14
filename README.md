@@ -3,6 +3,8 @@
 依据斋藤康毅《ゼロから作る Deep Learning ❻ — LLM編》（O'Reilly Japan，2026）的全部源代码反向编写的中文互动教程。
 原书代码以 git submodule 固定在 `third_party/dlfs6`（MIT 许可）。
 
+**在线阅读：<https://www.chenboyuan.com/zero-llm-tutorial/>**（GitHub Pages，`gh-pages` 分支是全量关卡通过的 `site/`）。
+
 教程的约定只有一条：**每一个技术断言都要能被最小化地验证**。
 
 - **A 层**：浏览器内验证。页面上带印章的代码块可以直接在浏览器里运行（Pyodide 314.0.7，NumPy 2.4.6），输出与构建时逐字一致才会盖章。
