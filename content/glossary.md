@@ -51,7 +51,7 @@ pyodide_packages: [numpy]
 | logits | logits | softmax 之前的分数，每个 token 一个 | [2.4](ch02.html#s2-4) |
 | 位置编码 | positional encoding | 把 token 的先后顺序告诉模型 | [2.5](ch02.html#s2-5) |
 | 因果掩码 | causal mask | 让每个位置只能看见它自己和它前面的位置 | [2.6](ch02.html#s2-6) |
-| 多头 Attention（多头注意力） | multi-head attention | 把注意力拆成 H 个头并行计算，再拼接起来 | [2.8](ch02.html#s2-8) |
+| 多头 Attention（多头注意力） | multi-head attention | 把 Attention 拆成 H 个头并行计算，再拼接起来 | [2.8](ch02.html#s2-8) |
 | 残差流 | residual stream | 每一层都往上“加”自己的结果的那条主干；它的宽度就是 `embed_dim` | [2.9](ch02.html#s2-9) |
 | LayerNorm（层归一化） | LayerNorm | 对每个 token 的向量减去均值、除以标准差 | [2.9](ch02.html#s2-9) |
 | FFN（前馈网络） | feed-forward network (FFN) | 每个位置各自通过的全连接层；它中间那层的宽度是 `ff_dim` | [2.9](ch02.html#s2-9) |
@@ -65,7 +65,7 @@ pyodide_packages: [numpy]
 | KV cache（KV 缓存） | KV cache | 生成时把算过的 K、V 存起来，每步只算新 token | [5.5](ch05.html#s5-5) |
 | Prefill、Decode | prefill, decode | 生成的两个阶段：先把整段提示一次算完，之后每步只送进一个新 token | [5.5](ch05.html#s5-5) |
 | scaling law | scaling law | loss 随参数量、数据量变化的经验规律 | [8.1](ch08.html#s8-1) |
-| Flash Attention | FlashAttention | 分块计算注意力，不显式存下 C×C 的分数矩阵 | [8.2](ch08.html#s8-2) |
+| Flash Attention | FlashAttention | 分块计算 Attention，不显式存下 C×C 的分数矩阵 | [8.2](ch08.html#s8-2) |
 | GQA（分组查询注意力） | grouped-query attention (GQA) | 几个查询头共用一组 K、V，KV cache 因此变小 | [8.3](ch08.html#s8-3) |
 | MoE（混合专家） | mixture of experts (MoE) | 每个 token 只经过少数几个“专家”FFN | [8.4](ch08.html#s8-4) |
 | torch.compile | torch.compile | 把模型捕获成计算图再编译，相邻的运算融合成一个 kernel，少读写显存 | [8.5](ch08.html#s8-5) |
@@ -151,7 +151,7 @@ pyodide_packages: [numpy]
 | FFN 中间层宽度 | `ff_dim` | `intermediate_size` | `d_ff` | `n_inner`（缺省为 4 × `n_embd`） | 固定为 4 × `n_embd` |
 | 每头维数 | `head_dim`（= `embed_dim // n_head`） | OLMo-2、Qwen2.5 的配置里没有单列，由 `hidden_size ÷ num_attention_heads` 算出；Qwen3 等较新的配置单列 `head_dim`，而且可以不等于这个商（Qwen3-0.6B：128 ≠ 1024 ÷ 16） | `d_k`（RoPE 的参数） | `n_embd // n_head` | `C // n_head`，注释里叫 `hs` |
 | RoPE θ | `theta` | `rope_theta` | `rope_theta`（RoPE 里叫 `theta`） | 没有 RoPE | 没有 RoPE |
-| 归一化的 eps | CodeBot：`nn.LayerNorm` 的默认值 1e-5；StoryBot、WebBot：`nn.RMSNorm` 不传 eps，float32 下约 1.19e-7 | `rms_norm_eps` 或 `layer_norm_epsilon` | `eps` | `layer_norm_epsilon` | 写死为 `1e-5` |
+| 归一化的 eps | CodeBot：`nn.LayerNorm` 的默认值 1e-5；StoryBot、WebBot：`nn.RMSNorm` 不传 eps，float32 下约 1.19e-7 | `rms_norm_eps` 或 `layer_norm_epsilon` | `eps` | `layer_norm_epsilon` | 写死为 <span class="nowrap">`1e-5`</span> |
 | 权重共享 | CodeBot 共享，其余不共享 | `tie_word_embeddings` | 不共享 | 共享 | 共享 |
 
 这些名字都来自源码本身。DLFS6 一列取自三个 `GPT.__init__` 的参数，CS336 一列取自 A1 的 `tests/adapters.py`，Hugging Face 一列取自真实模型的 `config.json` 与 `GPT2Config` 的源码，nanoGPT 一列取自 `model.py` 的 `GPTConfig`。[2.10.1 节](ch02.html#s2-10-1)的方框里有一张只含 CodeBot 的同类表，这里多了 Hugging Face 上较新的模型和归一化、权重共享等几行。我们把这些来源的原文、链接与 commit 存成了一个数据文件，下面的验证单元逐项核对：
@@ -192,11 +192,11 @@ assert q3["head_dim"] == 128 != q3["hidden_size"] // q3["num_attention_heads"] =
 
 其实不是。Hugging Face 的 `hidden_size` 是**残差流的宽度**，也就是每个 token 的向量在层与层之间传递时的维数：DLFS6 的 `embed_dim`、CS336 的 `d_model`、GPT-2 的 `n_embd`。FFN 中间那一层另有名字：`intermediate_size`，对应 DLFS6 的 `ff_dim`、CS336 的 `d_ff`。上面验证单元里的 `GPT2Config.attribute_map` 写得最直白：`hidden_size` 就是 `n_embd` 的别名。
 
-还可以用参数量来判断。残差流的宽度 d 会出现在几乎每一个权重矩阵里，所以一层的参数量大约是 $12d^2$（注意力 4 个 $d\times d$，FFN 约 $8d^2$）。拿 StoryBot 手算一下：
+还可以用参数量来判断。残差流的宽度 d 会出现在几乎每一个权重矩阵里，所以一层的参数量大约是 $12d^2$（Attention 4 个 $d\times d$，FFN 约 $8d^2$）。拿 StoryBot 手算一下：
 
 ```verify id=Y.2-b title="按 d = 512 算，12·L·d² 与真实的块参数量只差 1%；按 1344 算差了 7 倍"
 L, d, ff = 4, 512, 1344                       # StoryBot：embed_dim = 512，ff_dim = 1344
-per_layer = 4 * d * d + 3 * d * ff + 2 * d    # 注意力 4 个 d×d，SwiGLU 3 个 d×ff，两个 RMSNorm
+per_layer = 4 * d * d + 3 * d * ff + 2 * d    # Attention 4 个 d×d，SwiGLU 3 个 d×ff，两个 RMSNorm
 actual = L * per_layer
 print(f"真实的块参数量 L × (4d² + 3·d·ff + 2d) = {actual:,}")
 for guess in (d, ff):
@@ -220,7 +220,7 @@ StoryBot 的粗估之所以这么准，是因为它的 `ff_dim` 恰好让 SwiGLU
 
 能不能整除，两边的处理也不同。nanoGPT 在构造模型时断言 `n_embd % n_head == 0`；DLFS6 直接用整除计算 `head_dim`，不检查能否整除，`embed_dim=100, n_head=3` 时三个头合起来只有 99 维（[勘误 E19](errata.html#e19)）。
 
-最后是 DLFS6 代码里的单字母记号。它们写在注意力的 `forward` 里：
+最后是 DLFS6 代码里的单字母记号。它们写在 Attention 的 `forward` 里：
 
 ```listing storybot/model.py#L69-L71
 ```
@@ -241,7 +241,7 @@ StoryBot 的粗估之所以这么准，是因为它的 `ff_dim` 恰好让 SwiGLU
 {"data": "data/glossary/sources.json", "preset": "olmo2"}
 ```
 
-默认的 OLMo-2-0425-1B 是一个粗估失灵的例子。它的 `intermediate_size` 是 `hidden_size` 的 4 倍，又是 3 个矩阵的 SwiGLU，所以 FFN 每层有 $12d^2$，加上注意力的 $4d^2$ 一共 $16d^2$，比粗估假设的 $12d^2$ 多出三分之一：
+默认的 OLMo-2-0425-1B 是一个粗估失灵的例子。它的 `intermediate_size` 是 `hidden_size` 的 4 倍，又是 3 个矩阵的 SwiGLU，所以 FFN 每层有 $12d^2$，加上 Attention 的 $4d^2$ 一共 $16d^2$，比粗估假设的 $12d^2$ 多出三分之一：
 
 ```verify id=Y.2-c title="OLMo-2-0425-1B：按矩阵形状数是 1,073,807,360，粗估 12·L·d² 只有 805,306,368，低了 25%" files=data/glossary/sources.json
 c = src["hf"]["olmo2_0425_1b"]["config"]                    # src 来自验证 Y.2-a
@@ -251,7 +251,7 @@ attn = 2 * d * H * D + 2 * d * kv * D                        # Q、O 各 d×(H·
 ffn = 3 * d * ff                                             # SwiGLU：3 个 d×ff
 blocks = L * (attn + ffn + 2 * d)                            # 再加两个 RMSNorm
 rough = 12 * L * d * d
-print(f"每层：注意力 {attn / d**2:.0f}d²，FFN {ffn / d**2:.0f}d²；ff / d = {ff / d:.0f}")
+print(f"每层：Attention {attn / d**2:.0f}d²，FFN {ffn / d**2:.0f}d²；ff / d = {ff / d:.0f}")
 print(f"按矩阵形状：{blocks:,}；粗估 12·L·d²：{rough:,}，低了 {1 - rough / blocks:.0%}")
 assert (attn, ffn) == (4 * d * d, 12 * d * d) and blocks == 1_073_807_360 and rough == 805_306_368
 assert round(1 - rough / blocks, 2) == 0.25
@@ -423,9 +423,9 @@ assert sign_test(15, 6) > 0.05 > sign_test(16, 5)
 
 **epoch** 指把数据完整过一遍，但“一遍”可以有不同的数法。第 3 章的 CodeBot 预训练常被说成“过了 61 个 epoch”：20,000 步 × 32 个窗口 × 256 个 token，约是语料 2,677,398 个 token 的 61 倍。可是从 `DataLoader` 的角度看，数据集里的每个样本是一个起点不同的窗口，共有 2,677,142 个，20,000 步只取了其中 640,000 个，连一遍都没有过完。两种说法都对，只是“一遍”的单位不同：一个按 token 算，一个按窗口算。
 
-微调的数据少，epoch 就多了起来。数的时候要以 `DataLoader` 实际给出的 batch 为准：SFT 的 1,092 条样本每轮分成 35 个 batch，最后一个只有 4 条，所以 500 步是 14.3 轮，而不是粗算的 500 × 32 ÷ 1,092 ≈ 14.7 轮。
+微调的数据少，epoch 就多了起来。数的时候要以 `DataLoader` 实际给出的 batch 为准：SFT 的 1,092 条样本每个 epoch 分成 35 个 batch，最后一个只有 4 条，所以 500 步是 14.3 遍，而不是粗算的 500 × 32 ÷ 1,092 ≈ 14.7 遍。顺带交代一下本书的用词：把数据过一遍叫一个 epoch，说有多少时用“遍”（如 14.3 遍）；训练模型时说的“轮”只用来数 GRPO 的迭代，一轮是一次生成加两次更新（见下面的 step）。
 
-```verify id=Y.4-c title="同一次预训练：按 token 是 61.2 个 epoch，按 DataLoader 的样本只有 0.24 个；SFT 的 500 步是 14.3 轮"
+```verify id=Y.4-c title="同一次预训练：按 token 是 61.2 个 epoch，按 DataLoader 的样本只有 0.24 个；SFT 的 500 步是 14.3 遍"
 import math
 
 tokens, ctx, iters, batch = 2_677_398, 256, 20_000, 32          # ch03/01_pretrain.py
@@ -436,14 +436,14 @@ assert round(iters * batch * ctx / tokens, 1) == 61.2 and round(iters * batch / 
 
 for name, n, bs, steps in (("SFT", 1_092, 32, 500), ("DPO", 144, 8, 1_000)):    # ch03/03_sft.py、ch06/08_dpo.py
     per_pass = math.ceil(n / bs)                  # DataLoader 默认保留最后一个不满的 batch
-    print(f"{name}：每轮 {per_pass} 个 batch，{steps:,} 步 = {steps / per_pass:.1f} 轮"
+    print(f"{name}：每个 epoch {per_pass} 个 batch，{steps:,} 步 = {steps / per_pass:.1f} 遍"
           f"（粗算 {steps:,} × {bs} ÷ {n:,} = {steps * bs / n:.1f}）")
 assert round(500 / math.ceil(1092 / 32), 1) == 14.3 and round(1000 / math.ceil(144 / 8), 1) == 55.6
 ```
 
 强化学习里还有第三种用法：CS336 2025 年 A5 的 `epochs_per_rollout_batch` 指“同一批 rollout 拿来更新几遍”，相当于 DLFS6 的 `n_update_per_generation = 2`。
 
-```localcheck verify/test_reference.py::test_glossary_epoch_two_ways title="从原书脚本读出超参数：预训练的两种 epoch 是 61.2 与 0.239；用真实的 DataLoader 数，SFT 14.3 轮、DPO 55.6 轮"
+```localcheck verify/test_reference.py::test_glossary_epoch_two_ways title="从原书脚本读出超参数：预训练的两种 epoch 是 61.2 与 0.239；用真实的 DataLoader 数，SFT 14.3 遍、DPO 55.6 遍"
 ```
 
 <div id="y4-step"></div>
@@ -456,7 +456,7 @@ assert round(500 / math.ceil(1092 / 32), 1) == 14.3 and round(1000 / math.ceil(1
 micro_batch, accum, ctx = 32, 4, 1024                      # ch09/01_pretrain.py
 print(f"WebBot：每次更新 = {accum} 个 micro-step，每张卡 {micro_batch * accum * ctx:,} 个 token")
 prompts, G, updates = 32, 8, 2                            # ch03/09_grpo.py
-print(f"GRPO：每次迭代最多 {prompts} 道题 × {G} 个回答 = {prompts * G} 条 rollout，更新 {updates} 次"
+print(f"GRPO：每轮最多 {prompts} 道题 × {G} 个回答 = {prompts * G} 条 rollout，更新 {updates} 次"
       "（81 道题分成 32、32、17，见下面的 batch）")
 assert micro_batch * accum * ctx == 131_072 and prompts * G == 256
 ```
@@ -499,7 +499,7 @@ DLFS6 的 `generate()` 也有类似的区分：生成的总长度可以超过 25
 ```verify id=Y.4-f title="GRPO 的一批：81 道题分成 32、32、17，即 256、256、136 条回答；CS336 与 veRL 都按“题数 × 每题的回答数”来数" files=data/glossary/sources.json
 sizes = [min(32, 81 - i) for i in range(0, 81, 32)]       # DataLoader(81 道题, batch_size=32) 保留最后不满的一批
 rollouts = [s * 8 for s in sizes]                          # group_size = 8
-print(f"DLFS6：每轮 {sizes} 道题 → {rollouts} 条回答")
+print(f"DLFS6：81 道题每个 epoch 分成 {sizes} 三批，每轮取一批 → {rollouts} 条回答")
 a5 = src["cs336_a5_2026"]["batch_excerpt"]                 # src 来自验证 Y.2-a
 for l in a5[:6]:
     print("  A5 讲义：", l)

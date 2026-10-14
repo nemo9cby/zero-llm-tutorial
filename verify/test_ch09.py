@@ -144,7 +144,7 @@ def test_webbot_activation_memory_per_sequence(dlfs6_path):
     exec(verify_cell("9.2-c"), page)                         # 页面上的数字（单元里的断言也一起跑）
     assert abs(mib[False] - page["per_seq_plain"]) < 0.05 and abs(mib[True] - page["per_seq_ckpt"]) < 0.05
     assert abs(bf16_per_seq - page["per_seq_bf16"]) < 0.05 and abs(bf16_fixed - page["bf16_fixed"]) < 0.05
-    assert abs(bf16_fixed - 2 * n_matmul / 2**20) < 0.5      # 固定部分 = 全部矩阵乘权重（含 unembed）的 bf16 副本
+    assert abs(bf16_fixed - 2 * n_matmul / 2**20) < 0.5      # 固定部分 = 全部矩阵乘权重（含输出层）的 bf16 副本
     assert mib[False] / mib[True] > 3.5                      # 检查点后减少到约 1/4
     assert bf16_per_seq < 0.8 * mib[False]                   # bf16 只让每条序列少了约四分之一
 

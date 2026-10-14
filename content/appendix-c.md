@@ -392,7 +392,7 @@ assert np.allclose(A, 0.5 * np.array([r1 - r2, r2 - r1]))   # 一半的 RLOO 优
 ```verify id=C-g title="运行记录：更新前加一行 model.eval()，第 51 轮的准确率从 60.5% 变成 98.8%" files=data/runs/codebot-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/09_grpo.metrics.jsonl,data/runs/codebot-grpo-evalfix-3060ti/report.json
 import json
 
-def grpo_acc(run_id):                   # 第 it 步的 greedy 准确率（%）
+def grpo_acc(run_id):                   # 第 it 轮贪心解码的准确率（%）
     with open(f"data/runs/{run_id}/09_grpo.metrics.jsonl", encoding="utf-8") as f:
         return {row["it"]: row["acc"] for row in map(json.loads, f)}
 
@@ -403,7 +403,7 @@ as_is, fixed = grpo_acc("codebot-3060ti"), grpo_acc("codebot-grpo-evalfix-3060ti
 print(f"唯一的改动：{patches[0]['new'].strip().splitlines()[0]}")
 print(f"出发点：{fix['seeded'][0]['path']}，来自 {fix['seeded'][0]['from']}")
 for it in (51, 500):
-    print(f"第 {it:3d} 步：原样 {as_is[it]:5.1f}%，加 model.eval() 之后 {fixed[it]:5.1f}%")
+    print(f"第 {it:3d} 轮：原样 {as_is[it]:5.1f}%，加 model.eval() 之后 {fixed[it]:5.1f}%")
 assert len(patches) == 1 and patches[0]["new"].lstrip().startswith("model.eval()")
 assert fix["seeded"][0]["from"] == "tutorial run codebot-3060ti"
 assert (as_is[51], as_is[500]) == (60.5, 86.4) and (fixed[51], fixed[500]) == (98.8, 100.0)

@@ -155,7 +155,7 @@ import json
 
 def grpo_run(run_id):
     with open(f"data/runs/{run_id}/09_grpo.metrics.jsonl", encoding="utf-8") as f:
-        acc = {r["it"]: r["acc"] for r in map(json.loads, f)}       # 第 it 次迭代之后显示的准确率（%）
+        acc = {r["it"]: r["acc"] for r in map(json.loads, f)}       # 第 it 轮之后显示的准确率（%）
     with open(f"data/runs/{run_id}/report.json", encoding="utf-8") as f:
         step = next(s for s in json.load(f)["steps"] if s["script"] == "ch03/09_grpo.py")
     return acc, step
@@ -166,12 +166,12 @@ seeded = json.load(open("data/runs/codebot-grpo-evalfix-3060ti/report.json", enc
 print("唯一的改动：", step_f["patches"][0]["new"].strip().splitlines()[0])
 print("出发点：", seeded["path"], "来自", seeded["from"], "，sha256", seeded["sha256"][:12] + "…")
 for it in (1, 21, 51, 101, 201, 500):
-    print(f"第 {it:3d} 次迭代后：原样 {base[it]:5.1f}%    加 model.eval() {fix[it]:5.1f}%")
-evals = range(1, 500, 10)                                   # 评估在第 1、11、21……次迭代的两次更新之后
+    print(f"第 {it:3d} 轮后：原样 {base[it]:5.1f}%    加 model.eval() {fix[it]:5.1f}%")
+evals = range(1, 500, 10)                                   # 评估在第 1、11、21……轮的两次更新之后
 gaps = [fix[i] - base[i] for i in evals if 21 <= i <= 201]
 first100 = min(i for i in evals if fix[i] == 100.0)
-print(f"第 21–201 次迭代之间，差距在 {min(gaps):.1f} 到 {max(gaps):.1f} 个百分点之间；"
-      f"加 eval() 的从第 {first100} 次起一直是 100%")
+print(f"第 21–201 轮之间，差距在 {min(gaps):.1f} 到 {max(gaps):.1f} 个百分点之间；"
+      f"加 eval() 的从第 {first100} 轮起一直是 100%")
 for name, st in (("原样", step_b), ("加 eval()", step_f)):
     print(f"用时（{name}）：{int(st['seconds']) // 3600} 小时 {int(st['seconds']) % 3600 // 60} 分")
 assert len(step_f["patches"]) == 1 and step_f["patches"][0]["new"].lstrip().startswith("model.eval()")
@@ -192,7 +192,7 @@ assert 20 < min(gaps) and max(gaps) < 40 and round(fix[500] - base[500], 1) == 1
 runs = json.load(open("data/errata/grpo_dropout_runs.json", encoding="utf-8"))["runs"]
 for seed, (a, b) in {0: ("base", "nodrop"), 1: ("base_s1", "nodrop_s1")}.items():
     ra, rb = runs[a], runs[b]
-    print(f"seed {seed}，第 {ra['acc_it'][-1]} 次迭代：原样 {ra['greedy_acc'][-1]:.1f}%  →  "
+    print(f"seed {seed}，跑完 {ra['acc_it'][-1] + 1} 轮：原样 {ra['greedy_acc'][-1]:.1f}%  →  "
           f"更新前 eval() {rb['greedy_acc'][-1]:.1f}%")
     assert rb["greedy_acc"][-1] - ra["greedy_acc"][-1] > 20
     assert all(y >= x for x, y in zip(ra["greedy_acc"][1:], rb["greedy_acc"][1:]))
@@ -286,7 +286,7 @@ def train_bpe_toy(text, n_merges):
         for w, c in words.items():
             for p in zip(w, w[1:]):
                 pairs[p] += c
-        best = max(pairs, key=lambda p: (pairs[p], p[0], p[1]))   # DLFS6 的平局规则
+        best = max(pairs, key=lambda p: (pairs[p], p[0], p[1]))   # DLFS6 的平票规则
         vocab[new_id] = vocab[best[0]] + vocab[best[1]]
         merged = Counter()
         for w, c in words.items():
@@ -313,7 +313,12 @@ assert b"\r\n" not in lf and b"\r\n" in crlf
 ```localcheck verify/test_reference.py::test_e03_crlf_checkout_changes_binary_mode_merges needs="PyTorch" title="书中的 train_bpe：CRLF 文件的第 2 条 merge 是 \r\n；文本模式读取则看不到 \r"
 ```
 
-**修法**：克隆之前执行 `git config --global core.autocrlf false`，或者在仓库里加一个 `.gitattributes`（写上 `* text=auto eol=lf`）。本教程的项目就是这样做的，所以 `third_party/dlfs6` 里的 `tiny_codes.txt` 是 LF。如果已经检出了 CRLF 文件，也可以在读入后执行 `data.replace(b"\r\n", b"\n")`。
+**修法**：克隆之前执行 `git config --global core.autocrlf false`，或者在 DLFS6 的仓库里加一个 `.gitattributes`（写上 `* text=auto eol=lf`）。要注意，`.gitattributes` 只管它所在的那个仓库。本教程的项目根目录就有这样一份，却管不到子模块 `third_party/dlfs6`：在 `core.autocrlf=true` 的机器上用 `git clone --recurse-submodules` 克隆本教程，子模块里的 `tiny_codes.txt` 照样检出成 CRLF（6,743,534 字节；LF 版是 6,487,033 字节）。我们这里的副本是 LF，靠的是子模块自己的配置 `core.autocrlf=false`。
+
+```localcheck verify/test_reference.py::test_e03_tutorial_gitattributes_stop_at_the_submodule title="子模块里 tiny_codes.txt 的 text、eol 属性都是 unspecified；core.autocrlf=true 检出的是 6,743,534 字节的 CRLF 版"
+```
+
+已经检出成 CRLF 的，按本教程仓库的 README（或[第 0 章 0.7 节](ch00.html#s0-7)）的命令重新检出：先关掉子模块的换行转换，再用 `git rm -r --cached .` 清空它的索引，最后 `git reset --hard` 按 LF 写回全部文件。只想读一次数据的话，也可以在读入后执行 `data.replace(b"\r\n", b"\n")`。
 
 <div id="e04"></div>
 
@@ -390,7 +395,7 @@ C 等于 `max_context_len + 1` 时，切片 `[-1:max_len]` 只取到最后一行
 
 ### E06 带缓存时一次喂多个 token，没有因果掩码
 
-StoryBot 的注意力只在“第一次调用”时加因果掩码：
+StoryBot 的 Attention 只在“第一次调用”时加因果掩码：
 
 ```listing storybot/model.py#L115-L121
 ```
@@ -411,9 +416,9 @@ StoryBot 的注意力只在“第一次调用”时加因果掩码：
 ```listing ch03/09_grpo.py#L155-L157
 ```
 
-问题在于 `itertools.cycle` 的工作方式：它把第一遍迭代吐出的每个元素都**存下来**，第一遍结束后，不再重新调用 `iter()`，而是把存下来的元素按原来的顺序一遍遍重放。`DataLoader` 的 `shuffle=True` 只在每次 `iter()` 时生效，于是只有第一轮是洗过牌的，此后每一轮的 batch 都与第一轮一模一样：
+问题在于 `itertools.cycle` 的工作方式：它把第一遍迭代吐出的每个元素都**存下来**，第一遍结束后，不再重新调用 `iter()`，而是把存下来的元素按原来的顺序一遍遍重放。`DataLoader` 的 `shuffle=True` 只在每次 `iter()` 时生效，于是只有第一遍是洗过牌的，此后每一遍的 batch 都与第一遍一模一样：
 
-```verify id=Z.4-e title="itertools.cycle 重放第一轮：第二轮的 batch 就是第一轮的那些对象"
+```verify id=Z.4-e title="itertools.cycle 重放第一遍：第二遍取到的 batch 就是第一遍的那些对象"
 import random
 from itertools import cycle
 
@@ -426,28 +431,28 @@ class ShuffledLoader:                      # 与 DataLoader(shuffle=True) 一样
         self.rng.shuffle(idx)
         return iter([idx[i:i + self.bs] for i in range(0, len(idx), self.bs)])
 
-it = cycle(ShuffledLoader(range(10), 3))   # 每轮 4 个 batch
+it = cycle(ShuffledLoader(range(10), 3))   # 每个 epoch 4 个 batch
 epoch1 = [next(it) for _ in range(4)]
 epoch2 = [next(it) for _ in range(4)]
-print("第 1 轮：", epoch1)
-print("第 2 轮：", epoch2)
+print("第 1 遍：", epoch1)
+print("第 2 遍：", epoch2)
 assert epoch1 == epoch2 and all(a is b for a, b in zip(epoch1, epoch2))
 
 batch_bytes = 2 * 32 * 256 * 8             # 预训练一个 batch 的 x 与 y（int64）
 print(f"预训练 20,000 步，cycle 存下的 batch 共 {20_000 * batch_bytes / 2**30:.2f} GiB")
 ```
 
-影响因脚本而异。SFT 的 1,092 条样本每轮分成 35 个 batch，500 步约是 14.3 轮；DPO 的 144 对每轮 18 个 batch，1,000 步约是 55.6 轮；GRPO 的 81 道题每轮分成 32、32、17 三批，脚本一共取 500 批，约是 167 轮。这三个脚本从第二轮起，每个 batch 的组成和顺序都固定不变。预训练反而不会重放：20,000 步只取了 640,000 个窗口，还不到一轮（共 2,677,142 个窗口）；但 `cycle` 会把这 20,000 个 batch 都留在内存里，多占约 2.4 GiB。
+影响因脚本而异。SFT 的 1,092 条样本每个 epoch 分成 35 个 batch，500 步约是 14.3 遍；DPO 的 144 对每个 epoch 18 个 batch，1,000 步约是 55.6 遍；GRPO 的 81 道题每个 epoch 分成 32、32、17 三批，500 轮一共取 500 批，约是 167 遍。这三个脚本从第二遍起，每个 batch 的组成和顺序都固定不变。预训练反而不会重放：20,000 步只取了 640,000 个窗口，还不到一遍（共 2,677,142 个窗口）；但 `cycle` 会把这 20,000 个 batch 都留在内存里，多占约 2.4 GiB。
 
-```localcheck verify/test_reference.py::test_e07_cycle_dataloader_replays_first_epoch_and_keeps_batches needs="PyTorch" title="真实的 DataLoader：第二轮的 batch 与第一轮是同一批对象"
+```localcheck verify/test_reference.py::test_e07_cycle_dataloader_replays_first_epoch_and_keeps_batches needs="PyTorch" title="真实的 DataLoader：第二遍的 batch 与第一遍是同一批对象"
 ```
 
-**修法**：用一个每轮重新迭代的生成器代替 `cycle`：
+**修法**：用一个每个 epoch 都重新迭代的生成器代替 `cycle`：
 
 ```python
 def infinite(dataloader):
     while True:
-        yield from dataloader          # 每一轮都重新调用 iter()，重新洗牌，也不缓存
+        yield from dataloader          # 每个 epoch 都重新调用 iter()，重新洗牌，也不缓存
 data_iter = infinite(dataloader)
 ```
 
@@ -457,7 +462,7 @@ data_iter = infinite(dataloader)
 
 `BPETokenizer.encode_file` 把每个分块的编码结果先缓存到磁盘，最后在 `finally` 里删除缓存目录：
 
-```listing storybot/tokenizer.py#L272-L278
+```listing storybot/tokenizer.py#L272-L277
 ```
 
 ```listing storybot/tokenizer.py#L314-L321
@@ -542,7 +547,7 @@ assert apart[k:k + 2] == [" ", "Tim"] and " Tim" in joint and " " not in joint
 
 CodeBot 和 StoryBot 的 `encode` 第一步就是按 `<|endoftext|>` 切开文本，不区分这串字符来自哪里：
 
-```listing codebot/tokenizer.py#L87-L91
+```listing codebot/tokenizer.py#L87-L90
 ```
 
 这意味着用户在对话里打出 `<|endoftext|>` 这几个字符，模型收到的就是“文档结束”的 id（CodeBot 是 999）。
@@ -669,7 +674,7 @@ first = {}
 for run_id in ("codebot-3060ti", "codebot-grpo-evalfix-3060ti"):
     with open(f"data/runs/{run_id}/09_grpo.metrics.jsonl", encoding="utf-8") as f:
         first[run_id] = json.loads(f.readline())["acc"]
-print("记下的“第 0 次”准确率：", first)
+print("记下的“第 0 轮”准确率：", first)
 print(f"SFT 起点（本地验证）：44 / 81 = {100 * 44 / 81:.1f}%")
 assert first == {"codebot-3060ti": 53.1, "codebot-grpo-evalfix-3060ti": 56.8}
 ```
@@ -1024,7 +1029,7 @@ assert sum(empty) == 0 and calculate_reward(5, template.format(0, 5)) == 1.0
 ```listing ch09/01_pretrain.py#L172-L188
 ```
 
-问题在于 `no_sync()` 只包住了 `loss.backward()`，前向在它外面，而 DDP 在前向时就决定了这一轮要不要通信。于是每个 micro-step 都照样做了 all-reduce。结果并没有错：每张卡最后得到的梯度相同，也等于单卡把全部 micro-batch 当成一个大 batch 算出的梯度；只是通信多了 3 倍，每步 4 次而不是 1 次。我们用 gloo 后端在 CPU 上起了 2 个真正的进程，用一个通信钩子数 all-reduce 的次数：原书的写法是 `[1, 1, 1, 1]`，把前向也放进 `no_sync()` 是 `[0, 0, 0, 1]`（细节见 [9.3 节](ch09.html#s9-3)）。
+问题在于 `no_sync()` 只包住了 `loss.backward()`，前向在它外面，而 DDP 在前向时就决定了随后的 backward 要不要通信。于是每个 micro-step 都照样做了 all-reduce。结果并没有错：每张卡最后得到的梯度相同，也等于单卡把全部 micro-batch 当成一个大 batch 算出的梯度；只是通信多了 3 倍，每步 4 次而不是 1 次。我们用 gloo 后端在 CPU 上起了 2 个真正的进程，用一个通信钩子数 all-reduce 的次数：原书的写法是 `[1, 1, 1, 1]`，把前向也放进 `no_sync()` 是 `[0, 0, 0, 1]`（细节见 [9.3 节](ch09.html#s9-3)）。
 
 ```localcheck verify/test_ch09.py::test_ddp_two_processes_gloo needs="PyTorch" title="2 个 gloo 进程：初值被广播；梯度等于单进程的大 batch；原书写法每个 micro-step 都在通信"
 ```
@@ -1092,7 +1097,7 @@ assert sum(empty) == 0 and calculate_reward(5, template.format(0, 5)) == 1.0
 
 ## 小结
 
-50 个问题里，真正影响书中结果的只有少数几个，影响最大的是 E01：GRPO 更新时开着 dropout。在本书的 GPU 运行里，原样跑满 500 轮停在 86.4%；从同一个 SFT checkpoint 出发、只加一行 `model.eval()`，第 51 轮就到了 98.8%，之后一直是 100%。其次是几个只在特定用法下出现、后果却不小的问题：用 HF 上下载的 StoryBot 权重，第 6 章的脚本一加载就报错（E02）；把 git 检出的文本交给第 4 章的分词器，CRLF 会悄悄改变词表（E03）；用 8 张卡原样运行 WebBot 的预训练，读的 token 和用掉的 GPU 时间都变成 8 倍（E50）。
+50 个问题里，真正影响书中结果的只有少数几个，影响最大的是 E01：GRPO 更新时开着 dropout。在本书的 GPU 运行里，原样跑满 500 轮停在 86.4%；从同一个 SFT checkpoint 出发、只加一行 `model.eval()`，第 51 轮就到了 98.8%，第 131 轮起一直是 100%。其次是几个只在特定用法下出现、后果却不小的问题：用 HF 上下载的 StoryBot 权重，第 6 章的脚本一加载就报错（E02）；把 git 检出的文本交给第 4 章的分词器，CRLF 会悄悄改变词表（E03）；用 8 张卡原样运行 WebBot 的预训练，读的 token 和用掉的 GPU 时间都变成 8 倍（E50）。
 
 其余大多是在边界情况下静默出错的问题。它们的共同特点是“不报错”：位置被冻结（E04）、位置被广播（E05）、掩码缺失（E06）、洗牌失效（E07）、错误被吞掉（E09）。这也是我们坚持给每个结论配一个可以重跑的检查的原因：不报错的问题，只有去测才会发现。
 
@@ -1101,10 +1106,10 @@ assert sum(empty) == 0 and calculate_reward(5, template.format(0, 5)) == 1.0
 本章所学的内容：
 
 - 原书 38 处“写在注释里的期望输出”中，30 处逐字一致，7 处只是写法不同，1 处已经过期（[验证 Z.2-a](#v-Z.2-a)）。
-- GRPO 更新时开着 dropout：原样跑满 500 轮停在 86.4%，只加一行 `model.eval()`，第 51 轮就到 98.8%，之后一直是 100%（[验证 Z.3-a](#v-Z.3-a)）。
+- GRPO 更新时开着 dropout：原样跑满 500 轮停在 86.4%，只加一行 `model.eval()`，第 51 轮就到 98.8%，第 131 轮起一直是 100%（[验证 Z.3-a](#v-Z.3-a)）。
 - 二进制模式读取会保留 CRLF 里的 `\r`，BPE 会把 `\r\n` 学成一个 token；书中的流程恰好不会把检出的文件交给这样的读取（[验证 Z.4-b](#v-Z.4-b)）。
 - StoryBot 的 RoPE 把超出范围的位置夹在最后：生成时位置被冻结，输入恰好多 1 个 token 时位置被广播（[验证 Z.4-c](#v-Z.4-c)、[验证 Z.4-d](#v-Z.4-d)）。
-- `itertools.cycle` 只迭代一次并缓存所有元素，所以 `shuffle=True` 只在第一轮生效（[验证 Z.4-e](#v-Z.4-e)）。
+- `itertools.cycle` 只迭代一次并缓存所有元素，所以 `shuffle=True` 只在第一个 epoch 生效（[验证 Z.4-e](#v-Z.4-e)）。
 - `max_iters` 写死时，加卡不会更快，只会读更多的 token（[验证 Z.4-i](#v-Z.4-i)）。
 - 概率空间的 ratio 在 p = 1e-8 时只有 0.5；对数空间没有这个问题（[验证 Z.5-d](#v-Z.5-d)）。
 

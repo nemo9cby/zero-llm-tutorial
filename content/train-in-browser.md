@@ -310,7 +310,7 @@ same = (t[1:] == t[:-1]).mean()
 c = rng.integers(0, V, n)                         # 当前字符
 x = W[c] + 0.02 * rng.standard_normal((n, E))     # 残差流 ≈ 字符 embedding + 位置 embedding
 hx = (x - x.mean(1, keepdims=True)) / x.std(1, keepdims=True)
-lg = hx @ W.T                                     # unembed 用的正是同一个 W
+lg = hx @ W.T                                     # 输出层用的正是同一个 W
 boost = (lg[np.arange(n), c] - lg.mean(1)).mean()
 print(f"训练文本里“下一个字符与当前字符相同”的比例: {same:.2%}")
 print(f"初始化时，“与当前字符相同”的 logit 平均高出其他字符 {boost:.2f}")
@@ -582,16 +582,16 @@ embedding 层是查表：第 t 个位置取出词表的第 id 行。反向传播
 
 权重共享让事情多了一层：同一个矩阵既用来查表，又在最后当 `unembed`。它从两条路径各得到一份梯度，两份相加。这就是《深度学习入门：基于Python的理论与实现》附录 A 说的“正向传播时有分支流出，反向传播时梯度相加”。
 
-```verify id=T.4-f title="权重共享：查表与 unembed 两条路径的梯度相加"
+```verify id=T.4-f title="权重共享：查表与输出层两条路径的梯度相加"
 Vs, Es = 5, 3
-Wt = rng.normal(size=(Vs, Es))                    # 共享的权重：既查表，又当 unembed
+Wt = rng.normal(size=(Vs, Es))                    # 共享的权重：既查表，又当输出层
 ids = np.array([1, 3, 1])                        # 第 1 号 token 出现了两次
 H = rng.normal(size=(3, Es))                     # 某一层的输出（这里当作常数）
 R1, R2 = rng.normal(size=(3, Es)), rng.normal(size=(3, Vs))
-L = lambda: (Wt[ids] * R1).sum() + ((H @ Wt.T) * R2).sum()   # 查表一次，unembed 一次
+L = lambda: (Wt[ids] * R1).sum() + ((H @ Wt.T) * R2).sum()   # 查表一次，输出层一次
 d_lookup = np.zeros_like(Wt)
 np.add.at(d_lookup, ids, R1)                     # 查表的反向：按 id 累加（不是覆盖）
-d_unembed = R2.T @ H                             # unembed 的反向：dW = dy^T x
+d_unembed = R2.T @ H                             # 输出层的反向：dW = dy^T x
 e = rel_err(d_lookup + d_unembed, num_grad(L, Wt))
 assert np.allclose(d_lookup[1], R1[0] + R1[2]) and e < 1e-9
 print("第 1 行（查表部分）=", np.array2string(d_lookup[1], precision=3), "= R1[0] + R1[2]")
@@ -660,7 +660,7 @@ assert 4.6e-4 < diff.max() < 4.8e-4
 |---|---|
 | 交叉熵，对照 `F.cross_entropy` | atol 1e-4 |
 | 手写的 AdamW，对照 `torch.optim.AdamW`（在 `Linear(3, 2)` 上跑 1,000 步） | atol 1e-4 |
-| SwiGLU、注意力、多头注意力、RoPE，对照固定权重下的快照 | atol 1e-5 |
+| SwiGLU、Attention、多头 Attention、RoPE，对照固定权重下的快照 | atol 1e-5 |
 | RMSNorm、Transformer 块，同上 | atol 1e-4 |
 | 整个语言模型，同上 | atol 1e-4，另加 rtol 1e-2 |
 | Linear、embedding，同上 | 默认的 rtol 1e-4、atol 1e-2 |
@@ -669,7 +669,7 @@ assert 4.6e-4 < diff.max() < 4.8e-4
 :::
 
 ::: note WebAssembly SIMD
-浏览器支持 WebAssembly 的 SIMD 指令时，训练器会把 `matmulBT` 换成一个 670 字节的 WebAssembly 版本：一条 `f32x4.mul` 同时做 4 个 float32 乘法，下一条 `f32x4.add` 再做 4 个加法（WebAssembly 的 128 位 SIMD 没有融合乘加）。它与 JavaScript 版算的是同一个乘积，只是累加用 float32 而不是 float64，两者相差约 1e-7（相对）。上表里 float32 那一行的对拍，大部分乘法走的正是这条路径；形状不满足条件的（行数要是 4 的倍数，列数要是偶数，内积的长度要是 4 的倍数），例如 V = 23 的 unembed，仍然回退到 JavaScript。在录制用的机器上，它让一步训练的速度变成原来的 3 倍多：
+浏览器支持 WebAssembly 的 SIMD 指令时，训练器会把 `matmulBT` 换成一个 670 字节的 WebAssembly 版本：一条 `f32x4.mul` 同时做 4 个 float32 乘法，下一条 `f32x4.add` 再做 4 个加法（WebAssembly 的 128 位 SIMD 没有融合乘加）。它与 JavaScript 版算的是同一个乘积，只是累加用 float32 而不是 float64，两者相差约 1e-7（相对）。上表里 float32 那一行的对拍，大部分乘法走的正是这条路径；形状不满足条件的（行数要是 4 的倍数，列数要是偶数，内积的长度要是 4 的倍数），例如 V = 23 的输出层，仍然回退到 JavaScript。在录制用的机器上，它让一步训练的速度变成原来的 3 倍多：
 
 ```verify id=T.5-b title="WebAssembly SIMD 对训练速度的影响（录制时测得）"
 ms = rec["timing"]["stepMs"]
@@ -713,7 +713,7 @@ export function trainStep(m, ws, opt, x, y, B, T) {
 ```listing ch03/01_pretrain.py#L33-L50
 ```
 
-训练器的 `makeBatcher` 做同样的事：每个 epoch 把全部窗口的起点打乱一次，依次取 8 个组成一个 batch，取完再重新打乱。这一点与原书略有不同：原书用 `itertools.cycle` 包住 DataLoader，第二轮起会按原来的顺序重放第一轮的 batch（见 [3.3.5 节](ch03.html#s3-3-5)）。不过两边都远没有走完一轮，所以不影响这里的结果。
+训练器的 `makeBatcher` 做同样的事：每个 epoch 把全部窗口的起点打乱一次，依次取 8 个组成一个 batch，取完再重新打乱。这一点与原书略有不同：原书用 `itertools.cycle` 包住 DataLoader，从第二个 epoch 起，会按原来的顺序重放第一个 epoch 的 batch（见 [3.3.5 节](ch03.html#s3-3-5)）。不过两边都远没有走完一个 epoch，所以不影响这里的结果。
 
 我们的训练文本有 211,113 个 token，可以切出 211,049 个窗口。2,000 步用掉 16,000 个窗口，按 DataLoader 的算法还不到一个 epoch 的 8%，同一个窗口不会出现第二次。但窗口是重叠的。按 token 算，2,000 步一共有 1,024,000 个预测目标，是训练文本长度的 4.85 倍：每个字符平均已经当过近 5 次预测目标（第 3 章的 CodeBot 是 61 次，见 [3.1.3 节](ch03.html#s3-1-3)）。“没见过的窗口”不等于“没见过的文字”。
 

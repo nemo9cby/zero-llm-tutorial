@@ -4,7 +4,7 @@
    legible in both themes.
    config: {} */
 import { h, visible, fmt } from './_lib.js';
-import { seriesColor } from './_plot.js';
+import { seriesVars } from './_plot.js';
 
 const NAMES = { codebot: 'CodeBot（1,000）', storybot: 'StoryBot（10,000）', webbot: 'WebBot（50,000）' };
 const CORPUS = { TinyCodes: '代码', TinyStories: '故事', OpenWebText: '网页' };
@@ -33,6 +33,7 @@ export async function mount(root) {
   root.append(h('style', {}, CSS));
   const box = h('div', { class: 'w-part3-tok' });
   root.append(box);
+  seriesVars(box);                                  // the tints follow theme switches
   let data;
   try {
     const r = await fetch('data/part3/tokenizers.json');
@@ -52,7 +53,7 @@ export async function mount(root) {
         partial ||= text.startsWith('‹');
         return h('span', {
           class: 'chip', title: `id ${c.id}，字节 ${c.bytes.match(/../g).join(' ')}`,
-          style: { background: `color-mix(in oklab, ${seriesColor(i % 6)} 24%, var(--paper))` },
+          style: { background: `color-mix(in oklab, var(--series-${i % 6}) 24%, var(--paper))` },
         }, h('b', {}, text), h('i', {}, c.id));
       })));
   }
@@ -66,7 +67,7 @@ export async function mount(root) {
   const toks = Object.keys(NAMES);
   const vals = data.matrix.map((row) => toks.map((t) => row.bytes / row.tokens[t]));
   const all = vals.flat(), lo = Math.min(...all), hi = Math.max(...all);
-  const shade = (v) => `color-mix(in oklab, ${seriesColor(0)} ${Math.round(8 + (62 * (v - lo)) / (hi - lo))}%, var(--paper))`;
+  const shade = (v) => `color-mix(in oklab, var(--series-0) ${Math.round(8 + (62 * (v - lo)) / (hi - lo))}%, var(--paper))`;
   box.append(h('div', { class: 'w-label' }, '每个 token 平均装下多少字节（越大越省；行是数据，列是分词器）'),
     h('table', { class: 'heat', 'aria-label': '三种分词器在三种数据上的压缩率（字节 / token）' },
       h('thead', {}, h('tr', {}, h('th', {}, ''), ['CodeBot', 'StoryBot', 'WebBot'].map((t) => h('th', {}, t)))),

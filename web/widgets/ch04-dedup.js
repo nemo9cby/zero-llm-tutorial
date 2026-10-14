@@ -35,7 +35,30 @@ const STYLE = `
 @media (max-width: 640px) { .w-ch04-dedup .cols { grid-template-columns: minmax(0, 1fr); } }
 `;
 
-const compact = (v) => (v >= 1e6 ? `${(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}K` : String(Math.round(v)));
+/** Short labels for counts: 4741 → 5K, 2,524,909 → 2.5M, 1,000,000 → 1M (no trailing .0). */
+export const compact = (v) => (v >= 1e6 ? `${+(v / 1e6).toFixed(v >= 1e7 ? 0 : 1)}M` : v >= 1e3 ? `${Math.round(v / 1e3)}K` : String(Math.round(v)));
+
+/** The Heaps' law chart from data/ch04/bench.json: the measured prefixes as they are, on lineChart's log axes, and the
+    dashed power law U = U₀ (N / N₀)^β through the training prefix's first point, β fitted from its first and last points
+    (the same fit as verify cell 4.1-b). On log-log axes a power law is a straight line of slope β. */
+export function heapsChart(heaps) {
+  const runs = [
+    { name: '验证集的前缀', rows: heaps.filter((r) => r.file === 'tiny_stories_valid.txt') },
+    { name: '训练集的前缀', rows: heaps.filter((r) => r.file === 'train_prefix.txt') },
+  ];
+  const train = runs[1].rows, first = train[0], last = train[train.length - 1];
+  const nRatio = last.occurrences / first.occurrences, uRatio = last.unique / first.unique;
+  const beta = Math.log(uRatio) / Math.log(nRatio);
+  const ns = runs.flatMap((s) => s.rows.map((r) => r.occurrences));
+  const fit = [Math.min(...ns), Math.max(...ns)].map((n) => [n, first.unique * (n / first.occurrences) ** beta]);
+  const opts = {
+    series: [...runs.map((s) => ({ name: s.name, markers: true, points: s.rows.map((r) => [r.occurrences, r.unique]) })),
+      { name: `斜率 ${beta.toFixed(2)}`, points: fit, dash: '5 4', width: 1.5 }],
+    logX: true, logY: true, height: 240, table: false, xLabel: '预分词出现次数（对数刻度）', yLabel: '不同的预分词（个，对数刻度）',
+    xFormat: compact, yFormat: compact, ariaLabel: 'Heaps 定律：出现次数与不同预分词数的双对数图',
+  };
+  return { runs, beta, nRatio, uRatio, opts };
+}
 
 export async function mount(root, config) {
   root.classList.add('w-ch04-dedup');
@@ -97,27 +120,13 @@ export async function mount(root, config) {
   area.addEventListener('input', render);
   render();
 
-  // Heaps' law U = k N^beta is a straight line of slope beta on log-log axes: both axes are log10 here.
+  // Heaps' law U = k N^beta: a straight line of slope beta on the chart's log-log axes.
   const box = h('div', { class: 'heaps' });
-  const runs = [
-    { name: '验证集的前缀', rows: heaps.filter((r) => r.file === 'tiny_stories_valid.txt') },
-    { name: '训练集的前缀', rows: heaps.filter((r) => r.file === 'train_prefix.txt') },
-  ];
-  const train = runs[1].rows, first = train[0], last = train[train.length - 1];
-  const nRatio = last.occurrences / first.occurrences, uRatio = last.unique / first.unique;
-  const beta = Math.log(uRatio) / Math.log(nRatio);            // the same fit as the verify cell under this figure
-  const L = Math.log10;
-  const xs = runs.flatMap((s) => s.rows.map((r) => L(r.occurrences)));
-  const fit = [Math.min(...xs), Math.max(...xs)].map((x) => [x, L(first.unique) + beta * (x - L(first.occurrences))]);
+  const { runs, beta, nRatio, uRatio, opts } = heapsChart(heaps);
   root.append(h('div', { class: 'w-label' },
     `实测（双对数坐标）：训练集的前缀里，出现次数涨了 ${Math.round(nRatio)} 倍，不同的预分词只涨了 ${uRatio.toFixed(1)} 倍；`
     + `两条线几乎是直线，斜率就是 β ≈ ${beta.toFixed(2)}`), box);
-  lineChart(box, {
-    series: [...runs.map((s) => ({ name: s.name, markers: true, points: s.rows.map((r) => [L(r.occurrences), L(r.unique)]) })),
-      { name: `斜率 ${beta.toFixed(2)}`, points: fit, dash: '5 4', width: 1.5 }],
-    height: 240, table: false, xLabel: '预分词出现次数（对数刻度）', yLabel: '不同的预分词（个，对数刻度）',
-    xFormat: (v) => compact(10 ** v), yFormat: (v) => compact(10 ** v), ariaLabel: 'Heaps 定律：出现次数与不同预分词数的双对数图',
-  });
+  lineChart(box, opts);
   box.append(h('details', {}, h('summary', {}, '查看数据表'),
     h('table', {}, h('thead', {}, h('tr', {}, ['语料', '读到的字节', '出现次数', '不同的预分词'].map((c) => h('th', {}, c)))),
       h('tbody', {}, runs.flatMap((s) => s.rows.map((r) => h('tr', {},

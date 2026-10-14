@@ -385,7 +385,7 @@ def test_special_token_injection(sb, tok):
 
 
 def test_mean_row_on_trained_storybot(dlfs6_path):
-    """A new token whose unembedding row is the mean of the old rows: on the StoryBot we trained with chapter 6's
+    """A new token whose output-layer row is the mean of the old rows: on the StoryBot we trained with chapter 6's
     unchanged script (run storybot-h100), its probability at held-out positions is tiny, far below 1/(V+1)."""
     import torch
     if not STORYBOT_RUN.is_file():
@@ -398,7 +398,7 @@ def test_mean_row_on_trained_storybot(dlfs6_path):
     m.load_state_dict(ckpt["model_state_dict"])
     m.eval()
     seen = {}
-    m.unembed.register_forward_hook(lambda mod, inp, out: seen.update(h=inp[0]))   # what the unembedding sees
+    m.unembed.register_forward_hook(lambda mod, inp, out: seen.update(h=inp[0]))   # what the output layer sees
     data = np.memmap(DLFS6 / "storybot" / "tiny_stories_valid.bin", dtype=np.uint16, mode="r")
     x = torch.from_numpy(np.asarray(data[:256], dtype=np.int64))[None]      # 256 held-out positions
     with torch.no_grad():

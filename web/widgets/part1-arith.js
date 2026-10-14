@@ -3,7 +3,7 @@
    re-checked on CPU by verify/test_part1.py).
    config: { mode: "diff" }   // "sft" | "grpo" | "diff" */
 import { h } from './_lib.js';
-import { seriesColor } from './_plot.js';
+import { seriesVars } from './_plot.js';
 
 const CSS = `
 .w-part1-arith .pick { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .7rem; }
@@ -27,6 +27,7 @@ export async function mount(root, config) {
   root.append(h('style', {}, CSS));
   const box = h('div', { class: 'w-part1-arith' });
   root.append(box);
+  seriesVars(box);                                  // the cell colours follow theme switches
   let data;
   try {
     const r = await fetch('data/part1/preview.json');
@@ -42,8 +43,8 @@ export async function mount(root, config) {
     return !!nums && Number(nums[nums.length - 1]) === i + j;
   };
   const C = {   // blue = correct / fixed, red = wrong, amber = broken by RL (distinct hues in both themes)
-    right: tint(seriesColor(0), 28), wrong: tint(seriesColor(7), 55),
-    fixed: tint(seriesColor(0), 62), broke: tint(seriesColor(3), 75), same: 'var(--paper-2)',
+    right: tint('var(--series-0)', 28), wrong: tint('var(--series-7)', 55),
+    fixed: tint('var(--series-0)', 62), broke: tint('var(--series-3)', 75), same: 'var(--paper-2)',
   };
   let mode = config.mode || 'diff';
   let active = 0;                                  // roving tabindex: the one answer cell that takes Tab focus

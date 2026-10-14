@@ -204,8 +204,8 @@ print(f"共 {len(sft):,} 条；回答长度的中位数 {np.median([len(x['respo
       f"多行的回答（通常是代码）{sum(chr(10) in x['response'] for x in sft)} 条")
 full, rest = divmod(len(sft), 32)                     # DataLoader 不丢弃最后不满的 batch
 per_epoch = full + (rest > 0)
-sizes = [rest if k % per_epoch == per_epoch - 1 else 32 for k in range(500)]   # cycle 按第一轮的顺序重放
-print(f"每轮 {full} 个 32 条的 batch 加 1 个 {rest} 条的；500 步共读 {sum(sizes):,} 条，约 {sum(sizes) / len(sft):.1f} 遍")
+sizes = [rest if k % per_epoch == per_epoch - 1 else 32 for k in range(500)]   # cycle 按第一个 epoch 的顺序重放
+print(f"每个 epoch 有 {full} 个 32 条的 batch，加 1 个 {rest} 条的；500 步共读 {sum(sizes):,} 条，约 {sum(sizes) / len(sft):.1f} 遍")
 assert len(sft) == 1092
 assert [x["instruction"] for x in sft[-81:]] == [f"{i}+{j}=" for i in range(1, 10) for j in range(1, 10)]
 assert all(x["response"] == str(int(x["instruction"][0]) + int(x["instruction"][2])) for x in sft[-81:])
@@ -217,7 +217,7 @@ assert (full, rest) == (34, 4) and sum(sizes) == 15_608 and round(sum(sizes) / l
 ```listing ch03/03_alpaca.py#L20-L27
 ```
 
-训练时只在回答部分计算 loss，指令部分不算，也就是第 0 章 [验证 0.4-a](ch00.html#v-0.4-a) 里权重为 0 的那几个位置。SFT 跑 500 步，每步最多 32 条。DataLoader 不丢弃最后不满的 batch，1,092 条被切成 34 个 32 条的 batch 加 1 个 4 条的；`itertools.cycle` 再按第一轮的顺序一遍遍重放。500 步一共读了 15,608 条，约是这份数据的 14.3 遍。对话图里“SFT 之后”的回答，就是这一步的产物。
+训练时只在回答部分计算 loss，指令部分不算，也就是第 0 章 [验证 0.4-a](ch00.html#v-0.4-a) 里权重为 0 的那几个位置。SFT 跑 500 步，每步最多 32 条。DataLoader 不丢弃最后不满的 batch，1,092 条被切成 34 个 32 条的 batch 加 1 个 4 条的；`itertools.cycle` 再按第一个 epoch 的顺序一遍遍重放。500 步一共读了 15,608 条，约是这份数据的 14.3 遍。对话图里“SFT 之后”的回答，就是这一步的产物。
 
 ```localcheck verify/test_part1.py::test_sft_and_grpo_batches_follow_dataloader_cycle needs="PyTorch" title="用 PyTorch 的 DataLoader 和 itertools.cycle 照原书的写法取 500 次 batch，数一数每个 batch 有多大"
 ```
@@ -229,7 +229,7 @@ assert (full, rest) == (34, 4) and sum(sizes) == 15_608 and round(sum(sizes) / l
 ```listing ch03/09_grpo.py#L64-L72
 ```
 
-这个算法叫 **GRPO**（Group Relative Policy Optimization），“组”指的就是同一道题的 8 个回答。训练按“轮”进行：每一轮先为一个 batch 的题目生成回答，再用这批回答更新两次参数，一共 500 轮。超参数写在脚本里：
+这个算法叫 **GRPO**（Group Relative Policy Optimization，组相对策略优化），“组”指的就是同一道题的 8 个回答。训练按“轮”进行：每一轮先为一个 batch 的题目生成回答，再用这批回答更新两次参数，一共 500 轮。超参数写在脚本里：
 
 ```listing ch03/09_grpo.py#L138-L145
 ```

@@ -201,7 +201,7 @@ def test_b_sdpa_default_scale(dlfs6_path):
     from webbot.model import MultiHeadAttention
 
     torch.manual_seed(0)
-    E, H, KV, D, B, C = 128, 4, 2, 32, 2, 10            # 缩小版的 WebBot 注意力（GQA，无 RoPE）
+    E, H, KV, D, B, C = 128, 4, 2, 32, 2, 10            # 缩小版的 WebBot 多头 Attention（GQA，无 RoPE）
     attn = MultiHeadAttention(E, H, KV, D).eval()
     x = torch.randn(B, C, E)
     with torch.no_grad():
@@ -354,7 +354,7 @@ def test_e_dpo_loss(dlfs6_path):
     beta = _script_constant(script, "beta")
     assert beta == 0.1
 
-    # 正文引用的设置：AdamW、学习率 5e-6；model 与 ref_model 都从预训练完成的同一个检查点加载
+    # 正文引用的设置：AdamW、学习率 5e-6；model 与 ref_model 都从预训练完成的同一个 checkpoint 加载
     source = script.read_text(encoding="utf-8")
     assert _script_constant(script, "learning_rate") == 5e-6
     assert "torch.optim.AdamW(model.parameters(), lr=learning_rate)" in source

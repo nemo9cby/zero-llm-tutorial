@@ -199,7 +199,7 @@ export async function mount(root, config) {
       + `；常用的粗估 12 · L · d² = ${fmt(derived.roughNonEmbedding)}`);
     const why = roughNote(derived);
     if (why) facts.push(why);
-    if (derived.embedding != null) facts.push(`一张嵌入表 V · d = ${fmt(derived.embedding)}`);
+    if (derived.embedding != null) facts.push(`一张 embedding 表 V · d = ${fmt(derived.embedding)}`);
     out.replaceChildren(table, narrow, h('ul', {}, ...facts.map((f) => h('li', {}, f))),
       h('pre', { class: 'cmd' }, h('code', {}, dlfs6Call(rows, cfg))));
   };

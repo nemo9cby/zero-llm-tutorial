@@ -64,7 +64,7 @@ export function createEngine({ post, fetch: get = globalThis.fetch }) {
   function load(name, manifestURL) {
     if (!models.has(name)) {
       const job = (async () => {
-        if (!manifestURL) throw new Error(`检查点 ${name} 还没有加载`);
+        if (!manifestURL) throw new Error(`checkpoint ${name} 还没有加载`);
         const t0 = now();
         const { manifest, buffer, verified } = await fetchCheckpoint(manifestURL, {
           fetch: get, verify: true, onProgress: (loaded, total) => post({ id: null, kind: 'progress', name, loaded, total }),

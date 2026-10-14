@@ -258,12 +258,51 @@ def math_html(content: str, opts: dict) -> str:
 # ` reversible` never splits into an empty box at the end of one line and the word at the start of the next.
 GLUE_RE = re.compile(r"((?:^[ \t]+|[ \t]{2,})(?:\S|\Z))")
 
+# In a table cell, inline code may also break after "/", after "_" between two letters or digits, and after "." before
+# a letter: a long identifier (max_position_embeddings, critic/rewards/mean) then no longer forces its column wide, while
+# 1.5, __init__ and 1e-5 stay whole. Each point needs a non-space character on both sides (never at the code's ends,
+# never next to a space, never between the two slashes of //), so a <wbr> never meets a glued space. <wbr> adds no
+# character: copying and find-in-page see the code as written.
+WBR_RE = re.compile(r"(?<=\S/)(?=[^\s/])|(?<=[^\W_]_)(?=[^\W_])|(?<=\S\.)(?=[^\W\d_])")
+
 
 def code_inline(self, tokens, idx, options, env):
-    parts = GLUE_RE.split(tokens[idx].content)            # text, glued, text, glued, ..., text
-    inner = "".join(f'<span class="glue">{escapeHtml(p)}</span>' if i % 2 else escapeHtml(p)
-                    for i, p in enumerate(parts))
-    return f"<code{self.renderAttrs(tokens[idx])}>{inner}</code>"
+    text = tokens[idx].content
+    cuts = [m.start() for m in WBR_RE.finditer(text)] if tokens[idx].meta.get("wbr") else []
+    out, at = [], 0
+    for i, part in enumerate(GLUE_RE.split(text)):         # text, glued, text, glued, ..., text
+        if i % 2:
+            out.append(f'<span class="glue">{escapeHtml(part)}</span>')
+        else:                                              # the cuts all fall strictly inside text parts
+            bounds = [0, *(c - at for c in cuts if at < c < at + len(part)), len(part)]
+            out.append("<wbr>".join(escapeHtml(part[a:b]) for a, b in zip(bounds, bounds[1:])))
+        at += len(part)
+    return f"<code{self.renderAttrs(tokens[idx])}>{''.join(out)}</code>"
+
+
+SPAN_OPEN_RE = re.compile(r"<span\b", re.I)
+SPAN_CLOSE_RE = re.compile(r"</span\s*>", re.I)
+NOWRAP_RE = re.compile(r"""<span\b[^>]*\b(?:class\s*=\s*["'][^"']*\bnowrap\b|style\s*=\s*["'][^"']*white-space\s*:\s*nowrap)""",
+                       re.I)
+
+
+def mark_table_code(state) -> None:
+    """Flag the inline code of table cells for <wbr> break points (code_inline), except inside a nowrap span:
+    Chrome breaks at a <wbr> even under white-space: nowrap, and a nowrap span is the author asking for one line."""
+    in_cell = False
+    for tok in state.tokens:
+        if tok.type in ("td_open", "th_open", "td_close", "th_close"):
+            in_cell = tok.nesting == 1
+        elif tok.type == "inline" and in_cell:
+            spans = []                       # the <span>s open at this point of the cell: True for a nowrap one
+            for child in tok.children or []:
+                if child.type == "html_inline" and SPAN_CLOSE_RE.match(child.content):
+                    if spans:
+                        spans.pop()
+                elif child.type == "html_inline" and SPAN_OPEN_RE.match(child.content):
+                    spans.append(bool(NOWRAP_RE.match(child.content)))
+                elif child.type == "code_inline" and not any(spans):
+                    child.meta["wbr"] = True
 
 
 def with_inline(md: MarkdownIt) -> MarkdownIt:
@@ -337,6 +376,7 @@ def make_md(state: dict) -> MarkdownIt:
                 if tok.tag == "h2":
                     state["sections"].append((hid, text))
     md.core.ruler.push("heading_ids", heading_ids)
+    md.core.ruler.push("table_code", mark_table_code)
     return md
 
 

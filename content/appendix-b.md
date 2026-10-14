@@ -209,7 +209,7 @@ print(f"最后一行注意力的最大权重：{w.max():.4f}（均匀分布是 1
 assert w.max() < 2 / C                               # 几乎均匀
 ```
 
-真实的 CodeBot 是不是也这样，用 PyTorch 检查一下：取 `codebot/model.py` 里刚初始化的模型，确认它的注意力等于“除以 $\sqrt{64}$”的手算结果，并测量第 0 层分数的标准差。换三个随机种子，实测分别是 0.1511、0.1514、0.1515，与预测相差不到 1%：
+真实的 CodeBot 是不是也这样，用 PyTorch 检查一下：取 `codebot/model.py` 里刚初始化的模型，确认它的 Attention 输出等于“除以 $\sqrt{64}$”的手算结果，并测量第 0 层分数的标准差。换三个随机种子，实测分别是 0.1511、0.1514、0.1515，与预测相差不到 1%：
 
 ```localcheck verify/test_appendix.py::test_b_codebot_scores needs="PyTorch" title="真实 CodeBot：缩放因子是 √64；初始化时分数的标准差 ≈ 0.1517"
 ```

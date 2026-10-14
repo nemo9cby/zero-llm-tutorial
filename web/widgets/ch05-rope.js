@@ -1,7 +1,7 @@
 /* 图：二维 RoPE 实验台。q 位于位置 m，转 m·θ；k 位于位置 n，转 n·θ。
    “q、k 同时 +1”时两支箭头一起转，夹角与点积都不变；只挪动其中一个，点积才会变。 */
 import { h } from './_lib.js';
-import { seriesColor } from './_plot.js';
+import { seriesVars } from './_plot.js';
 import { injectStyle, slider, button, reducedMotion, svg } from './ch05-common.js';
 
 const DEG = Math.PI / 180;
@@ -33,6 +33,7 @@ export function mount(root, config = {}) {
   const shown = { qa: 0, ka: 0 };                       // angles currently drawn (degrees), for tweening
   const box = h('div', { class: 'w-ch05 w-ch05-rope' });
   root.append(box);
+  seriesVars(box);                                  // the arrows' colours follow theme switches
   box.append(h('style', {}, `
 .w-ch05-rope .stage { display: flex; flex-wrap: wrap; gap: .8rem 1.4rem; align-items: center; }
 .w-ch05-rope svg.plane { width: 240px; max-width: 100%; height: auto; flex: 0 0 auto; }
@@ -46,7 +47,7 @@ export function mount(root, config = {}) {
   const marker = (id, color) => svg('marker', { id, viewBox: '0 0 10 10', refX: 8.5, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto-start-reverse' },
     svg('path', { d: 'M0,0 L10,5 L0,10 z', fill: color }));
   const uid = Math.random().toString(36).slice(2, 8);
-  const qColor = seriesColor(0), kColor = seriesColor(1);
+  const qColor = 'var(--series-0)', kColor = 'var(--series-1)';
   defs.append(marker(`aq${uid}`, qColor), marker(`ak${uid}`, kColor));
   plane.append(defs,
     svg('circle', { cx: C, cy: C, r: R, fill: 'none', stroke: 'var(--rule)', 'stroke-width': 1 }),

@@ -81,7 +81,8 @@ export async function mount(root, config) {
       return { label, report: await rep.json(), rows: parseMetrics(await met.text()) };
     }));
   } catch (err) {
-    root.append(h('p', { class: 'w-label' }, `运行记录读取失败（${err.message}）。两次运行的命令：`),
+    root.append(h('p', { class: 'w-label' }, `运行记录读取失败（${err.message}）。记录这两次运行的命令（自己重跑时，把 `,
+      h('code', {}, '--run'), ' 后面换成新的运行名）：'),
       h('pre', { class: 'cmd' }, h('code', {}, 'uv run python gpu/run_local.py --run codebot-3060ti --job codebot\n'
         + 'uv run python gpu/run_local.py --run codebot-grpo-evalfix-3060ti --job codebot-grpo-evalfix')));
     return;

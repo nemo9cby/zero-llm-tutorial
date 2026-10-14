@@ -3,7 +3,7 @@
    辅助 loss 按 Switch Transformer 式 (4)：E·Σ f_i·P_i（以 α 为单位），f_i 按 router 的最大值计数。
    同一组结论由验证 8.4-a 到 8.4-d 钉住；纯函数由 tests/js/ch08-widgets.test.mjs 对拍。 */
 import { h } from './_lib.js';
-import { seriesColor } from './_plot.js';
+import { seriesColor, onThemeChange } from './_plot.js';
 
 export const TOKENS = ['The', ' cat', ' sat', ' on', ' the', ' mat', '.', ' It',
   'def', ' add', '(', 'a', ',', ' b', '):', ' return'];
@@ -97,11 +97,6 @@ function injectStyle() {
 `));
 }
 
-function onThemeChange(fn) {
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', fn);
-  new MutationObserver(fn).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-}
-
 export function mount(root, config = {}) {
   injectStyle();
   let k = config.k || 2, cf = config.capacity ?? 1.25, bias = config.bias ?? 0;
@@ -160,6 +155,6 @@ export function mount(root, config = {}) {
 
   cfRange.addEventListener('input', () => { cf = +cfRange.value; draw(); });
   biasRange.addEventListener('input', () => { bias = +biasRange.value; draw(); });
-  onThemeChange(draw);
+  onThemeChange(() => draw());                     // the token tints and expert bars use the palette
   draw();
 }

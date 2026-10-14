@@ -2,7 +2,8 @@
    Palette = the validated dataviz reference instance (categorical slots in fixed order,
    sequential blue, diverging blue↔red with a gray midpoint), light and dark steps.
    Every chart ships a hover/focus tooltip and an optional data table (<details>).
-   Also the theme helpers isDark() / onThemeChange(fn) for widgets that colour things in JS.
+   Also the theme helpers isDark() / onThemeChange(fn) for widgets that colour things in JS, and seriesVars(el) for
+   widgets that colour them in CSS (var(--series-k)).
    Nothing here touches the DOM at import time, so Node tests can import it. */
 import { h } from './_lib.js';
 
@@ -12,6 +13,11 @@ const DARK = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#008300', 
 const SEQ = ['#cde2fb', '#b7d3f6', '#9ec5f4', '#86b6ef', '#6da7ec', '#5598e7', '#3987e5', '#2a78d6',
   '#256abf', '#1c5cab', '#184f95', '#104281', '#0d366b'];
 const DIV_NEG = '#2a78d6', DIV_POS = '#e34948';
+// The dark theme's red end: #e34948 with oklab lightness 0.0015 lower (same hue and chroma; one sRGB step on red and
+// green). On #e34948 the ink beat white by a hair (4.015:1 against 3.953:1), so where every other red step of the dark
+// ramp (mixed with the dark grey midpoint) has white labels, the strongest cells alone got ink ones. On #e24848 white
+// wins, 3.997:1 against 3.971:1, and the whole dark red ramp is white-labelled; the other steps move by at most 1/255.
+const DIV_POS_DARK = '#e24848';
 const DIV_MID_LIGHT = '#f0efec', DIV_MID_DARK = '#383835';
 const ON_DARK = '#ffffff', ON_LIGHT = '#1b2233';      // value labels on heat-map cells: white or the ink
 
@@ -52,6 +58,15 @@ export function onThemeChange(fn) {
 }
 
 export const seriesColor = (i) => (isDark() ? DARK : LIGHT)[i % 8];
+
+/** Keep el's custom properties --series-0 … --series-7 equal to seriesColor(0 … 7) in the current theme. A widget's CSS
+    and inline styles can then say var(--series-k), also inside color-mix(), and follow every theme switch, from the
+    toggle or the OS, without redrawing (nothing is rebuilt, so focus and state stay). Returns the unsubscribe function. */
+export function seriesVars(el) {
+  const set = () => LIGHT.forEach((_, i) => el.style.setProperty(`--series-${i}`, seriesColor(i)));
+  set();
+  return onThemeChange(set);
+}
 
 // ---------------------------------------------------------------- colour arithmetic
 
@@ -351,7 +366,8 @@ export function lineChart(root, opts) {
         h('div', { class: 'k' }, `${o.xLabel || 'x'} = ${fx(x)}`),
         ...series.map((ser, i) => {
           if (!ser.points.length) return null;
-          const p = ser.points.reduce((best, q) => (Math.abs(q[0] - x) < Math.abs(best[0] - x) ? q : best), ser.points[0]);
+          // nearest in axis units, as drawn (log10 on a log axis), like the pointer above
+          const p = ser.points.reduce((best, q) => (Math.abs(gx(q[0]) - gx(x)) < Math.abs(gx(best[0]) - gx(x)) ? q : best), ser.points[0]);
           return h('div', { class: 'row', style: `--c:${seriesColor(i)}` }, h('b', {}, fy(p[1])), ' ', h('span', { class: 'k' }, ser.name));
         }).filter(Boolean),
       ]);
@@ -460,10 +476,11 @@ export function seqIsDark(t) {
 /** The diverging fill for t in [−1, 1], as #rrggbb: the oklab mix that color-mix(in oklab, end |t|, mid) gives,
     computed here so that the label colour can be chosen against the very same colour. */
 export function divColor(t) {
-  const mid = isDark() ? DIV_MID_DARK : DIV_MID_LIGHT;
+  const dark = isDark();
+  const mid = dark ? DIV_MID_DARK : DIV_MID_LIGHT;
   const a = Math.round(Math.min(1, Math.abs(t)) * 100) / 100;       // whole percent, as before
   if (!(a > 0)) return mid;
-  const end = t < 0 ? DIV_NEG : DIV_POS;
+  const end = t < 0 ? DIV_NEG : dark ? DIV_POS_DARK : DIV_POS;
   return a >= 1 ? end : mixOklab(end, mid, a);
 }
 

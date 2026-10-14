@@ -229,7 +229,7 @@ export function mount(root, config = {}) {
       h('p', { class: 'note' }, msg),
       h('p', { class: 'note' }, `朴素实现要同时摆出 ${N}×${N} = ${N * N} 个分数；分块实现此刻只有 ${block}×${block} = ${block * block} 个，外加每行的 m、ℓ 和输出累加器。`
         + (causal ? `因果掩码让斜线所示的 ${run.skipped.length} 块被整块跳过，标着 −∞ 的格子是块内被遮住的分数。` : '')),
-      k === total ? h('p', { class: 'note done' }, `全部 ${total} 块处理完毕：与朴素 softmax attention 的最大差 ${err.toExponential(1)}。`) : null,
+      k === total ? h('p', { class: 'note done' }, `全部 ${total} 块处理完毕：与朴素 softmax Attention 的最大差 ${err.toExponential(1)}。`) : null,
     ].filter(Boolean));
   }
 

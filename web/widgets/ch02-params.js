@@ -14,8 +14,8 @@ export const PRESETS = {
 export function countParams({ V, ctx, E, L, ff, tied = true, style = 'codebot' }) {
   const attnBias = style === 'gpt2' ? 4 * E : 0;
   const parts = [
-    { key: 'tok', name: tied ? 'token 嵌入（与 unembed 共享）' : 'token 嵌入', n: V * E },
-    { key: 'pos', name: '位置嵌入', n: ctx * E },
+    { key: 'tok', name: tied ? 'token embedding（与 unembed 共享）' : 'token embedding', n: V * E },
+    { key: 'pos', name: '位置 embedding', n: ctx * E },
     { key: 'ln', name: `块内 LayerNorm（${L} × 2 × 2E）`, n: L * 2 * 2 * E },
     { key: 'attn', name: `块内 Attention（${L} × (4E²${attnBias ? ' + 4E' : ''})）`, n: L * (4 * E * E + attnBias) },
     { key: 'ffn', name: `块内 FFN（${L} × (2·E·ff + ff + E)）`, n: L * (E * ff + ff + ff * E + E) },
@@ -31,7 +31,7 @@ export function countParams({ V, ctx, E, L, ff, tied = true, style = 'codebot' }
 /** The footnote under the table: the 12·L·E² rule of thumb assumes ff = 4E. */
 export function approxNote({ L, E, ff }, r) {
   return ff === 4 * E
-    ? `粗估 12·L·E² = ${fmt(r.approx12)}：只算块内的大矩阵（FFN 宽度 ff = 4E 时，每块是 4E² + 8E²），嵌入和偏置不在其中。`
+    ? `粗估 12·L·E² = ${fmt(r.approx12)}：只算块内的大矩阵（FFN 宽度 ff = 4E 时，每块是 4E² + 8E²），embedding 和偏置不在其中。`
     : `块内的大矩阵 L·(4E² + 2·E·ff) = ${fmt(r.approxBlocks)}。现在 ff ≠ 4E，所以不能再用 12·L·E² = ${fmt(r.approx12)} 来粗估。`;
 }
 

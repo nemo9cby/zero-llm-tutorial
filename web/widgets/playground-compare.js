@@ -64,9 +64,9 @@ export async function mount(root, config = {}) {
     box.replaceChildren(h('p', { class: 'w-pg-error' }, `这张图没能启动：${err.message}`));
     return;
   }
-  const input = h('input', { class: 'w-input', value: cfg.prompt, spellcheck: 'false', 'aria-label': '三个检查点共用的 prompt' });
+  const input = h('input', { class: 'w-input', value: cfg.prompt, spellcheck: 'false', 'aria-label': '三个 checkpoint 共用的 prompt' });
   const tpl = h('input', { type: 'checkbox', checked: cfg.template });
-  const askBtn = h('button', { type: 'button', class: 'w-pg-btn primary' }, '三个检查点一起回答（greedy）');
+  const askBtn = h('button', { type: 'button', class: 'w-pg-btn primary' }, '三个 checkpoint 一起回答（贪心解码）');
   const status = statusLine();
   const cards = h('div', { class: 'w-pg-cards' });
   const outs = new Map();
@@ -122,7 +122,7 @@ export async function mount(root, config = {}) {
         const res = await handle.promise;
         if (res.stopped === 'length') out.append(h('span', { class: 'w-pg-note' }, ' ……（到达上限）'));
       }
-      status.say('三个检查点用的是同一串 token、同样的 greedy 解码，不同的只是权重。');
+      status.say('三个 checkpoint 用的是同一串 token、同样的贪心解码，不同的只是权重。');
     } catch (err) {
       status.error(err);
     } finally {
@@ -183,7 +183,7 @@ export async function mount(root, config = {}) {
         return block(n, set, r.responses.map((text, i) => ({ text, ok: r.correct[i] > 0 })), 'PyTorch 记录的回答');
       }));
       addNote.textContent = '';
-      addStatus.say('这一组还没在浏览器里测过；格子里先显示 PyTorch 用同一份 int8 权重的回答（ch03 的模板，greedy 解码）。'
+      addStatus.say('这一组还没在浏览器里测过；格子里先显示 PyTorch 用同一份 int8 权重的回答（ch03 的模板，贪心解码）。'
         + '点“在浏览器里逐题测试”，可以在这里逐题重算。');
     } catch (err) {
       addStatus.error(err);
@@ -232,6 +232,6 @@ export async function mount(root, config = {}) {
   askBtn.addEventListener('click', ask);
   runBtn.addEventListener('click', runAddition);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') ask(); });
-  status.say('点按钮后，三个检查点依次下载（各 11.3 MB）并回答同一个 prompt。');
+  status.say('点按钮后，三个 checkpoint 依次下载（各 11.3 MB）并回答同一个 prompt。');
   drawSet();
 }

@@ -1,6 +1,6 @@
 /* 运行记录：列出 data/runs/index.json 里的每一次运行，展示 report.json 的溯源信息
    （在哪台机器、什么 GPU 与 PyTorch、哪两个提交、每个脚本的用时与结果、改过什么、花了多少钱），
-   再从 data/gpu/plan.json 补上重跑的命令、书里用到它的位置，以及报告里的教程提交不含代码时的真正提交；
+   再从 data/gpu/plan.json 补上记录这次运行的命令、书里用到它的位置，以及报告里的教程提交不含代码时的真正提交；
    最后列出计划了但还没有记录的运行，附上命令。
    只请求 index.json 里登记过的报告，所以未记录的运行不会产生 404。config: {} */
 import { h, fmt } from './_lib.js';
@@ -43,6 +43,13 @@ async function getJSON(url) {
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
+
+/** The label above a recorded run's command from plan.json. The command carries the recorded run id, and the runner
+ *  refuses to append to a report recorded on another kind of machine (on the same machine it would append duplicate
+ *  steps), so a reader re-running it needs a new run id. */
+export const RECORDED_COMMAND = '记录这次运行的命令（自己重跑时，把 --run 后面换成新的运行名）：';
+/** The label's text with the flag set as inline code (in the body font, "--" reads like a dash). */
+const withFlag = (text) => text.split('--run').flatMap((part, i) => (i ? [h('code', {}, '--run'), part] : [part]));
 
 const short = (sha) => (sha && sha !== 'unknown' ? sha.slice(0, 7) : '未知');
 const stemOf = (script) => script.split('/').pop().replace(/\.py$/, '');
@@ -142,14 +149,14 @@ function card(run, report, pinned, plan, evalAt) {
     if (s.launcher) extras.push(h('div', { class: 'line' }, `${s.script}：用 ${s.launcher} 启动`));
   }
   for (const sd of report.seeded || []) {
-    extras.push(h('div', { class: 'line' }, `起点检查点 ${sd.path} 来自 ${sd.from}${sd.fix ? `（${sd.fix}）` : ''}`));
+    extras.push(h('div', { class: 'line' }, `起点 checkpoint ${sd.path} 来自 ${sd.from}${sd.fix ? `（${sd.fix}）` : ''}`));
   }
   if (plan?.used_in?.length) {
     extras.push(h('div', { class: 'line' }, '用在：',
       ...plan.used_in.flatMap((u, i) => [i ? '、' : '', h('a', { href: u.href }, u.label)])));
   }
   if (plan?.command) {
-    extras.push(h('div', { class: 'line' }, '重跑：', h('pre', {}, h('code', {}, plan.command))));
+    extras.push(h('div', { class: 'line' }, ...withFlag(RECORDED_COMMAND), h('pre', {}, h('code', {}, plan.command))));
   }
   return h('article', {}, h('h4', {}, run), meta, steps.length ? table : h('p', {}, '还没有完成的脚本。'), ...extras);
 }
@@ -178,8 +185,8 @@ export async function mount(root) {
 
   const allSteps = reports.flatMap((rep) => rep?.steps || []);
   const legend = [];
-  if (allSteps.some((s) => s.s_per_it)) legend.push('后半程 s/it：用 tqdm 的计时算出的后半程平均每步秒数，包含这段时间里的评估。');
-  if (allSteps.some((s) => s.final && 'acc' in s.final)) legend.push('acc：81 道训练题上的贪心准确率（每 10 步评估一次），不是留出集上的成绩。');
+  if (allSteps.some((s) => s.s_per_it)) legend.push('后半程 s/it：用 tqdm 的计时算出的后半程平均每步（GRPO 是每轮）秒数，包含这段时间里的评估。');
+  if (allSteps.some((s) => s.final && 'acc' in s.final)) legend.push('acc：81 道训练题上贪心解码的准确率（每 10 轮评估一次），不是留出集上的成绩。');
   if (legend.length) box.append(h('p', { class: 'legend' }, legend.join(' ')));
 
   const pending = plan.planned.filter((p) => !runs.includes(p.run));

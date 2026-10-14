@@ -702,7 +702,9 @@ def test_parse_tqdm_keeps_the_first_line_of_each_counter(dlfs6_path):
     assert "steps = list(range(0, len(accuracies) * eval_interval, eval_interval))" in text
 
 
-# Files under web/data/runs/ that no script writes: excerpts we took by hand from runs/<run>/<stem>.log.
+# Excerpts of runs/<run>/<stem>.log committed under web/data/runs/. Only the probe's log excerpt is purely
+# hand-cut now: run_local.py writes timing.json and <stem>.output.txt itself, and the committed ones (cut by
+# hand before it did) reproduce from the raw logs under its rules (test_gpu_runner.py).
 HAND_EXTRACTS = [("webbot-probe", "01_pretrain.log.txt", "01_pretrain.log"),
                  ("codebot-3060ti", "02_generate.output.txt", "02_generate.log"),
                  ("storybot-h100", "06_generate.output.txt", "06_generate.log")]

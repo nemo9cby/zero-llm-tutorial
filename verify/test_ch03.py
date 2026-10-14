@@ -106,7 +106,7 @@ def test_pretrained_checkpoint_fits_its_training_text(dlfs6_path, models):
 
 
 def test_low_training_loss_is_not_verbatim_recall(dlfs6_path, models):
-    """loss 很低 ≠ 逐字背诵：给出语料里的 96 个 token，让官方预训练模型 greedy 续写 32 个，
+    """loss 很低 ≠ 逐字背诵：给出语料里的 96 个 token，让官方预训练模型贪心续写 32 个，
     与语料原文逐 token 比较。teacher forcing 下 top-1 准确率很高，自由续写却很少整段对上。"""
     ids = np.fromfile(CODEBOT / "tiny_codes.bin", dtype=np.uint16).astype(np.int64)
     starts = np.random.default_rng(123).integers(0, len(ids) - 300, 64)
@@ -118,7 +118,7 @@ def test_low_training_loss_is_not_verbatim_recall(dlfs6_path, models):
         loss = F.cross_entropy(lg.reshape(-1, 1000), full[:, 1:].reshape(-1)).item()
         top1 = (lg.argmax(-1) == full[:, 1:]).float().mean().item()
         cur = full[:, :P]
-        for _ in range(K):                                   # greedy 续写，不看原文
+        for _ in range(K):                                   # 贪心续写，不看原文
             cur = torch.cat([cur, m(cur)[:, -1].argmax(-1, keepdim=True)], 1)
     match = (cur[:, P:] == full[:, P:]).int()
     verbatim = int((match.sum(1) == K).sum())                # 32 个 token 全部对上的窗口
@@ -182,7 +182,7 @@ def test_temperature_zero_is_greedy_and_tiny_temperature_breaks(dlfs6_path, tok,
     assert torch.isnan(probs).any()
     with pytest.raises(RuntimeError):              # 原书的 generate() 本身：torch.multinomial 拒绝 NaN 概率
         generate(m, tok, p, max_new_tokens=1, temperature=1e-45)
-    ok = F.softmax(logits / 0.01, dim=-1)          # 0.01 不会溢出，但也不等于 greedy
+    ok = F.softmax(logits / 0.01, dim=-1)          # 0.01 不会溢出，但也不等于贪心解码
     assert not torch.isnan(ok).any()
     top2 = ok.topk(2).values[0].tolist()
     print(f"T=0.01 时前两名的概率：{top2[0]:.3f} / {top2[1]:.3f}")
@@ -342,7 +342,7 @@ def test_greedy_probe_before_and_after_rl(dlfs6_path, tok, models, grpo_fns):
     acc = {name: sum(r) for name, r in right.items()}
     fixed = sum(not a and b for a, b in zip(right["sft"], right["grpo"]))     # SFT 错、GRPO 对
     broken = sum(a and not b for a, b in zip(right["sft"], right["grpo"]))    # SFT 对、GRPO 错
-    print("81 道加法的 greedy 正确数：", acc, f"；GRPO 修好 {fixed} 道，弄坏 {broken} 道")
+    print("81 道加法，贪心解码答对的题数：", acc, f"；GRPO 修好 {fixed} 道，弄坏 {broken} 道")
     assert acc == {"sft": 44, "grpo": 67}
     assert (fixed, broken) == (29, 6) and 44 + fixed - broken == 67
 
@@ -436,7 +436,7 @@ def test_dataloader_cycle_replays_the_same_batches(dlfs6_path, tok, grpo_fns):
     first = [tuple(next(it)[1].tolist()) for _ in range(3)]
     second = [tuple(next(it)[1].tolist()) for _ in range(3)]
     assert [len(b) for b in first] == [32, 32, 17]
-    assert first == second             # itertools.cycle 记住了第一轮，之后原样重放
+    assert first == second             # itertools.cycle 记住了第一个 epoch，之后原样重放
 
 
 def test_get_batch_never_contains_eos(dlfs6_path, tok, models, grpo_fns):
@@ -470,7 +470,7 @@ def test_empty_answer_is_never_penalized(dlfs6_path, tok, models):
     assert pr["run_sft"] < 0.01 and pr["run_grpo"] > 0.99 and pr["run_evalfix"] < 0.01
     from codebot.utils import generate
     p = ALPACA.format("3+3=")
-    assert generate(runs["run_grpo"], tok, p, temperature=0)[len(p):] == ""     # greedy 也是空回答
+    assert generate(runs["run_grpo"], tok, p, temperature=0)[len(p):] == ""     # 贪心解码也是空回答
 
 
 def _batch(tok, grpo_fns, responses, prompts):
@@ -639,7 +639,7 @@ def test_dropout_biases_the_logged_grpo_loss(dlfs6_path, tok, models, grpo_fns):
 def test_local_runs_answer_distributions_and_greedy(dlfs6_path, tok, grpo_fns):
     """本书自己的 3060 Ti 运行（runs/<run>/work/ 下的 checkpoint）：
     answer_dists.json 里 run_* 三行可以从 checkpoint 重新算出；修复版的 SFT 起点就是原样运行产出的那一个；
-    greedy 答对 44 / 70 / 81 道（与进度条上的 54.3%…、86.4%、100% 一致）。"""
+    贪心解码答对 44 / 70 / 81 道（与进度条上的 54.3%…、86.4%、100% 一致）。"""
     import hashlib
     from codebot.utils import generate
     data = read_json("answer_dists.json")
@@ -663,7 +663,7 @@ def test_local_runs_answer_distributions_and_greedy(dlfs6_path, tok, grpo_fns):
             for a, ans in enumerate(answers):
                 prob = lp[a, torch.arange(len(ans)), torch.tensor(ans)].sum().exp().item()
                 assert abs(prob - data[key][k][a]) < 2e-5, (key, p, a)
-    print("本书运行的 greedy 正确数：", greedy)
+    print("本书的三次运行，贪心解码答对的题数：", greedy)
     assert greedy == {"run_sft": 44, "run_grpo": 70, "run_evalfix": 81}
 
 
@@ -701,7 +701,7 @@ def test_zero_gradient_still_moves_weights_through_weight_decay(dlfs6_path):
 def test_recorded_grpo_runs(dlfs6_path):
     """页面引用的 CPU 对照实验记录（verify/_ch03_grpo_replicate.py 的输出，seed 0、1、2 各两条）：
     核对正文写到的数字。批量采样每条回答最多 40 个 token：77,760 条回答里只有 8 条写满上限被截断，
-    greedy 评测里一条也没有。除了这 8 条，它与原书逐条调用 generate() 在统计上等价。"""
+    贪心解码的评测里一条也没有。除了这 8 条，它与原书逐条调用 generate() 在统计上等价。"""
     runs = read_json("grpo_dropout_runs.json")
     assert sorted((r["seed"], r["dropout"]) for r in runs["runs"]) == [(s, d) for s in (0, 1, 2) for d in (False, True)]
     n_resp = n_trunc = 0

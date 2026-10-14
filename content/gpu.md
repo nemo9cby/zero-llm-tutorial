@@ -116,7 +116,7 @@ def param_counts(b):
     block = attn + ffn + (ff + E + 4 * E if gpt2 else 2 * E)
     pos = T * E if b["learned_pos"] else 0
     params = V * E + pos + L * block + (2 * E if gpt2 else E)
-    # unembed：CodeBot 与 embedding 共享，但有 bias
+    # 输出层：CodeBot 与 embedding 共享权重，只多出 V 个 bias
     params += 0 if b["tied"] else V * E
     params += V if gpt2 else 0
     # 第二项就是 n_mm
@@ -129,9 +129,9 @@ for name, b in bots.items():
 assert param_counts(bots["codebot"]) == (11_121_640, 11_000_832)
 
 w = bots["webbot"]
-# embedding 与 unembed 各 V × d
+# embedding 与输出层各 V × d
 emb_share = 2 * w["vocab"] * w["d"] / w["params"]
-print(f"WebBot 的 embedding 与 unembed 占全部参数的 {emb_share:.1%}")
+print(f"WebBot 的 embedding 与输出层占全部参数的 {emb_share:.1%}")
 assert abs(emb_share - 0.504) < 0.001
 ```
 
@@ -457,6 +457,11 @@ assert share < 0.005
 读数要读中段，不要读最后一行。tqdm 收尾时打印的是全程平均：`webbot-probe` 的第一步花了 141 秒（`torch.compile` 编译，加上第 0 步的完整评估），所以最后一行显示 1.02 s/it，照它推算，全程要 28 小时。中段稳定的读数是 3.17 it/s，也就是每步约 0.32 秒。运行报告里的 `s_per_it`（0.32）也是这样算的：取后半程的用时差，除以步数差。
 
 下面的 `timing.json` 是我们从探针的原始日志里摘出来的：第一步的耗时，和第 20 步到第 200 步的平均每步秒数（tqdm 的计时精度是 1 秒）。评估的速度直接读日志节选里 `Evaluating` 那条进度条的中段。本地测试会拿原始日志逐行核对这两份摘录。
+
+日志节选还留着第 0 步评估的结尾，那里有一段停顿：进度条在 01:15 走到第 1,965 个 batch，01:30 还停在那里，01:41 才走完全部 1,969 个。评估的最后一个 batch 只有 8 条序列（[验证 8.5-b](ch08.html#v-8.5-b)），形状变了，这约 26 秒的停顿与第 8 章“最后一个小 batch 要再编译一次”的说法相符。日志记下的只是停顿，重新编译是与它相符的解释，并不是直接观察到的。第 1 个 batch 还用了 19 秒（与切换到推理状态后的那次编译相符），中间按稳定的速度走了约 56 秒，加起来 19 + 56 + 26 ≈ 101 秒，正好是第 0 步评估的用时，已经包含在第一步的 141 秒里。按 [8.5 节](ch08.html#s8-5)的分析，这两次编译都只在第一次评估时发生，所以下面的外推把其余 100 次评估都按稳定的速度算（每秒约 35.1 个 batch，每次约 56 秒），10.4 小时的结论不变。
+
+```localcheck verify/test_gpu_runner.py::test_probe_excerpt_shows_the_one_time_eval_stall title="日志节选：进度条从 01:15 到 01:30 都停在第 1,965 个 batch，01:41 才走完 1,969 个；19 + 56 + 26 ≈ 101 秒，包含在第一步的 141 秒里"
+```
 
 ```verify id=G.2-j title="探针实测：每步 0.317 秒、MFU 31%，全程约 10.4 小时" files=data/runs/webbot-probe/timing.json,data/runs/webbot-probe/01_pretrain.log.txt,data/runs/webbot-probe/report.json
 import re
@@ -860,7 +865,7 @@ Modal 的文档写得很直白：所有函数默认都可能被抢占，而用�
 [^preempt]: [Modal 文档：抢占](https://modal.com/docs/guide/preemption)（2026-10 查证）。
 [^timeout]: [Modal 文档：超时](https://modal.com/docs/guide/timeouts)（2026-10 查证）。
 
-原书脚本没有断点续训，被打断就只能从头再来。我们的 `run_job` 做了两件事来减少损失。第一，一个作业里的几个脚本是分开记录的，每跑完一个就把 checkpoint 和报告存进 Volume；重启后，已经完成的脚本（同一个脚本、同样的补丁）直接跳过。第二，脚本本身出错时只记录、不抛异常，免得重试机制把同一个 bug 重跑两遍、多付两次钱。
+原书脚本没有断点续训，被打断就只能从头再来。我们的 `run_job` 做了两件事来减少损失。第一，一个作业里的几个脚本是分开记录的，每跑完一个就把 checkpoint 和报告存进 Volume；重启后如果还是同一种机器，已经完成的脚本（同一个脚本、同样的补丁）直接跳过。第二，脚本本身出错时只记录、不抛异常，免得重试机制把同一个 bug 重跑两遍、多付两次钱。
 
 ```python gpu/modal_app.py
 @app.function(gpu="L4", volumes={VOL_MOUNT: vol}, timeout=24 * 3600, single_use_containers=True,
@@ -869,6 +874,11 @@ def run_job(plan: dict, run: str, meta: dict, force: bool = False) -> dict:
 ```
 
 装饰器里的 `gpu="L4"` 只是默认值，`launch` 会用 `run_job.with_options(gpu=…)` 换成你在命令行里选的卡。
+
+重试还可能落到另一种 GPU 上：前面说过，`"H100"` 的请求有时会被升级成 H200。这时 Volume 里的报告记着第一次的 H100，新的步骤如果接着写进去，机器就标错了。所以 `run_job` 一开始先比对主机，对不上就什么也不复制、不运行，直接返回 `refused`，`launch` 收到后以这条信息退出。要接着跑，有两条路：用同一个运行名、加上 `--gpu "H100!"` 再启动一次，回到 H100 上，已经跑完的脚本照样跳过；或者换一个新的运行名，从头再来。有好几个脚本的 H100 作业，最好一开始就用 `--gpu "H100!"` 把型号固定下来。
+
+```localcheck verify/test_gpu_runner.py::test_modal_run_job_records_provenance_and_refuses_another_host title="用假的 Volume 执行 run_job：每一步记下教程的提交与 checkpoint 的哈希；报告里的主机换成另一种 GPU 后再跑，返回 refused，报告一个字节也不变" needs="modal"
+```
 
 即便如此，一个 10 小时的单卡 WebBot 在第 9 小时被抢占，仍然要从头再跑。所以 WebBot 全程更适合 G.6 的整机租用，或者在 Modal 上用 8 卡把墙钟缩到一个多小时。
 
@@ -891,14 +901,14 @@ def run_job(plan: dict, run: str, meta: dict, force: bool = False) -> dict:
 # 抄自 ch03/09_grpo.py
 batch_size, group_size, max_iters = 32, 8, 500
 eval_interval, n_problems = 10, 81
-# DataLoader 不丢掉最后那个不满的 batch，每轮是 32、32、17；
-# cycle 只迭代一次 DataLoader，之后按第一轮的顺序重放
+# DataLoader 不丢掉最后那个不满的 batch，每个 epoch 是 32、32、17；
+# cycle 只遍历一次 DataLoader，之后按第一个 epoch 的顺序重放
 per_epoch = [min(batch_size, n_problems - k)
              for k in range(0, n_problems, batch_size)]
 sizes = (per_epoch * max_iters)[:max_iters]
 sampled = sum(sizes) * group_size
 greedy = math.ceil(max_iters / eval_interval) * n_problems
-print(f"每轮的 batch：{per_epoch}；500 步共取 {sum(sizes):,} 道题")
+print(f"每个 epoch 的 batch：{per_epoch}；500 轮共取 {sum(sizes):,} 道题")
 print(f"训练时采样 {sampled:,} 个回答，评估时再贪心生成 {greedy:,} 个，"
       "每次只生成一条")
 assert per_epoch == [32, 32, 17]
@@ -909,7 +919,7 @@ rep = json.load(open("data/runs/codebot-3060ti/report.json",
 secs = {x["script"]: x["seconds"] for x in rep["steps"]}
 pre, grpo = secs["ch03/01_pretrain.py"], secs["ch03/09_grpo.py"]
 print(f"运行记录：预训练 20,000 步 {pre / 60:.1f} 分钟，"
-      f"GRPO 500 步 {grpo / 60:.1f} 分钟")
+      f"GRPO 500 轮 {grpo / 60:.1f} 分钟")
 assert (round(pre / 60, 1), round(grpo / 60, 1)) == (41.9, 89.7)
 assert grpo > 2 * pre and round(grpo) == 5_379
 ```
@@ -1056,14 +1066,20 @@ uv run python gpu/register_run.py webbot-8xh100
 
 每次运行的目录里有这样几种文件，都由 `run_local.py`（或 Modal 上的同一套代码）生成：
 
-- **`report.json`**：教程与原书的提交号、主机（平台、GPU、PyTorch 与 CUDA 版本）、费用，以及每个脚本的开始时间、用时、退出码、最后的指标、吞吐、改动（patches）和起点 checkpoint 的来历。
+- **`report.json`**：教程与原书的提交号、主机（平台、GPU、PyTorch 与 CUDA 版本）、费用，以及每个脚本的开始时间、用时、退出码、最后的指标、吞吐、改动（patches）和起点 checkpoint 的来历。现在每个脚本还多记两项：跑它的教程代码（`tutorial`：提交号、有没有未提交的改动；有改动时，再记下 `git diff HEAD` 的 SHA-256 和改动过的文件，`web/data/runs/` 不算在内），以及它写出的每个 checkpoint（`checkpoints`：路径、字节数和 SHA-256）。已有的四次运行早于这两项，报告里没有它们。
 - **`<脚本名>.metrics.jsonl`**：从 tqdm 进度条解析出的指标，每行一个 `{"it": …, "loss": …}`；`it` 是 tqdm 的计数，下面细说。
 - **脚本自己画的图**：文件名沿用脚本里写的，例如 `loss_pretrain.png`、`webbot_val_loss.png`。
 - **`../index.json`**：登记过的运行，以及每次运行里哪些脚本有指标。
 
-另有几份是我们从原始日志 `runs/<运行名>/<脚本名>.log` 里手工摘出来的：探针的 `timing.json`（第一步的耗时、稳定后的每步秒数）和日志节选 `01_pretrain.log.txt`，以及两个生成脚本的样例 `02_generate.output.txt`、`06_generate.output.txt`。原始日志太大，不进仓库；本地测试在日志存在时逐行核对这些摘录，并从日志重新算出 `timing.json`。
+还有几份是从原始日志 `runs/<运行名>/<脚本名>.log` 里摘出来的。预训练脚本的 `timing.json`（第一步的耗时、不含评估的稳定每步秒数、评估的速度、一次评估的秒数）和不带进度条的脚本的输出 `<脚本名>.output.txt`，现在都由运行器读日志自己写出。仓库里现有的探针 `timing.json`，以及两个生成脚本的样例 `02_generate.output.txt`、`06_generate.output.txt`，是在这之前手工摘的；本地测试按运行器的规则从原始日志把它们重新生成一遍：两份样例逐字节相同，`timing.json` 原有的四个字段一个不差，只多出 11 个新字段。只有探针的日志节选 `01_pretrain.log.txt` 仍是手工摘的。原始日志太大，不进仓库，这几个测试只在有日志的机器上真正运行。
 
 ```localcheck verify/test_gpu.py::test_hand_extracts_match_the_raw_logs title="手工摘录与原始日志一致：节选与样例是日志里按顺序出现的原文，timing.json 能从日志重新算出来"
+```
+
+```localcheck verify/test_gpu_runner.py::test_regenerated_timing_json_reproduces_the_committed_one title="按运行器的规则从原始日志重算探针的 timing.json：原有的四个字段相同，新字段里一次评估 56.1 秒、第 0 步的评估 101 秒"
+```
+
+```localcheck verify/test_gpu_runner.py::test_regenerated_output_txt_is_byte_identical title="运行器从原始日志重新写出两个生成脚本的样例，与仓库里手工摘的逐字节相同"
 ```
 
 指标从哪来？原书的脚本不写日志文件（第 9 章的 wandb 也被我们默认关掉了），只有 tqdm 进度条上的 `loss=…`。`run_local.py` 用两个正则表达式把它们从日志里读出来。
@@ -1109,11 +1125,11 @@ print(rows[10])
 print(rows[11])
 # run_local.py 每个计数只留第一行
 assert (rows[10], rows[11]) == (first, third)
-# 开头是例外：计数 0 没有刷新的那一行，记下的就是第 1 步的值
+# 开头是例外：计数 0 没有刷新的那一行，记下的就是第 1 轮的值
 assert rows[0] == {**rows[1], "it": 0}
 ```
 
-`run_local.py` 每个计数只留第一行，所以运行记录里 it = k 的那一行，是第 k 轮（`i = k − 1`）写下的读数：`i = 10` 测得的 61.7%，记在 it = 11。其他脚本的记录也这样数，it = k 就是第 k 步。唯一的例外在开头：计数 0 没有刷新的那一行，记下的就是第 1 轮的值，所以 it = 0 和 it = 1 两行相同。原书的准确率图以 `i` 为横轴（0、10、20……），同一次评估在那张图上落在 10。拿运行记录和原书的图对照时，要记得这一轮之差。
+`run_local.py` 每个计数只留第一行，所以运行记录里 it = k 的那一行，是第 k 轮（`i = k − 1`）写下的读数：`i = 10` 测得的 61.7%，记在 it = 11。其他脚本的记录也这样数，it = k 就是第 k 步。唯一的例外在开头：计数 0 没有刷新的那一行，记下的就是第 1 轮（其他脚本是第 1 步）的值，所以 it = 0 和 it = 1 两行相同。原书的准确率图以 `i` 为横轴（0、10、20……），同一次评估在那张图上落在 10。拿运行记录和原书的图对照时，要记得这一轮之差。
 
 ```localcheck verify/test_gpu.py::test_parse_tqdm_keeps_the_first_line_of_each_counter title="run_local.py 每个计数只留第一行，与运行记录一致，每份记录的 it = 0 与 it = 1 相同；原书在 i 这一轮更新之后评估，准确率图的横轴就是 i"
 ```
@@ -1123,9 +1139,19 @@ assert rows[0] == {**rows[1], "it": 0}
 
 在章节里引用一次运行，只要一个 `runcurve` 组件，指明运行名和脚本名即可（上面 G.4 的曲线就是这样嵌进来的）。还没跑的运行不会让页面出错，组件会显示应该执行的命令。
 
-最后是三条规矩。第一，报告由脚本生成，不手改；手工摘录另放，并由测试对照原始日志。第二，每份报告都带着两个提交号，但教程的提交号记的是开始运行时的 `HEAD`，当时没提交的改动不在里面。前两次本机运行就是这样：`codebot-3060ti` 开跑时运行器 `run_local.py` 还没有提交，`codebot-grpo-evalfix-3060ti` 开跑时它的作业定义也还没有提交。上面的运行记录给这两次标出了第一个包含那份代码的提交，重跑时检出它即可。第三，花了钱的运行都记下费用，下一个人在动手之前就知道要花多少；这个数是按容器计时乘以标价算的，是一个下限。
+最后是四条规矩。第一，报告由脚本生成，不手改；手工摘录另放，并由测试对照原始日志。第二，每份报告都带着两个提交号，而教程的提交号记的是开始运行时的 `HEAD`，当时没提交的改动不在里面。所以运行器先检查工作树：只要有没提交的改动（`web/data/runs/` 除外），或者运行要用到的文件还没有纳入 git，它就拒绝开跑；加上 `--allow-dirty` 才会照跑，同时在每一步记下 `git diff HEAD` 的 SHA-256 和改动过的文件。
+
+```localcheck verify/test_gpu_runner.py::test_run_local_refuses_a_dirty_tree_unless_allowed title="临时的 git 仓库里：有未提交的改动时 run_local.py 拒绝开跑，什么也不写；加 --allow-dirty 才跑，每一步记下 git diff HEAD 的 SHA-256 与改动的文件；提交之后照常运行"
+```
+
+已有的四次运行都早于这条规矩，前两次本机运行就带着没提交的代码：`codebot-3060ti` 开跑时运行器 `run_local.py` 还没有提交，`codebot-grpo-evalfix-3060ti` 开跑时它的作业定义也还没有提交。上面的运行记录给这两次标出了第一个包含那份代码的提交，重跑时检出它即可。
 
 ```localcheck verify/test_gpu.py::test_run_reports_point_at_commits_that_contain_their_code title="每份报告的教程提交里都有跑它的代码；两处例外在 plan.json 里标了真正的提交，用 git 核对它是第一个包含那份代码的提交"
+```
+
+第三，一份报告只描述一种机器。已经有报告的运行名，不能换到另一种机器上接着跑，也不能在本机（或租来的机器）与 Modal 之间换着续写；运行器会拒绝，并要求换一个新的运行名。第四，花了钱的运行都记下费用，下一个人在动手之前就知道要花多少；这个数是按容器计时乘以标价算的，是一个下限。
+
+```localcheck verify/test_gpu_runner.py::test_append_refuses_another_host_or_provider title="已有报告的运行名：换一种 GPU 或 PyTorch，或者在 Modal 与本机之间换着续写，都会被拒绝并要求新的运行名；同一种机器只是内核或驱动版本不同，照常追加"
 ```
 
 ## 小结

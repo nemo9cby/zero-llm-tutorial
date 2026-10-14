@@ -4,7 +4,7 @@
    from N and D, and verify cell 0.5-e asserts the same products.
    config: { metric: "params" } */
 import { h, fmt } from './_lib.js';
-import { seriesColor } from './_plot.js';
+import { seriesVars } from './_plot.js';
 
 const METRICS = [
   { id: 'params', name: '参数量 N', get: (b) => b.params },
@@ -49,6 +49,7 @@ export async function mount(root, config) {
   root.append(h('style', {}, CSS));
   const box = h('div', { class: 'w-ch00-scale' });
   root.append(box);
+  seriesVars(box);                                  // the dots' colours follow theme switches
   let bots;
   try {
     const r = await fetch('data/ch00/bots.json');
@@ -98,7 +99,7 @@ export async function mount(root, config) {
         h('div', { class: 'name' }, b.name),
         h('div', {},
           h('div', { class: 'track', role: 'img', 'aria-label': `${b.name}：${label}` }, ...grid,
-            h('div', { class: 'dot', style: { left: `${pos(v)}%`, background: seriesColor(i) } })),
+            h('div', { class: 'dot', style: { left: `${pos(v)}%`, background: `var(--series-${i})` } })),
           h('div', { class: 'val' }, metric.sci ? sciNode(v) : fmt(v), times)),
       ];
     }));

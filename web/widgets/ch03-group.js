@@ -2,7 +2,7 @@
    算法与 09_grpo.py 相同：A = r − mean(r)；可选“除以标准差”（DeepSeekMath 原版，std 为无偏估计 + 1e-4）。
    config: { G: 8, rewards: [1,0,...] } */
 import { h } from './_lib.js';
-import { seriesColor } from './_plot.js';
+import { seriesVars } from './_plot.js';
 import { injectStyle, advantages, looAdvantages, pNoSignal, rng, slider, toggle } from './ch03-common.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -27,6 +27,7 @@ export function mount(root, config) {
 .w-ch03-grp .axis { fill: var(--ink-3); font: 11px var(--mono); }
 `));
   root.classList.add('w-ch03-grp');
+  seriesVars(root);                                 // the bars' colours follow theme switches
 
   const sG = slider({ label: '组大小 G', min: 1, max: 16, step: 1, value: G, aria: '组的大小 G',
     onInput: (v) => { G = v; while (rewards.length < G) rewards.push(0); rewards = rewards.slice(0, G); render(); } });
@@ -74,7 +75,7 @@ export function mount(root, config) {
       } else if (a !== 0) {
         const y0 = sy(0), y1 = sy(a);
         s.append(svg('rect', { x: cx - bw / 2, y: Math.min(y0, y1), width: bw, height: Math.max(1, Math.abs(y1 - y0)), rx: 2,
-          fill: seriesColor(a > 0 ? 0 : 1) }));
+          fill: `var(--series-${a > 0 ? 0 : 1})` }));
       }
       s.append(svg('text', { class: 'axis', x: cx, y: H - 8, 'text-anchor': 'middle' }, rewards[i] ? '✓' : '✗'));
     });

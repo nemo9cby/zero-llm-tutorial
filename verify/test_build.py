@@ -91,6 +91,77 @@ def test_inline_code_glues_a_leading_space_to_the_next_character():
     assert '<code><span class="glue"> t</span></code>' in title and "<code>he</code>" in title
 
 
+# ---------------------------------------------------------------- inline code in table cells: <wbr> break points
+
+def table(*cells: str) -> str:
+    """A one-row Markdown table with the given cells."""
+    return "| " + " | ".join(f"h{i}" for i in range(len(cells))) + " |\n" + "|---" * len(cells) + "|\n" \
+        + "| " + " | ".join(cells) + " |\n"
+
+
+def codes(out: str) -> list[str]:
+    return re.findall(r"<code>(.*?)</code>", out)
+
+
+def test_table_code_may_break_after_slash_underscore_and_dot():
+    out = render(table("`critic/rewards/mean`", "`max_position_embeddings`", "`actor_rollout_ref.rollout.n`",
+                       "`verify/_ch03_grpo_replicate.py`"))
+    assert codes(out) == ["critic/<wbr>rewards/<wbr>mean", "max_<wbr>position_<wbr>embeddings",
+                          "actor_<wbr>rollout_<wbr>ref.<wbr>rollout.<wbr>n", "verify/<wbr>_ch03_<wbr>grpo_<wbr>replicate.<wbr>py"]
+    # <wbr> adds no character: the text (what copying and find-in-page see) is unchanged
+    assert [text_of(c) for c in codes(out)] == ["critic/rewards/mean", "max_position_embeddings",
+                                                "actor_rollout_ref.rollout.n", "verify/_ch03_grpo_replicate.py"]
+
+
+@pytest.mark.parametrize("code,want", [
+    ("1.5", "1.5"),                          # "." before a digit: a number stays whole
+    ("1e-5", "1e-5"),
+    ("3.0e-4", "3.0e-4"),
+    ("__init__", "__init__"),                # "_" not between two letters or digits
+    ("_ch03", "_ch03"),
+    ("n_", "n_"),
+    (".py", ".py"),                          # a leading "." or "/" would be left alone at a line end
+    ("/v1/chat", "/v1/<wbr>chat"),
+    ("a/", "a/"),                            # nothing to break before
+    ("a/ b", "a/ b"),                        # a space is already a break point
+    ("https://x.org/a", "https://<wbr>x.<wbr>org/<wbr>a"),   # never between the two slashes of //
+    ("model.eval()", "model.<wbr>eval()"),
+    ("x.T", "x.<wbr>T"),
+    ("π_θ", "π_<wbr>θ"),                     # letters are Unicode letters
+    ("a&lt;b_c", "a&amp;lt;b_<wbr>c"),        # escaped like any inline code
+    ("val-core/<数据源>/reward/mean@N", "val-core/<wbr>&lt;数据源&gt;/<wbr>reward/<wbr>mean@N"),
+])
+def test_table_code_break_points(code, want):
+    assert codes(render(table(f"`{code}`"))) == [want]
+
+
+def test_code_outside_tables_gets_no_wbr():
+    src = "`critic/rewards/mean` 与 `max_position_embeddings`"
+    out = render(f"{src}\n\n- {src}\n\n## 1.1 {src}\n\n::: note {src}\n{src}\n:::\n")
+    assert "<wbr>" not in out
+    assert codes(out).count("max_position_embeddings") == 5
+
+
+def test_table_code_wbr_composes_with_glue():
+    # A leading space or a run of spaces is glued to the character after it; <wbr> goes only between non-space characters.
+    out = render(table("` max_seq_len`", "`a_b  /c_d`", "`x  _y_z`"))
+    assert codes(out) == ['<span class="glue"> m</span>ax_<wbr>seq_<wbr>len',
+                          'a_<wbr>b<span class="glue">  /</span>c_<wbr>d',
+                          'x<span class="glue">  _</span>y_<wbr>z']
+
+
+def test_table_code_inside_a_nowrap_span_stays_on_one_line():
+    # Chrome breaks at <wbr> even under white-space: nowrap, so code inside a nowrap span gets none.
+    out = render(table('<span class="nowrap">`vocab_size`</span> = 10', '<span style="white-space:nowrap">`a/b`</span>',
+                       '<span class="nowrap">x <span>`in_both`</span> `still_in`</span> `out_side`'))
+    assert codes(out) == ["vocab_size", "a/b", "in_both", "still_in", "out_<wbr>side"]
+
+
+def test_raw_html_code_in_tables_is_untouched():
+    out = render(table("<code>rewards.<wbr>mean()</code>", "<code>a_b</code>"))
+    assert "<code>rewards.<wbr>mean()</code>" in out and "<code>a_b</code>" in out
+
+
 def test_callout_title_does_not_disturb_page_footnotes():
     out = render("正文[^1]\n\n::: note 标题 `x`\n内容\n:::\n\n[^1]: 脚注。\n")
     assert out.count('class="footnotes"') == 1

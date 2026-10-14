@@ -19,7 +19,7 @@ pyodide_packages: [numpy]
 
 下面就是工作台。它进入视野时会下载 SFT checkpoint（11.3 MB），然后按图中的设置回答“read a file line by line”。你可以改动指令、切换 checkpoint、拖动采样参数，再点“生成”。
 
-```widget playground-bench caption="CodeBot 工作台。勾选模板时，输入会被套进 ch03 的 Alpaca 格式；生成的 token 底色越深，说明它被抽中时的概率越低。把鼠标移到某个 token 上，能看到当时的前 5 个候选。"
+```widget playground-bench caption="CodeBot 工作台。勾选模板时，输入会被套进 ch03 的 Alpaca 格式；生成的 token 底色越深，说明它被抽中时的概率越低。把鼠标移到某个 token 上，或者按 Tab 键把焦点移到它上面，能看到当时的前 5 个候选。"
 {"checkpoint": "sft", "prompt": "read a file line by line", "template": true, "temperature": 0.8, "topK": 40, "topP": 0.95, "maxNewTokens": 128, "seed": 1}
 ```
 
@@ -70,7 +70,7 @@ CodeBot 有 11,121,640 个参数（[2.10 节](ch02.html#s2-10)）。用 float32 
 ```verify id=P.2-a title="参数量与字节数：float32 是 44.5 MB，int8 按行量化是 11.3 MB"
 V, C, E, L, FF = 1000, 256, 384, 6, 1536            # vocab_size, max_context_len, embed_dim, n_layer, ff_dim
 mats = [(V, E), (C, E)] + L * 4 * [(E, E)] + L * [(FF, E), (E, FF)]   # 2 维权重的（行, 列）
-vecs = L * [E, E, E, E, FF, E] + [E, E, V]           # LayerNorm 的 γ 与 β、FFN 的偏置、最后的 LN、unembed 的偏置
+vecs = L * [E, E, E, E, FF, E] + [E, E, V]           # LayerNorm 的 γ 与 β、FFN 的偏置、最后的 LN、输出层的偏置
 n_params = sum(r * c for r, c in mats) + sum(vecs)
 f32_bytes = 4 * n_params
 q8_bytes = sum(r * c + 4 * r for r, c in mats) + 4 * sum(vecs)   # 每个元素 1 字节，每行再加 4 字节的 scale
@@ -286,7 +286,7 @@ token id 有了，接下来进入模型。`GPT.forward` 只有十几行：
 多半是输入的最后一个 token 自己。下面的例子里，它的概率接近 1；后文会解释原因，也会看到例外。
 :::
 
-```widget playground-lens caption="logit lens：在 embedding 之后和每个块之后，把残差流直接送进最后的 LayerNorm 与 unembed。这个例子里，模型最终预测的 return 要到第 4 层才浮上来。"
+```widget playground-lens caption="logit lens：在 embedding 之后和每个块之后，把残差流直接送进最后的 LayerNorm 与输出层。这个例子里，模型最终预测的 return 要到第 4 层才浮上来。"
 {"checkpoint": "pretrain", "prompt": "def add(a, b):\n", "template": false}
 ```
 
@@ -321,7 +321,7 @@ emb = rng.normal(0, 0.02, size=(1000, 384))       # 与 CodeBot 的初始化相�
 pos = rng.normal(0, 0.02, size=384)
 X = emb + pos                                     # 每个 token 都放在同一个位置上
 H = (X - X.mean(1, keepdims=True)) / np.sqrt(X.var(1, keepdims=True) + 1e-5)   # LayerNorm（省去 γ、β）
-S = H @ emb.T                                     # 共享权重：unembed 用的就是 embedding 表
+S = H @ emb.T                                     # 共享权重：输出层用的就是 embedding 表
 P = np.exp(S - S.max(1, keepdims=True))
 P /= P.sum(1, keepdims=True)
 self_top = np.mean(S.argmax(1) == np.arange(1000))
@@ -470,7 +470,7 @@ assert abs(H_max / np.log(2) - np.log2(1000)) < 1e-12 and round(H_max, 3) == 6.9
 ```listing codebot/utils.py#L18-L37
 ```
 
-每一轮，`model(ids)` 都把整个序列从头算一遍，只为了取最后一个位置的 logits。前面那些位置的 K 和 V，上一轮明明已经算过了。第 5 章为 StoryBot 引入的 **KV cache**，就是把它们存起来，每一轮只算新来的那一个 token（[5.5 节](ch05.html#s5-5)）。
+每生成一个 token，`model(ids)` 都要把整个序列从头算一遍，只为了取最后一个位置的 logits。前面那些位置的 K 和 V，上一步明明已经算过了。第 5 章为 StoryBot 引入的 **KV cache**，就是把它们存起来，每一步只算新来的那一个 token（[5.5 节](ch05.html#s5-5)）。
 
 工作台也是这样做的：先用一次 **prefill** 把整个 prompt 算完，之后每生成一个 token，只做一步 **decode**。这样做必须保证一件事：结果与从头重算完全相同。下面用一个 2 层的迷你 GPT 来确认。它保留了 CodeBot 结构上的要点：可学习的位置 embedding、先 LayerNorm 再 Attention、输出层与 embedding 表共享权重；简单起见，省去了偏置和 LayerNorm 的参数。
 
@@ -498,7 +498,7 @@ def full(ids):                                    # 不用 cache：每次从头�
         Q, K, Vs = h @ Pm["Wq"][l], h @ Pm["Wk"][l], h @ Pm["Wv"][l]
         x = x + np.stack([attend(Q[t], K[: t + 1], Vs[: t + 1]) for t in range(len(ids))]) @ Pm["Wo"][l]
         x = x + gelu(norm(x) @ Pm["W1"][l]) @ Pm["W2"][l]
-    return norm(x[-1]) @ Pm["tok"].T              # 权重共享：unembed 用的是同一张 embedding 表
+    return norm(x[-1]) @ Pm["tok"].T              # 权重共享：输出层用的是同一张 embedding 表
 
 def step(i, t, cache):                            # 有 cache：只算位置 t 的这一个 token
     x = Pm["tok"][i] + Pm["pos"][t]
@@ -561,7 +561,7 @@ assert diff["没有位置 embedding"][0] < 1e-12 and diff["没有位置 embeddin
 
 下面的图分两步测一测。先测“生成 1 个新 token 要多久”：有 KV cache 时只算 1 个位置，没有时要把上下文从头算一遍。再从一段 251 个 token 的代码开始生成 12 个 token，看看越过 256 之后发生了什么。
 
-```widget playground-kv caption="先测生成 1 个新 token 要多久（双对数刻度，成正比的关系在图上是一条直线）：没有 KV cache 时，要重算的位置随上下文长度成正比地增加，注意力那部分还按长度的平方增长，上下文长了以后，时间涨得比正比还快；有 KV cache 时只是缓慢增加。再从 251 个 token 开始生成 12 个：从第 7 个新 token 起，每一个都要重算整个 256 窗口。"
+```widget playground-kv caption="先测生成 1 个新 token 要多久（双对数刻度，成正比的关系在图上是一条直线）：没有 KV cache 时，要重算的位置随上下文长度成正比地增加，Attention 那部分还按长度的平方增长，上下文长了以后，时间涨得比正比还快；有 KV cache 时只是缓慢增加。再从 251 个 token 开始生成 12 个：从第 7 个新 token 起，每一个都要重算整个 256 窗口。"
 {"checkpoint": "pretrain", "lengths": [8, 16, 32, 64, 128, 192, 256], "cross": 12}
 ```
 

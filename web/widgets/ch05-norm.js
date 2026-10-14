@@ -1,7 +1,7 @@
 /* 图：同一个向量的 LayerNorm 与 RMSNorm（γ = 1、β = 0）。
    拖动左边输入向量的柱子（或用方向键），整体平移、缩放，观察两种归一化的输出；虚线是各自的均值。 */
 import { h } from './_lib.js';
-import { seriesColor } from './_plot.js';
+import { seriesVars } from './_plot.js';
 import { injectStyle, radioButtons, button, svg } from './ch05-common.js';
 
 export const mean = (x) => x.reduce((s, v) => s + v, 0) / x.length;
@@ -62,6 +62,7 @@ export function mount(root, config = {}) {
   let x = x0.slice(), eps = 1e-5;
   const box = h('div', { class: 'w-ch05 w-ch05-norm' });
   root.append(box);
+  seriesVars(box);                                  // the bars' colours follow theme switches
   box.append(h('style', {}, `
 .w-ch05-norm .panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .8rem 1rem; margin-top: .5rem; }
 .w-ch05-norm .panel svg { display: block; width: 100%; overflow: visible; }
@@ -100,9 +101,9 @@ export function mount(root, config = {}) {
 
   function render() {        // rebuild the panels (new input scale); outputs always use ±3
     const lim = Math.max(...x.map(Math.abs)) * 1.25 || 1;
-    gIn = barPanel(pIn.holder, { lim, color: seriesColor(0), editable: true, label: '输入向量：每根柱子可以拖动，或聚焦后用上下方向键调整' });
-    gLN = barPanel(pLN.holder, { lim: 3, color: seriesColor(2), label: 'LayerNorm 输出的柱状图' });
-    gRMS = barPanel(pRMS.holder, { lim: 3, color: seriesColor(1), label: 'RMSNorm 输出的柱状图' });
+    gIn = barPanel(pIn.holder, { lim, color: 'var(--series-0)', editable: true, label: '输入向量：每根柱子可以拖动，或聚焦后用上下方向键调整' });
+    gLN = barPanel(pLN.holder, { lim: 3, color: 'var(--series-2)', label: 'LayerNorm 输出的柱状图' });
+    gRMS = barPanel(pRMS.holder, { lim: 3, color: 'var(--series-1)', label: 'RMSNorm 输出的柱状图' });
     wire(gIn);
     update();
   }

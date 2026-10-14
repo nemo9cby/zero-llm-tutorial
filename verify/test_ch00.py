@@ -184,3 +184,49 @@ def test_windows_pitfalls(dlfs6_path, tmp_path):
     assert '# file_path = "storybot/tiny_stories_train.txt"' in cache_src and "# text = open(file_path).read()" in cache_src
     with pytest.raises(UnicodeDecodeError):
         (pp.DLFS6 / "storybot/tiny_stories_valid.txt").read_bytes().decode("gbk")
+
+
+def test_checkout_alone_leaves_crlf_files(tmp_path):
+    """0.7 节的重新检出命令，在子模块的一个临时克隆上重现（third_party/dlfs6 本身不动）。
+    git 在索引里记下每个文件的时间戳和大小；checkout -- . 先比较这些记录，看起来没改过的文件就跳过。
+    清空索引（rm -r --cached .）之后没有记录可比，reset --hard 只能把每个文件重新写一遍。"""
+    import os
+    import shutil
+    import subprocess
+    import time
+    if not shutil.which("git"):
+        pytest.skip("git not found")
+    if not (pp.DLFS6 / ".git").exists():                         # 子模块还没取回时，git -C 会找到外层的仓库
+        pytest.skip("third_party/dlfs6 is not a git checkout — run `git submodule update --init`")
+    (tmp_path / "gitconfig").write_text("", encoding="utf-8")
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": str(tmp_path / "gitconfig"), "GIT_CONFIG_NOSYSTEM": "1"}  # 不读本机的 git 配置
+    run = lambda *args: subprocess.run(["git", *args], env=env, capture_output=True, text=True, check=True).stdout
+    head = run("-C", str(pp.DLFS6), "rev-parse", "HEAD").strip()        # 子模块固定的 commit
+    clone = tmp_path / "dlfs6"
+    run("clone", "-q", "--no-checkout", str(pp.DLFS6), str(clone))
+    git = lambda *args: run("-C", str(clone), *args)
+    crlf = lambda: [line for line in git("ls-files", "--eol").splitlines() if "w/crlf" in line]
+    tiny = clone / "codebot" / "tiny_codes.txt"
+
+    git("config", "core.autocrlf", "true")                       # Git for Windows 常见的配置
+    git("checkout", "-q", head)
+    n_text = sum(line.startswith("i/lf") for line in git("ls-files", "--eol").splitlines())
+    assert len(crlf()) == n_text > 0 and tiny.stat().st_size == 6_743_534     # 每个文本文件都是 CRLF
+    past = time.time() - 600                                     # 克隆之后过了一阵：文件比索引旧
+    for path in clone.rglob("*"):
+        if path.is_file() and ".git" not in path.relative_to(clone).parts:
+            os.utime(path, (past, past))
+    assert git("status", "--porcelain") == ""                    # git status 顺手刷新了索引里的记录
+
+    git("config", "core.autocrlf", "false")                      # 0.7 节的命令：先关掉换行转换
+    git("checkout", "--", ".")                                   # 常见的做法：重新检出
+    assert len(crlf()) == n_text and tiny.stat().st_size == 6_743_534         # 一个文件也没有重写
+    assert git("status", "--porcelain") == ""                    # git 还认为什么都没改
+
+    git("rm", "-r", "-q", "--cached", ".")                       # 0.7 节的做法：清空索引，
+    git("reset", "-q", "--hard")                                 # 再按 LF 写回全部文件
+    assert crlf() == [] and tiny.stat().st_size == 6_487_033     # 检查那一行应当没有任何输出
+    assert git("status", "--porcelain") == "" and git("rev-parse", "HEAD").strip() == head
+    page = (pp.ROOT / "content" / "ch00.md").read_text(encoding="utf-8")       # 页面上写的正是这几条命令
+    for cmd in ("config core.autocrlf false", "rm -r -q --cached .", "reset -q --hard", "ls-files --eol | grep w/crlf"):
+        assert f"git -C third_party/dlfs6 {cmd}" in page, cmd

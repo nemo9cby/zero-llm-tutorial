@@ -37,7 +37,7 @@ export async function mount(root, config = {}) {
   // ── controls
   const desc = h('div', { class: 'w-label' });
   const prov = h('div', { class: 'w-pg-note' });
-  const sw = checkpointSwitch(entries, name, (n) => { name = n; onCheckpoint(); }, '选择 CodeBot 的检查点');
+  const sw = checkpointSwitch(entries, name, (n) => { name = n; onCheckpoint(); }, '选择 CodeBot 的 checkpoint');
   const text = h('textarea', { class: 'w-input', rows: 2, spellcheck: 'false', 'aria-label': '输入 prompt 或指令' });
   text.value = cfg.prompt;
   const tpl = h('input', { type: 'checkbox', checked: cfg.template });
@@ -45,7 +45,7 @@ export async function mount(root, config = {}) {
     onclick: () => { text.value = p.text; tpl.checked = p.template; onPrompt(); } }, p.label)));
   const chipsHead = h('div', { class: 'w-label' });
   const chips = h('div', { class: 'tokens w-pg-chips' });
-  const temp = slider({ label: '温度', min: 0, max: 2, step: 0.05, value: settings.temperature, format: (v) => (v === 0 ? '0（greedy）' : v.toFixed(2)),
+  const temp = slider({ label: '温度', min: 0, max: 2, step: 0.05, value: settings.temperature, format: (v) => (v === 0 ? '0（贪心解码）' : v.toFixed(2)),
     onInput: (v) => { settings.temperature = v; showNext(); } });
   const topk = slider({ label: 'Top-k', min: 0, max: 100, step: 1, value: settings.topK, format: (v) => (v === 0 ? '不限' : String(v)),
     onInput: (v) => { settings.topK = v; showNext(); } });
@@ -209,7 +209,7 @@ export async function mount(root, config = {}) {
   renderChips();
   renderOut();
   desc.textContent = entries.find((c) => c.name === name)?.description || '';
-  status.say('权重在这张图进入视野时才下载（每个检查点 11.3 MB）。');
+  status.say('权重在这张图进入视野时才下载（每个 checkpoint 11.3 MB）。');
   setBusy(true);
   whenVisible(box, async () => {
     if (started) return;

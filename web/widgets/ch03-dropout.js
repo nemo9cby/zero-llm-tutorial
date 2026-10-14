@@ -3,7 +3,7 @@
    右：同一个种子下，dropout 开 / 关两条 GRPO 运行的逐轮指标（data/ch03/grpo_dropout_runs.json）。
    config: { ratios, runs } */
 import { h } from './_lib.js';
-import { lineChart, seriesColor } from './_plot.js';
+import { lineChart, seriesColor, onThemeChange } from './_plot.js';
 import { injectStyle, loadJSON, segmented } from './ch03-common.js';
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -15,7 +15,7 @@ const svg = (tag, attrs = {}, ...kids) => {
 };
 
 const METRICS = [
-  { key: 'greedy_acc', label: 'greedy 准确率（%）', sparse: true },
+  { key: 'greedy_acc', label: '贪心解码的准确率（%）', sparse: true },
   { key: 'reward_mean', label: '采样回答的平均奖励' },
   { key: 'zero_var_frac', label: '没有信号的组的比例' },
   { key: 'entropy', label: '回答 token 的熵（nats）' },
@@ -77,6 +77,7 @@ export async function mount(root, config) {
       + `最小 ${Math.min(...vals).toPrecision(3)}，最大 ${Math.max(...vals).toPrecision(3)}。`;
   }
   drawHist();
+  onThemeChange(drawHist);           // the bars take their colour from the palette: the toggle and the OS setting alike
 
   // ---------------- 右：对照运行
   const runs = index.runs;
@@ -108,10 +109,10 @@ export async function mount(root, config) {
       name: r.dropout ? 'dropout 开' : 'dropout 关',
       points: (rows.get(r.file) || []).filter((p) => p[metric.key] != null).map((p) => [p.it, p[metric.key]]),
     })).filter((s) => s.points.length);
-    const opts = { series, xLabel: 'iteration', yLabel: metric.label, height: 220, table: true };
+    const opts = { series, xLabel: 'iteration（轮）', yLabel: metric.label, height: 220, table: true };
     if (!series.length) { chartBox.replaceChildren(h('p', { class: 'w-label' }, '这一组运行还没有数据。')); chart = null; return; }
     if (!chart) { chartBox.replaceChildren(); chart = lineChart(chartBox, opts); } else chart.update(opts);
-    runNote.textContent = sel.map((r) => `${r.dropout ? 'dropout 开' : 'dropout 关'}：最终 greedy 准确率 ${r.final_greedy_acc.toFixed(1)}%`).join('；')
+    runNote.textContent = sel.map((r) => `${r.dropout ? 'dropout 开' : 'dropout 关'}：最终贪心解码的准确率 ${r.final_greedy_acc.toFixed(1)}%`).join('；')
       + `（${sel[0]?.who || ''}，${sel[0]?.iters || ''} 轮，CPU）。`;
   }
   drawRuns();

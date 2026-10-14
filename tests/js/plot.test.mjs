@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
-  isDark, onThemeChange, seriesColor, seqColor, seqIsDark, divColor, textColorOn, contrastRatio, mixOklab,
+  isDark, onThemeChange, seriesColor, seriesVars, seqColor, seqIsDark, divColor, textColorOn, contrastRatio, mixOklab,
   niceTicks, autoTicks, logTicks, lineChart, heatmap,
 } from '../../web/widgets/_plot.js';
 import { recordedPoints } from '../../web/widgets/runcurve.js';
@@ -49,7 +49,8 @@ class FakeText extends FakeNode {
 class FakeElement extends FakeNode {
   constructor(tag) {
     super();
-    this.tagName = tag; this.attrs = new Map(); this.style = {}; this.dataset = {}; this.listeners = {}; this.hidden = false;
+    this.tagName = tag; this.attrs = new Map(); this.dataset = {}; this.listeners = {}; this.hidden = false;
+    this.style = { setProperty(k, v) { this[k] = String(v); }, getPropertyValue(k) { return this[k] ?? ''; } };
     this.width = 0;
   }
   setAttribute(k, v) { this.attrs.set(k, String(v)); }
@@ -141,6 +142,28 @@ test('onThemeChange: a listener that throws does not stop the others', () => {
   assert.equal(errors.length, 2);
 });
 
+test('seriesVars: --series-0 … --series-7 follow the effective theme, from the toggle and from the OS', () => {
+  setOs(false); setTheme(null);
+  const el = mount(100);
+  const vars = () => Array.from({ length: 8 }, (_, i) => el.style.getPropertyValue(`--series-${i}`));
+  const palette = () => Array.from({ length: 8 }, (_, i) => seriesColor(i));
+  const off = seriesVars(el);
+  const light = palette();
+  assert.deepEqual(vars(), light);
+  setTheme('dark');                  // the page's toggle
+  const dark = palette();
+  assert.notDeepEqual(dark, light);
+  assert.deepEqual(vars(), dark);
+  setTheme(null);                    // follows the OS again: light
+  assert.deepEqual(vars(), light);
+  setOs(true);                       // an OS-level switch, no data-theme
+  assert.deepEqual(vars(), dark);
+  off();                             // unsubscribed: no longer updated
+  setOs(false);
+  assert.deepEqual(vars(), dark);
+  assert.equal(typeof off, 'function');
+});
+
 // ---------------------------------------------------------------- colour
 test('WCAG contrast: known values', () => {
   assert.ok(Math.abs(contrastRatio('#ffffff', '#000000') - 21) < 1e-9);
@@ -196,9 +219,36 @@ test('divColor: exact sRGB fills; the midpoint is the theme\'s grey and the ends
   assert.equal(divColor(-3), '#2a78d6');                 // clamped
   setTheme('dark');
   assert.equal(divColor(0), '#383835');
-  assert.equal(divColor(0.5), mixOklab('#e34948', '#383835', 0.5));
+  assert.equal(divColor(-1), '#2a78d6');
+  assert.equal(divColor(1), '#e24848');                  // the dark theme's red end (next test)
+  assert.equal(divColor(0.5), mixOklab('#e24848', '#383835', 0.5));
   assert.match(divColor(-0.37), /^#[0-9a-f]{6}$/);
   setTheme(null);
+});
+
+test('dark-theme red end: darkened just enough that white beats the ink, as on every other dark red step', () => {
+  const W = '#ffffff', INK = '#1b2233';
+  // On #e34948 the ink wins by a hair, 4.015:1 against 3.953:1, so in the dark theme the strongest red cells alone
+  // carried ink labels among white-labelled neighbours (ch05 figure 5-2).
+  assert.ok(Math.abs(contrastRatio(INK, '#e34948') - 4.015) < 5e-4 && Math.abs(contrastRatio(W, '#e34948') - 3.953) < 5e-4);
+  // #e24848 is #e34948 with oklab lightness 0.0015 lower (one sRGB step on red and green): 3.997:1 against 3.971:1.
+  assert.ok(Math.abs(contrastRatio(W, '#e24848') - 3.997) < 5e-4 && Math.abs(contrastRatio(INK, '#e24848') - 3.971) < 5e-4);
+  // Every whole-percent step of every half-ramp, in both themes: the label is still the exact-contrast pick, and it
+  // changes at most once along a half-ramp. The dark red half is white throughout; light red stays ink throughout.
+  const runs = {};
+  for (const theme of ['light', 'dark']) {
+    setTheme(theme);
+    for (const sign of [-1, 1]) {
+      const labels = Array.from({ length: 101 }, (_, p) => textColorOn(divColor((sign * p) / 100)) === W ? 'W' : 'i').join('');
+      runs[`${theme} ${sign < 0 ? 'blue' : 'red'}`] = labels;
+      assert.ok(labels.replace(/(.)\1*/g, '$1').length <= 2, `${theme} ${sign}: ${labels}`);
+    }
+  }
+  setTheme(null);
+  assert.equal(runs['dark red'], 'W'.repeat(101));
+  assert.equal(runs['light red'], 'i'.repeat(101));
+  assert.equal(runs['dark blue'], 'W'.repeat(101));
+  assert.match(runs['light blue'], /^i+W+$/);
 });
 
 test('heatmap: every value label uses the higher-contrast colour on its actual fill, in both themes', () => {
@@ -213,6 +263,8 @@ test('heatmap: every value label uses the higher-contrast colour on its actual f
       assert.equal(labels.length, 7);
       labels.forEach((t, i) => assert.equal(t.getAttribute('fill'), textColorOn(rects[i].getAttribute('fill')), `${theme} ${scale} ${i}`));
       if (scale === 'div') assert.equal(labels[3].getAttribute('fill'), theme === 'dark' ? '#ffffff' : '#1b2233');
+      // the red end (value 1) is labelled like its neighbour (0.6): white in the dark theme, ink in the light one
+      if (scale === 'div') assert.equal(labels[6].getAttribute('fill'), labels[5].getAttribute('fill'), `${theme}: red end`);
     }
   }
   setTheme(null);
@@ -319,6 +371,22 @@ test('lineChart: markers: true marks every point; an array marks only the given 
   const circles = tag(tag(el, 'svg')[0], 'circle');
   assert.equal(circles.length, 5 + 3);
   assert.ok(circles.slice(0, 5).every((c) => c.getAttribute('r') === '4'));
+});
+
+test('lineChart tooltip: on a log x axis, each series lists its point nearest as drawn (ch04 figure 4-2)', () => {
+  // b has points at 10 and 10,000 only. At x = 2,000, 10 is nearer in raw units (1,990 against 8,000), but on a log
+  // axis 10,000 is (0.7 decades against 2.3): that is the point the reader sees next to the crosshair.
+  const series = [{ name: 'a', points: [[10, 1], [2000, 2], [10000, 3]] }, { name: 'b', points: [[10, 5], [10000, 7]] }];
+  const rowsAt2000 = (logX) => {
+    const el = mount(600);
+    lineChart(el, { series, logX, table: false });
+    const hit = all(el, (e) => e.getAttribute('aria-label') === '用左右方向键查看数据点')[0];
+    for (const fn of hit.listeners.keydown) fn({ key: 'ArrowRight', preventDefault() {} });      // x = 10 -> 2,000
+    const tip = all(el, (e) => e.className === 'viz-tip')[0];
+    return all(tip, (e) => e.className === 'row').map((r) => r.textContent);
+  };
+  assert.deepEqual(rowsAt2000(true), ['2 a', '7 b']);
+  assert.deepEqual(rowsAt2000(false), ['2 a', '5 b']);         // a linear axis: raw distance, as before
 });
 
 test('lineChart: reference-line labels keep their end-label class (trainer-replay liftLabels relies on it)', () => {

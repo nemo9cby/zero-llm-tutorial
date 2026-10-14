@@ -21,7 +21,7 @@ let indexPromise = null;
 /** web/data/playground/index.json: [{name, label, description, template, manifest, ref, bytes}] in switch order. */
 export function getIndex() {
   indexPromise ??= fetch(new URL('index.json', DATA)).then((r) => {
-    if (!r.ok) throw new Error(`读取检查点列表失败（HTTP ${r.status}）`);
+    if (!r.ok) throw new Error(`读取 checkpoint 列表失败（HTTP ${r.status}）`);
     return r.json();
   }).then((j) => j.checkpoints);
   return indexPromise;
@@ -120,7 +120,7 @@ class EngineClient {
 
   async manifestURL(name) {
     const entry = (await getIndex()).find((c) => c.name === name);
-    if (!entry) throw new Error(`没有名为 ${name} 的检查点`);
+    if (!entry) throw new Error(`没有名为 ${name} 的 checkpoint`);
     return new URL(entry.manifest, DATA).href;
   }
 
@@ -216,7 +216,7 @@ export function injectStyle() {
 }
 
 /** Segmented checkpoint switch. entries: index.json checkpoints. */
-export function checkpointSwitch(entries, value, onChange, label = '选择检查点') {
+export function checkpointSwitch(entries, value, onChange, label = '选择 checkpoint') {
   const box = h('div', { class: 'w-pg-switch', role: 'group', 'aria-label': label });
   const buttons = entries.map((c) => h('button', { type: 'button', 'aria-pressed': String(c.name === value), 'data-name': c.name,
     onclick: () => { set(c.name); onChange(c.name); } }, c.label));

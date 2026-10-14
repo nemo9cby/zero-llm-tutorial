@@ -31,7 +31,7 @@ export async function mount(root, config) {
   root.classList.add('w-ch03-samp');
 
   const ctxSeg = segmented(ctxs.map((c) => c.label), 0, (i) => { ci = i; counts = null; render(); }, '选择上下文');
-  const sT = slider({ label: '温度 T', min: 0, max: 3, step: 0.05, value: 1, format: (v) => (v === 0 ? '0（greedy）' : v.toFixed(2)),
+  const sT = slider({ label: '温度 T', min: 0, max: 3, step: 0.05, value: 1, format: (v) => (v === 0 ? '0（贪心解码）' : v.toFixed(2)),
     onInput: (v) => { T = v; counts = null; render(); } });
   const sK = slider({ label: 'Top-k', min: 0, max: 50, step: 1, value: 0, format: (v) => (v === 0 ? '不截断' : String(v)),
     onInput: (v) => { k = v; counts = null; render(); } });

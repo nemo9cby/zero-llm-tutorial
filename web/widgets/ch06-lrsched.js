@@ -38,8 +38,8 @@ export function summarize(fn, maxIters, maxLr, wd = 0.01) {
 export const PRESETS = {
   storybot: { label: 'StoryBot（05_pretrain.py）', maxLr: 1e-3, warmup: 200, total: 40000, minRatio: 0.1 },
   webbot: { label: 'WebBot（ch09/01_pretrain.py）', maxLr: 6e-4, warmup: 500, total: 100000, minRatio: 0.1 },
-  lrgraph: { label: 'lr_graph.py（预热 5%）', maxLr: 1, warmup: 50, total: 1000, minRatio: 0.1 },
-  cs336: { label: 'CS336 测试（预热 7，到第 21 步）', maxLr: 1, warmup: 7, total: 21, minRatio: 0.1 },
+  lrgraph: { label: 'lr_graph.py（warmup 5%）', maxLr: 1, warmup: 50, total: 1000, minRatio: 0.1 },
+  cs336: { label: 'CS336 测试（warmup 7，到第 21 步）', maxLr: 1, warmup: 7, total: 21, minRatio: 0.1 },
 };
 
 let styled = false;
@@ -63,7 +63,7 @@ export function mount(root, config = {}) {
   const presetSel = h('select', { 'aria-label': '预置的调度参数' },
     Object.entries(PRESETS).map(([k, p]) => h('option', { value: k }, p.label)));
   presetSel.value = PRESETS[config.preset] ? config.preset : 'storybot';
-  const warmIn = h('input', { type: 'range', min: 0, 'aria-label': '预热的步数' });
+  const warmIn = h('input', { type: 'range', min: 0, 'aria-label': 'warmup 的步数' });
   const minIn = h('input', { type: 'range', min: 0, max: 50, step: 1, 'aria-label': '余弦退火的下限（占最大学习率的百分比）' });
   const atIn = h('input', { type: 'range', min: 0, max: 1000, step: 1, value: 500, 'aria-label': '查看某一步的学习率' });
   const warmLabel = h('b'), minLabel = h('b'), atLabel = h('b');
@@ -72,7 +72,7 @@ export function mount(root, config = {}) {
   root.append(
     h('div', { class: 'ctrl' },
       h('label', {}, '预置参数', presetSel),
-      h('label', {}, h('span', {}, '预热 ', warmLabel), warmIn),
+      h('label', {}, h('span', {}, 'warmup ', warmLabel), warmIn),
       h('label', {}, h('span', {}, '余弦的下限 ', minLabel), minIn),
       h('label', {}, h('span', {}, '查看第 ', atLabel, ' 步'), atIn)),
     chartBox, stats);

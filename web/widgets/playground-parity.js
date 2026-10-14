@@ -22,9 +22,9 @@ export function float32Forks(rows) {
 
 /** The sentence of the verdict about the float32 weights (the effect of int8 rounding, not of the implementation). */
 export function float32Verdict({ early, late }) {
-  if (!early && !late) return '换成原始的 float32 权重，greedy 序列也全部相同。';
+  if (!early && !late) return '换成原始的 float32 权重，贪心生成的序列也全部相同。';
   return '换成原始的 float32 权重时，'
-    + (early ? `有 ${early} 个 prompt 的 greedy 序列在中途分岔：这是 int8 量化带来的差别，不是实现的差别。` : '')
+    + (early ? `有 ${early} 个 prompt 贪心生成的序列在中途分岔：这是 int8 量化带来的差别，不是实现的差别。` : '')
     + (late ? `${early ? '另有' : '有'} ${late} 个 prompt 只在 <|endoftext|> 之后分岔：参考序列遇到它也不停，`
       + '原书的 generate() 却在那里就停下了，所以两边的回答相同。' : '');
 }
@@ -58,8 +58,8 @@ export async function mount(root, config = {}) {
   const agree = (a, late = '') => `${a.same}/${a.total}${a.firstMismatch >= 0 ? `（第 ${a.firstMismatch + 1} 个起不同${late}）` : ''}`;
   const agreeF32 = (r) => agree(r.greedyF32, forksAfterEnd(r) ? `，已在第 ${r.eosAt + 1} 个的 <|endoftext|> 之后` : '');
 
-  const COLS = ['prompt', 'token 数', 'max|Δlogit|（int8 权重）', 'greedy 一致（int8）', 'max|Δlogit|（float32 权重）',
-    'greedy 一致（float32）', '注意力 max|Δ|', 'logit lens', '用时'];
+  const COLS = ['prompt', 'token 数', 'max|Δlogit|（int8 权重）', '贪心解码一致（int8）', 'max|Δlogit|（float32 权重）',
+    '贪心解码一致（float32）', '注意力 max|Δ|', 'logit lens', '用时'];
   function render(rows) {
     table.replaceChildren(h('table', { class: 'w-pg-table w-pg-rtable' },
       h('thead', {}, h('tr', {}, COLS.map((t) => h('th', {}, t)))),
@@ -88,7 +88,7 @@ export async function mount(root, config = {}) {
       const ok = rows.every((r) => r.maxDiffQ8 < cfg.tolerance && r.greedyQ8.firstMismatch === -1 && r.lensTop1);
       const maxQ8 = Math.max(...rows.map((r) => r.maxDiffQ8));
       verdict.textContent = (ok
-        ? `实现一致：与使用同一份 int8 权重的 PyTorch 相比，logits 最多差 ${maxQ8.toExponential(1)}（容差 ${cfg.tolerance}），greedy 生成的 token 全部相同。`
+        ? `实现一致：与使用同一份 int8 权重的 PyTorch 相比，logits 最多差 ${maxQ8.toExponential(1)}（容差 ${cfg.tolerance}），贪心生成的 token 全部相同。`
         : `出现了超出容差的差异（最大 ${maxQ8.toExponential(1)}），说明实现有问题。`)
         + float32Verdict(float32Forks(rows))
         + `（后端：${res.backend === 'wasm-simd' ? 'WASM SIMD' : '纯 JavaScript'}）`;

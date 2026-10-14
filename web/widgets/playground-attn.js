@@ -2,7 +2,7 @@
    one head enlarged with token labels (rows = queries, columns = keys; the causal mask hides the upper triangle).
    config: { checkpoint, prompt, template, layer, head } (layer and head count from 0, written L0H0 as in the code and ch02) */
 import { h } from './_lib.js';
-import { heatmap, seqColor } from './_plot.js';
+import { heatmap, seqColor, onThemeChange } from './_plot.js';
 import {
   injectStyle, getIndex, getTokenizer, engine, ensureModel, checkpointSwitch, statusLine, alpaca, tokenLabel,
   whenVisible, pct,
@@ -134,8 +134,8 @@ export async function mount(root, config = {}) {
   let t = 0;
   text.addEventListener('input', () => { clearTimeout(t); t = setTimeout(refresh, 300); });
   tpl.addEventListener('change', refresh);
-  new MutationObserver(() => { if (data) { buildGrid(); show(); } })
-    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  // The thumbnails are canvases painted with seqColor and --paper-3: repaint them on every theme switch (toggle or OS).
+  onThemeChange(() => { if (data) { buildGrid(); show(); } });
   status.say('这张图进入视野时才加载模型。');
   whenVisible(box, refresh);
 }

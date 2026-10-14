@@ -141,7 +141,9 @@ th:first-child, td:first-child { min-width: 6em; }
 .nowrap { white-space: nowrap; }
 .chapter p code, .chapter li code, .chapter .callout-title code, .chapter h2 code, .chapter h3 code,
 .chapter a { overflow-wrap: anywhere; }
-/* In tables, identifiers stay whole (no column collapses to a few letters); a wide table scrolls in its own box. */
+/* In tables, identifiers never break mid-word (no column collapses to a few letters): only at the <wbr> points build.py
+   puts in table code (after "/", after "_" between letters or digits, after "." before a letter; none inside a .nowrap
+   span), at spaces and where the browser always may. A table still too wide scrolls in its own box. */
 .chapter td code, .chapter th code { overflow-wrap: normal; }
 th { font-weight: 600; border-bottom-color: var(--ink-3); }
 blockquote { margin: 1.5rem 0; padding-left: 1rem; border-left: 2px solid var(--rule); color: var(--ink-2); }

@@ -2,7 +2,7 @@
    分组约定与 PyTorch 的 enable_gqa 相同：第 h 个 query 头用第 h // (H/KV) 个 KV 头（repeat_interleave）。
    显存公式 2·L·KV·d_h·bytes 与验证 8.3-b 相同；纯函数由 tests/js/ch08-widgets.test.mjs 对拍。 */
 import { h } from './_lib.js';
-import { barChart, seriesColor } from './_plot.js';
+import { barChart, seriesColor, onThemeChange } from './_plot.js';
 
 export const kvBytesPerToken = ({ L, KV, D, bytes }) => 2 * L * KV * D * bytes;
 
@@ -67,11 +67,6 @@ const svg = (tag, attrs = {}, text) => {
   if (text != null) el.textContent = text;
   return el;
 };
-
-function onThemeChange(fn) {
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', fn);
-  new MutationObserver(fn).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-}
 
 export function mount(root, config = {}) {
   injectStyle();
@@ -195,7 +190,7 @@ export function mount(root, config = {}) {
   ctl.T.addEventListener('input', () => { s.T = 2 ** +ctl.T.value; outs.T.value = s.T.toLocaleString('en-US'); custom(); draw(); });
   ctl.batch.addEventListener('input', () => { s.batch = +ctl.batch.value; outs.batch.value = s.batch; custom(); draw(); });
   ctl.bytes.addEventListener('change', () => { s.bytes = +ctl.bytes.value; custom(); draw(); });
-  onThemeChange(drawMap);
+  onThemeChange(() => drawMap());                  // the map's lines and blocks use the palette; the bar chart redraws itself
   let lastWidth = 0;
   new ResizeObserver(() => { if (box.clientWidth !== lastWidth) { lastWidth = box.clientWidth; drawMap(); } }).observe(box);
   syncControls();

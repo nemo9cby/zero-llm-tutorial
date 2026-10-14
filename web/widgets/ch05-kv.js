@@ -2,8 +2,12 @@
    无 cache：每一步重算整个下三角；有 cache：prefill 算一次 prompt 的下三角，之后每一步只算新的一行。
    “prefill 不加 mask”重现 8b3911f 之前的 bug：prompt 内部出现指向未来的格子（prompt 只有 1 个 token 时不会出现）。 */
 import { h } from './_lib.js';
-import { seriesColor } from './_plot.js';
+import { seriesVars } from './_plot.js';
 import { injectStyle, slider, radioButtons, button, reducedMotion, svg, fmtInt } from './ch05-common.js';
+
+// Cell colours as CSS: the palette comes from --series-k (seriesVars), so a theme switch needs no redraw.
+const COLORS = { new: 'var(--series-0)', redo: 'color-mix(in srgb, var(--series-1) 55%, var(--paper))',
+  past: 'var(--ai-2)', future: 'var(--series-7)' };
 
 /** Cells (query i, key j) computed at step s (0-based). kind: 'new' | 'redo' | 'future'. */
 export function stepCells(mode, P, s, buggy = false) {
@@ -42,6 +46,7 @@ export function mount(root, config = {}) {
   const steps = () => N - P;                             // step s produces token P + s
   const box = h('div', { class: 'w-ch05 w-ch05-kv' });
   root.append(box);
+  seriesVars(box);                                  // --series-k for COLORS and .chip.redo
   box.append(h('style', {}, `
 .w-ch05-kv .stage { display: flex; flex-wrap: wrap; gap: .6rem 1.4rem; align-items: flex-start; margin-top: .4rem; }
 .w-ch05-kv .grid svg { display: block; max-width: 100%; height: auto; }
@@ -49,14 +54,11 @@ export function mount(root, config = {}) {
 .w-ch05-kv .chips { display: flex; flex-wrap: wrap; gap: 2px; margin: .15rem 0 .5rem; font: 11px/1 var(--mono); }
 .w-ch05-kv .chip { padding: 3px 4px; border-radius: 3px; background: var(--paper-3); color: var(--ink-2); min-width: 1.9em; text-align: center; }
 .w-ch05-kv .chip.fresh { background: var(--ai); color: var(--paper); }
-.w-ch05-kv .chip.redo { background: color-mix(in srgb, ${seriesColor(1)} 35%, var(--paper)); color: var(--ink); }
+.w-ch05-kv .chip.redo { background: color-mix(in srgb, var(--series-1) 35%, var(--paper)); color: var(--ink); }
 .w-ch05-kv .legend { display: flex; flex-wrap: wrap; gap: .2rem .9rem; font-size: .78rem; color: var(--ink-2); margin: .3rem 0; }
 .w-ch05-kv .legend span::before { content: ''; display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; background: var(--c); }
 .w-ch05-kv .phase { font-weight: 600; color: var(--ink); margin: .2rem 0; }
 `));
-
-  const colors = () => ({ new: seriesColor(0), redo: `color-mix(in srgb, ${seriesColor(1)} 55%, var(--paper))`,
-    past: 'var(--ai-2)', future: seriesColor(7) });
 
   const modeSel = radioButtons([['nocache', '无 cache（每步全部重算）'], ['cache', '有 cache（prefill + decode）']], mode,
     (v) => { mode = v; bugBox.disabled = v !== 'cache'; s = 0; draw(); }, '生成方式');
@@ -88,12 +90,11 @@ export function mount(root, config = {}) {
   function stop() { clearInterval(timer); timer = 0; play.textContent = '播放'; }
 
   function draw() {
-    const c = colors();
     legend.replaceChildren(
-      h('span', { style: `--c:${c.new}` }, '本步新算'),
-      mode === 'nocache' ? h('span', { style: `--c:${c.redo}` }, '本步重复计算')
-        : h('span', { style: `--c:${c.past}` }, '之前的步骤算过（分数用完即弃，缓存里只留 K、V）'),
-      ...(mode === 'cache' && buggy ? [h('span', { style: `--c:${c.future}` }, '看见了未来')] : []));
+      h('span', { style: `--c:${COLORS.new}` }, '本步新算'),
+      mode === 'nocache' ? h('span', { style: `--c:${COLORS.redo}` }, '本步重复计算')
+        : h('span', { style: `--c:${COLORS.past}` }, '之前的步骤算过（分数用完即弃，缓存里只留 K、V）'),
+      ...(mode === 'cache' && buggy ? [h('span', { style: `--c:${COLORS.future}` }, '看见了未来')] : []));
     const avail = Math.max(220, (gridBox.parentElement?.clientWidth || 360));
     const lab = 26, cs = Math.max(14, Math.min(26, Math.floor((Math.min(avail, 420) - lab - 4) / N)));
     const W = lab + cs * N + 2, H = lab + cs * N + 2;
@@ -112,7 +113,7 @@ export function mount(root, config = {}) {
     for (let i = 0; i < N; i++) {
       for (let j = 0; j < N; j++) {
         const key = `${i},${j}`, kind = cur.get(key);
-        const fill = kind ? c[kind] : past.has(key) ? c.past : 'transparent';
+        const fill = kind ? COLORS[kind] : past.has(key) ? COLORS.past : 'transparent';
         g.append(svg('rect', { x: lab + j * cs + 1, y: lab + i * cs + 1, width: cs - 2, height: cs - 2, rx: 2, fill,
           stroke: j <= i ? 'var(--rule)' : 'none', 'stroke-width': 1 }));
       }

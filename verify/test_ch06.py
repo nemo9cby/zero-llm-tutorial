@@ -166,7 +166,7 @@ def test_get_lr_identical_and_lr_zero_step(dlfs6_path):
 
 
 def test_first_step_moves_most_params_by_lr(dlfs6_path):
-    # 6.3.1 节：不预热、第一步就用 lr = 1e-3 时，随机初始化的 StoryBot 的参数各移动多少
+    # 6.3.1 节：不做 warmup、第一步就用 lr = 1e-3 时，随机初始化的 StoryBot 的参数各移动多少
     from storybot.model import GPT
 
     get_batch = load_defs("ch06/05_pretrain.py", ["get_batch"])["get_batch"]

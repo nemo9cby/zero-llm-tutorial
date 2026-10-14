@@ -134,7 +134,7 @@ def test_e01_recorded_grpo_checkpoints_on_cpu(dlfs6_path):
     grpo = {"codebot-3060ti": RUNS / "codebot-3060ti" / "work" / "codebot" / "model_grpo.pt",
             "codebot-grpo-evalfix-3060ti": RUNS / "codebot-grpo-evalfix-3060ti" / "work" / "codebot" / "model_grpo.pt"}
     if not all(p.is_file() for p in (sft, *grpo.values())):
-        pytest.skip("runs/ 里没有这两次运行的检查点：先运行 gpu/run_local.py --run codebot-3060ti 等")
+        pytest.skip("runs/ 里没有这两次运行的 checkpoint：先运行 gpu/run_local.py --run codebot-3060ti 等")
     seeded = json.loads((WEB / "runs" / "codebot-grpo-evalfix-3060ti" / "report.json").read_text(encoding="utf-8"))["seeded"][0]
     assert hashlib.sha256(sft.read_bytes()).hexdigest() == seeded["sha256"]
     g = load_defs("ch03/09_grpo.py", names={"GRPODataset", "calculate_reward"})
@@ -273,6 +273,26 @@ def test_e03_binary_mode_readers_only_read_downloaded_corpora():
     for bot in ("storybot", "webbot"):
         fetched = [l for l in src(f"{bot}/download.sh").splitlines() if l.startswith("wget")]
         assert fetched and all(l.startswith("wget -nc https://huggingface.co/") and l.endswith(".txt") for l in fetched)
+
+
+def test_e03_tutorial_gitattributes_stop_at_the_submodule():
+    """The tutorial's .gitattributes (* text=auto eol=lf) does not reach into third_party/dlfs6: the submodule is
+    a repository of its own, and inside it nothing sets text or eol for tiny_codes.txt. core.autocrlf alone decides
+    the checkout, and core.autocrlf=true gives CRLF (`git cat-file --filters` converts exactly as a checkout does)."""
+    import shutil
+    import subprocess
+
+    if not shutil.which("git"):
+        pytest.skip("git not found")
+    assert "* text=auto eol=lf" in (ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines()
+    assert not (DLFS6 / ".gitattributes").exists()
+    assert git("check-attr", "text", "eol", "--", "codebot/tiny_codes.txt").splitlines() == [
+        "codebot/tiny_codes.txt: text: unspecified", "codebot/tiny_codes.txt: eol: unspecified"]
+    checkout = {v: subprocess.run(["git", "-C", str(DLFS6), "-c", f"core.autocrlf={v}", "cat-file", "--filters",
+                                   "HEAD:codebot/tiny_codes.txt"], capture_output=True, check=True).stdout
+                for v in ("true", "false")}
+    assert (len(checkout["true"]), len(checkout["false"])) == (6_743_534, 6_487_033)
+    assert checkout["true"] == checkout["false"].replace(b"\n", b"\r\n")
 
 
 # ====================================================================== errata: medium
@@ -893,7 +913,7 @@ def grpo_dropout_runs() -> dict:
                       "greedy_acc": [round(r["greedy_acc"], 2) for r in evals]}
     return {"source": "research/data/ch03_grpo_metrics_*.jsonl",
             "note": "研究阶段在本机 CPU 上的记录：批量采样版 GRPO（与 09_grpo.py 同一算法、同一超参），"
-                    "每 10 次迭代（及最后一次）用 greedy 解码在 81 道题上测准确率；单 seed，各一次运行。",
+                    "每 10 轮（及最后一轮）用贪心解码在 81 道题上测准确率；单 seed，各一次运行。",
             "runs": runs}
 
 

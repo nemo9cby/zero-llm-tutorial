@@ -188,9 +188,10 @@ def test_reference_rederived_with_torch(name, dlfs6_path):
 
 @pytest.mark.parametrize("name", NAMES)
 def test_layer0_lens_self_prediction(name, dlfs6_path):
-    """P.4.2: the layer-0 logit lens (final LayerNorm + tied unembedding of token + position embedding) for each of the
-    1,000 ids at each of the 256 positions, with the int8 weights the browser runs. Ids that occur in tiny_codes.bin
-    (the pretraining data) are always their own top-1; every id that never occurs loses the top spot somewhere."""
+    """P.4.2: the layer-0 logit lens (final LayerNorm + the tied output layer, on token + position embedding) for
+    each of the 1,000 ids at each of the 256 positions, with the int8 weights the browser runs. Ids that occur in
+    tiny_codes.bin (the pretraining data) are always their own top-1; every id that never occurs loses the top spot
+    somewhere."""
     sd = {k: v.double().numpy() for k, v in load_export(name).items()}
     emb, pos, g, b, ub = (sd[k] for k in ["embed.weight", "pos_embed.weight", "norm.weight", "norm.bias", "unembed.bias"])
     V, T = emb.shape[0], pos.shape[0]
@@ -227,8 +228,9 @@ def test_previous_token_head(name, dlfs6_path):
     t = np.arange(1, att.shape[-1])
     prev = att[:, :, t, t - 1].mean(-1)
     uniform = float(np.mean(1 / (t + 1)))
-    print(f"{name}: {att.shape[-1]} tokens; layer 1 head 1 gives the previous token {prev[0, 0]:.3f} "
-          f"(uniform {uniform:.3f}); the strongest head is {tuple(int(i) + 1 for i in np.unravel_index(prev.argmax(), prev.shape))}")
+    l, h = (int(i) for i in np.unravel_index(prev.argmax(), prev.shape))   # numbered from 0, like the page: L0H0
+    print(f"{name}: {att.shape[-1]} tokens; L0H0 gives the previous token {prev[0, 0]:.3f} "
+          f"(uniform {uniform:.3f}); the strongest head is L{l}H{h}")
     assert uniform < 0.03
     assert 0.45 < prev[0, 0] < 0.49                                           # the page: 46% to 48%
 

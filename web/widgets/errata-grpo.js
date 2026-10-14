@@ -1,11 +1,11 @@
-/* E01 的证据：GRPO 原样运行 vs 更新前 model.eval() 的 greedy 准确率曲线。
+/* E01 的证据：GRPO 原样运行 vs 更新前 model.eval() 的贪心解码准确率曲线。
    config: {
      runs: { base: "data/runs/codebot-3060ti/09_grpo.metrics.jsonl",          // 本机 RTX 3060 Ti，原书脚本原样
              fix: "data/runs/codebot-grpo-evalfix-3060ti/09_grpo.metrics.jsonl" }, // 同一 SFT 起点，只加 model.eval()
      data: "data/errata/grpo_dropout_runs.json"                                // 研究阶段的 CPU 对照（两个 seed）
    }
    默认显示两次完整的 GPU 运行；另外两个选项是研究阶段的 CPU 记录（verify/test_reference.py 校验）。
-   横轴是“已完成的迭代次数”：脚本在每次迭代的两次更新之后才评估（勘误 E15），所以点画在 1、11、21……处。 */
+   横轴是“已完成的轮数”：脚本在每一轮的两次更新之后才评估（勘误 E15），所以点画在 1、11、21……处。 */
 import { h } from './_lib.js';
 import { lineChart } from './_plot.js';
 
@@ -61,8 +61,8 @@ export async function mount(root, config) {
     return;
   }
   const OPTIONS = [
-    { key: 'gpu', label: 'GPU，原书脚本 500 次', series: () => gpu,
-      note: '本机 RTX 3060 Ti 上的两次完整运行（运行记录 codebot-3060ti 与 codebot-grpo-evalfix-3060ti），从同一个 SFT 检查点出发；各一次运行，脚本没有设随机种子。' },
+    { key: 'gpu', label: 'GPU，原书脚本 500 轮', series: () => gpu,
+      note: '本机 RTX 3060 Ti 上的两次完整运行（运行记录 codebot-3060ti 与 codebot-grpo-evalfix-3060ti），从同一个 SFT checkpoint 出发；各一次运行，脚本没有设随机种子。' },
     ...CPU_SEEDS.map((s) => ({ key: s.key, label: s.label, series: () => cpuSeries(cpu, s.key), note: cpu.note })),
   ];
   let current = OPTIONS[0];
@@ -77,7 +77,7 @@ export async function mount(root, config) {
     '每条曲线的第一个点都已经在两次更新之后（勘误 E15），所以不等于虚线标出的 SFT 起点。');
   root.append(bar, chartBox, note, firstNote);
   const chart = lineChart(chartBox, {
-    series: current.series(), xLabel: '已完成的迭代次数', yLabel: 'greedy 准确率（%，81 道题）',
+    series: current.series(), xLabel: '已完成的轮数', yLabel: '贪心解码的准确率（%，81 道题）',
     yMin: 50, yMax: 100, refLines: [{ y: SFT_BASELINE, label: `SFT 起点 ${SFT_BASELINE}%` }],
     yFormat: (v) => `${Math.round(v)}`,
   });

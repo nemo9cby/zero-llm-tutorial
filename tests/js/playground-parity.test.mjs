@@ -37,12 +37,12 @@ function loadExport(name) {
 }
 
 test('figure P-8: the float32 sentence of the verdict tells forks before <|endoftext|> from forks after it', () => {
-  assert.equal(float32Verdict({ early: 0, late: 0 }), '换成原始的 float32 权重，greedy 序列也全部相同。');
-  assert.match(float32Verdict({ early: 2, late: 0 }), /^换成原始的 float32 权重时，有 2 个 prompt 的 greedy 序列在中途分岔/);
+  assert.equal(float32Verdict({ early: 0, late: 0 }), '换成原始的 float32 权重，贪心生成的序列也全部相同。');
+  assert.match(float32Verdict({ early: 2, late: 0 }), /^换成原始的 float32 权重时，有 2 个 prompt 贪心生成的序列在中途分岔/);
   assert.doesNotMatch(float32Verdict({ early: 2, late: 0 }), /之后分岔/);
   assert.match(float32Verdict({ early: 0, late: 1 }), /^换成原始的 float32 权重时，有 1 个 prompt 只在 <\|endoftext\|> 之后分岔/);
   assert.doesNotMatch(float32Verdict({ early: 0, late: 1 }), /中途分岔/);
-  assert.match(float32Verdict({ early: 1, late: 2 }), /有 1 个 prompt 的 greedy 序列在中途分岔.*另有 2 个 prompt 只在/);
+  assert.match(float32Verdict({ early: 1, late: 2 }), /有 1 个 prompt 贪心生成的序列在中途分岔.*另有 2 个 prompt 只在/);
 });
 
 test('index.json lists pretrain, SFT and GRPO, and the folder stays under 36 MB', () => {

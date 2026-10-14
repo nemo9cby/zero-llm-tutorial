@@ -124,7 +124,7 @@ export function mount(root, config = {}) {
     const pref = sigmoid(r[w] - r[l]);
     // π_θ = π* 时，隐式奖励之差 z 正好等于 r_w − r_l（β·log Z 抵消），所以 σ(z) = P
     pairSummary.replaceChildren(
-      h('div', {}, `Bradley–Terry：P(y${w} ≻ y${l}) = σ(r${w} − r${l}) = `, h('b', {}, pref.toFixed(4))),
+      h('div', {}, `Bradley-Terry：P(y${w} ≻ y${l}) = σ(r${w} − r${l}) = `, h('b', {}, pref.toFixed(4))),
       h('div', {}, '这一对的期望 DPO 损失（两种标注按这个概率出现）：π_θ = π_ref 时是 ',
         h('b', {}, expectedPairLoss(pref, 0).toFixed(4)), '（ln 2）；π_θ = π* 时降到最小值 ',
         h('b', {}, expectedPairLoss(pref, r[w] - r[l]).toFixed(4)), '，正是二元熵 −P ln P − (1−P) ln(1−P)。'),

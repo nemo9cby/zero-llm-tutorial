@@ -25,7 +25,7 @@ export async function mount(root, config = {}) {
   const sw = checkpointSwitch(entries, name, (n) => { name = n; refresh(); });
   const text = h('input', { class: 'w-input', value: cfg.prompt, spellcheck: 'false', 'aria-label': 'prompt' });
   const tpl = h('input', { type: 'checkbox', checked: cfg.template });
-  const temp = slider({ label: '温度', min: 0, max: 2, step: 0.05, value: s.temperature, format: (v) => (v === 0 ? '0（greedy）' : v.toFixed(2)),
+  const temp = slider({ label: '温度', min: 0, max: 2, step: 0.05, value: s.temperature, format: (v) => (v === 0 ? '0（贪心解码）' : v.toFixed(2)),
     onInput: (v) => { s.temperature = v; draw(); } });
   const topk = slider({ label: 'Top-k', min: 0, max: 50, step: 1, value: s.topK, format: (v) => (v === 0 ? '不限' : String(v)),
     onInput: (v) => { s.topK = v; draw(); } });

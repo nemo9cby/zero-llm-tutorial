@@ -1,6 +1,6 @@
 {
  "source": "research/data/ch03_grpo_metrics_*.jsonl",
- "note": "研究阶段在本机 CPU 上的记录：批量采样版 GRPO（与 09_grpo.py 同一算法、同一超参），每 10 次迭代（及最后一次）用 greedy 解码在 81 道题上测准确率；单 seed，各一次运行。",
+ "note": "研究阶段在本机 CPU 上的记录：批量采样版 GRPO（与 09_grpo.py 同一算法、同一超参），每 10 轮（及最后一轮）用贪心解码在 81 道题上测准确率；单 seed，各一次运行。",
  "runs": {
   "base": {
    "label": "原样（更新时 dropout 开）",

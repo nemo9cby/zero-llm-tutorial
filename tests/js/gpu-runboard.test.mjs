@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { finalMetrics, costOf, duration, settledSince } from '../../web/widgets/gpu-runboard.js';
+import { finalMetrics, costOf, duration, settledSince, RECORDED_COMMAND } from '../../web/widgets/gpu-runboard.js';
 
 const runs = new URL('../../web/data/runs/', import.meta.url);
 const report = (run) => JSON.parse(readFileSync(new URL(`${run}/report.json`, runs), 'utf8'));
@@ -42,4 +42,15 @@ test('durations switch units at 90 s and 90 min', () => {
   assert.equal(duration(5379.1), '89.7 分钟');
   assert.equal(duration(37_426), '10.40 小时');
   assert.equal(duration(null), '—');
+});
+
+test('a recorded run shows the command that recorded it, and says a re-run needs a new --run', () => {
+  // gpu/run_local.py will not append to a report from another kind of machine, so plan.json's command
+  // (which carries the recorded run id) is not a re-run command as it stands
+  assert.match(RECORDED_COMMAND, /^记录这次运行的命令（.*--run.*新的运行名）：$/);
+  const plan = JSON.parse(readFileSync(new URL('../gpu/plan.json', runs), 'utf8'));
+  const index = JSON.parse(readFileSync(new URL('index.json', runs), 'utf8'));
+  for (const run of Object.keys(index)) {
+    assert.ok(plan.planned.find((p) => p.run === run).command.includes(`--run ${run} `), run);
+  }
 });

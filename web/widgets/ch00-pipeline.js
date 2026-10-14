@@ -77,9 +77,9 @@ function stageFacts(bot, stageId) {
   const p = split(s.examples, s.batch_size);
   const scale = {
     SFT: `${fmt(s.max_iters)} 步，每步最多 ${s.batch_size} 条（${fmt(s.examples)} 条被切成 ${p.length - 1} 个 `
-      + `${s.batch_size} 条的 batch 加 1 个 ${p[p.length - 1]} 条的，轮流使用）`,
-    GRPO: `${fmt(s.max_iters)} 步，每步最多 ${s.batch_size} 道题 × 每题 ${s.group_size} 个回答`
-      + `（${s.examples} 道题分成 ${p.join('、')} 道的 ${p.length} 批，轮流使用）`,
+      + `${s.batch_size} 条的 batch 加 1 个 ${p[p.length - 1]} 条的，循环使用）`,
+    GRPO: `${fmt(s.max_iters)} 轮，每轮最多 ${s.batch_size} 道题 × 每题 ${s.group_size} 个回答`
+      + `（${s.examples} 道题分成 ${p.join('、')} 道的 ${p.length} 批，循环使用）`,
     DPO: `${fmt(s.max_iters)} 步 × ${s.batch_size} 对，β = ${s.beta}` };
   return { data: data[stageId], scale: scale[stageId], output: files[stageId], script: s.script };
 }

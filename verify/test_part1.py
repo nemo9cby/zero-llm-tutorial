@@ -46,7 +46,7 @@ def test_codebot_preview_matches_record(dlfs6_path):
     assert new["prompts"] == rec["prompts"] and new["template"] == rec["template"]
     for name in ("pretrain", "sft", "grpo"):
         assert new["models"][name] == rec["models"][name], name
-        assert rec["models"][name]["sha256"] == pp.HF_SHA256[f"codebot/model_{name}.pt"]   # 官方检查点
+        assert rec["models"][name]["sha256"] == pp.HF_SHA256[f"codebot/model_{name}.pt"]   # 官方 checkpoint
     base = dict(zip(pp.CHAT_PROMPTS, rec["models"]["pretrain"]["greedy"]))
     assert [base[p] for p in ("Hello", "Who are you?", "write loop", "7+8=")] == [""] * 4   # 直接输出结束记号
     assert base["make variable x"].startswith("def main():")                            # 续写出不相干的代码
@@ -81,7 +81,7 @@ def test_pretrain_windows_cross_programs(dlfs6_path):
 
 def test_sft_and_grpo_batches_follow_dataloader_cycle(dlfs6_path):
     """ch03/03_sft.py 与 09_grpo.py 都用 cycle(DataLoader(dataset, batch_size=32, shuffle=True))：
-    DataLoader 不丢弃最后不满的 batch，cycle 从第二轮起按第一轮的顺序原样重放。"""
+    DataLoader 不丢弃最后不满的 batch，cycle 从第二个 epoch 起按第一个 epoch 的顺序原样重放。"""
     from collections import Counter
     from itertools import cycle
     import torch
@@ -99,11 +99,11 @@ def test_sft_and_grpo_batches_follow_dataloader_cycle(dlfs6_path):
         it = cycle(DataLoader(list(range(n)), batch_size=32, shuffle=True))
         return [next(it) for _ in range(500)]
 
-    sft = batches(n_sft)                                         # 1,092 = 34 × 32 + 4：每轮 35 个 batch
+    sft = batches(n_sft)                                         # 1,092 = 34 × 32 + 4：每个 epoch 35 个 batch
     assert Counter(len(b) for b in sft) == {32: 486, 4: 14}
     assert sum(len(b) for b in sft) == 15_608 and round(15_608 / n_sft, 1) == 14.3
-    assert torch.equal(sft[0], sft[35])                          # 第二轮原样重放第一轮
-    grpo = batches(81)                                           # 81 = 32 + 32 + 17：每三步一轮
+    assert torch.equal(sft[0], sft[35])                          # 第二个 epoch 原样重放第一个
+    grpo = batches(81)                                           # 81 = 32 + 32 + 17：每三轮过一遍
     assert [len(b) for b in grpo[:6]] == [32, 32, 17, 32, 32, 17]
     assert Counter(len(b) for b in grpo) == {32: 334, 17: 166} and sum(len(b) for b in grpo) == 13_510
     assert torch.equal(grpo[0], grpo[3])

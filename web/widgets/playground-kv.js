@@ -81,7 +81,7 @@ export async function mount(root, config = {}) {
     try {
       const ids = await longIds(false);
       await ensureModel(cfg.checkpoint, status);
-      status.say(`从 ${ids.length} 个 token 开始，greedy 生成 ${cfg.cross} 个……`);
+      status.say(`从 ${ids.length} 个 token 开始，贪心生成 ${cfg.cross} 个……`);
       const cells = [];
       const handle = await engine().call('generate', cfg.checkpoint,
         { ids, opts: { temperature: 0, maxNewTokens: cfg.cross, stopAtEnd: false, top: 0 } }, (ev) => {

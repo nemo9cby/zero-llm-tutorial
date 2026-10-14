@@ -1,5 +1,5 @@
 {
- "about": "本书计划记录与已经记录的运行。estimate_usd 由 gpu/costs.py 的 estimate_plan 算出（verify/test_gpu.py 核对），已记录的运行以 web/data/runs/<run>/report.json 为准。command 是重跑这次运行的命令；used_in 是书里引用这次运行的位置；code_commit 只在报告里的 tutorial_commit 不含跑它的代码时出现，给出第一个包含那份代码（path 里含 contains）的提交，verify/test_gpu.py 用 git 核对。",
+ "about": "本书计划记录与已经记录的运行。estimate_usd 由 gpu/costs.py 的 estimate_plan 算出（verify/test_gpu.py 核对），已记录的运行以 web/data/runs/<run>/report.json 为准。command 是记录这次运行的命令（已记录的运行要重跑，得把 --run 换成新的运行名：运行器不会往别种机器记下的报告里追加，同一台机器上则会追加重复的步骤）；used_in 是书里引用这次运行的位置；code_commit 只在报告里的 tutorial_commit 不含跑它的代码时出现，给出第一个包含那份代码（path 里含 contains）的提交，verify/test_gpu.py 用 git 核对。",
  "planned": [
   {"run": "codebot-3060ti", "job": "codebot", "offer": "local:rtx3060ti", "nproc": 1,
    "where": "本机 RTX 3060 Ti", "what": "CodeBot：预训练 → 生成 → SFT → GRPO",
@@ -20,7 +20,7 @@
    "command": "uv run --group gpu modal run --detach gpu/modal_app.py::launch --job webbot-probe --gpu H100 --run webbot-probe --budget 2",
    "used_in": [{"href": "#sG-2", "label": "G.2 探针"}, {"href": "ch09.html#s9-7", "label": "9.7 WebBot 的训练"}]},
   {"run": "codebot-grpo-evalfix-3060ti", "job": "codebot-grpo-evalfix", "offer": "local:rtx3060ti", "nproc": 1,
-   "where": "本机 RTX 3060 Ti", "what": "勘误实验：GRPO 更新前加一行 model.eval()，起点是 codebot-3060ti 的 SFT 检查点",
+   "where": "本机 RTX 3060 Ti", "what": "勘误实验：GRPO 更新前加一行 model.eval()，起点是 codebot-3060ti 的 SFT checkpoint",
    "estimate_usd": [0, 0],
    "command": "uv run python gpu/run_local.py --run codebot-grpo-evalfix-3060ti --job codebot-grpo-evalfix",
    "used_in": [{"href": "errata.html#e01", "label": "勘误 E01"}, {"href": "ch02.html#s2-10-4", "label": "2.10.4 运行验证"}],

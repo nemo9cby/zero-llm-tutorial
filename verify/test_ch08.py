@@ -115,7 +115,7 @@ def test_numpy_flash_matches_torch_sdpa(wb, sb):
             S = S.masked_fill(~torch.ones(T, T, dtype=torch.bool).tril(), float("-inf"))
         assert np.abs(lse - torch.logsumexp(S, dim=-1)[0, 0].numpy()).max() < 1e-12
 
-    # 原书的两种写法：WebBot 的 SDPA（KV = H 时）与 StoryBot 的手写 attention，权重相同则输出相同
+    # 原书的两种写法：WebBot 的 SDPA（KV = H 时）与 StoryBot 的手写 Attention，权重相同则输出相同
     torch.manual_seed(0)
     story_attn = sb.MultiHeadAttention(64, 4, 16, rope=sb.RoPE(10000, 16, 32)).double()
     web_attn = wb.MultiHeadAttention(64, 4, 4, 16, rope=wb.RoPE(10000, 16, 32)).double()
@@ -174,7 +174,7 @@ def test_sdpa_on_cpu_is_flash_kernel_with_linear_memory():
 
 
 def test_naive_attention_under_bf16_autocast_saves_fp32_softmax(sb):
-    """StoryBot 的手写 attention 换成 WebBot 的尺寸、在 ch09 的 bf16 autocast 下训练时，为反向传播存下了什么。
+    """StoryBot 的手写 Attention 换成 WebBot 的尺寸、在 ch09 的 bf16 autocast 下训练时，为反向传播存下了什么。
 
     本机不用 GPU：FakeTensorMode 里的“CUDA 张量”只有形状和 dtype，不分配显存；
     autocast(device_type='cuda') 在没有 CUDA 时会自动关闭，所以直接打开 CUDA 的 autocast 状态。
