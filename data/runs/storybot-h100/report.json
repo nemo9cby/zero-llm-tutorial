@@ -1,0 +1,108 @@
+{
+ "run": "storybot-h100",
+ "tutorial_commit": "4cf7333568acbbeea1d92c83a681815643a54554",
+ "dlfs6_commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
+ "host": {
+  "platform": "Linux-4.19.0-gvisor-x86_64-with-glibc2.36",
+  "python": "3.12.10",
+  "torch": "2.14.1+cu130",
+  "cuda": "13.0",
+  "gpu": "NVIDIA H100 80GB HBM3",
+  "gpu_count": 1,
+  "gpu_capability": "9.0",
+  "bf16": true,
+  "nvidia_smi": "NVIDIA H100 80GB HBM3, 580.95.05, 81559 MiB"
+ },
+ "provider": "modal",
+ "cost_usd": 1.17,
+ "steps": [
+  {
+   "script": "ch06/05_pretrain.py",
+   "started": "2026-10-12T02:32:57+00:00",
+   "seconds": 973.6,
+   "exit_code": 0,
+   "points": 5722,
+   "final": {
+    "it": 40000,
+    "loss": 1.331,
+    "val_loss": 1.303646
+   },
+   "produced": [
+    "loss_val.png",
+    "storybot/__pycache__/model.cpython-312.pyc",
+    "storybot/__pycache__/tokenizer.cpython-312.pyc",
+    "storybot/__pycache__/utils.cpython-312.pyc",
+    "storybot/model_iter_500.pt",
+    "storybot/model_iter_5000.pt",
+    "storybot/model_pretrain.pt"
+   ],
+   "log_tail": [
+    "Validation:  99%|█████████▉| 663/668 [00:04<00:00, 161.97it/s]\u001b[A",
+    "Validation: 100%|██████████| 668/668 [00:04<00:00, 161.72it/s]",
+    "",
+    "100%|█████████▉| 39995/40000 [16:06<00:00, 63.74it/s, loss=1.3310, val_loss=1.303646]",
+    "100%|██████████| 40000/40000 [16:06<00:00, 41.40it/s, loss=1.3310, val_loss=1.303646]"
+   ],
+   "rate": "41.40it/s",
+   "s_per_it": 0.0242,
+   "job": "storybot",
+   "gpu": "1× NVIDIA H100 80GB HBM3"
+  },
+  {
+   "script": "ch06/06_generate.py",
+   "started": "2026-10-12T02:49:14+00:00",
+   "seconds": 6.8,
+   "exit_code": 0,
+   "points": 0,
+   "final": null,
+   "produced": [],
+   "log_tail": [
+    "--- サンプル 3 ---",
+    "",
+    "One day, a boy named Tim found a kite in his room. It was a very interesting kite with many colors. Tim wanted to fly the kite in the park. His mom said, \"Tim, let me lead the kite to the park.\"",
+    "Tim held the kite up high and started to run. He was happy and excited. The kite danced in the wind, and Tim laughed. The kite seemed to fly higher and higher.",
+    "But then, something unexpected happened. The wind stopped, and the kite started to disappear! Tim was sad. He looked at his mom and said, \"Mom, I am sorry. The kite disappeared.\" His mom smiled and said, \"It's okay, accidents happen. Next time, I will always tell you a secret.\" Tim smiled and hugged his mom. They went to the park, and Tim had a fun day."
+   ],
+   "job": "storybot",
+   "gpu": "1× NVIDIA H100 80GB HBM3"
+  },
+  {
+   "script": "ch06/08_dpo.py",
+   "started": "2026-10-12T02:49:22+00:00",
+   "seconds": 34.2,
+   "exit_code": 0,
+   "points": 252,
+   "final": {
+    "it": 1000,
+    "loss": 0.0045
+   },
+   "produced": [
+    "loss_dpo.png",
+    "storybot/model_dpo.pt"
+   ],
+   "log_tail": [
+    "100%|█████████▉| 997/1000 [00:28<00:00, 36.68it/s, loss=0.0058]",
+    "100%|█████████▉| 997/1000 [00:28<00:00, 36.68it/s, loss=0.0045]",
+    "100%|█████████▉| 997/1000 [00:28<00:00, 36.68it/s, loss=0.0061]",
+    "100%|█████████▉| 997/1000 [00:28<00:00, 36.68it/s, loss=0.0045]",
+    "100%|██████████| 1000/1000 [00:28<00:00, 35.57it/s, loss=0.0045]"
+   ],
+   "rate": "35.57it/s",
+   "s_per_it": 0.0278,
+   "job": "storybot",
+   "gpu": "1× NVIDIA H100 80GB HBM3"
+  }
+ ],
+ "billing": [
+  {
+   "started": "2026-10-12T02:32:57+00:00",
+   "job": "storybot",
+   "gpu": "H100",
+   "usd_per_hour": 4.1075,
+   "price_src": "https://modal.com/pricing",
+   "price_checked": "2026-10-11",
+   "seconds": 1027.8,
+   "usd": 1.1727
+  }
+ ]
+}

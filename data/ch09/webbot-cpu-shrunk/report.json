@@ -1,0 +1,124 @@
+{
+ "run": "webbot-cpu-shrunk",
+ "what": "缩小版 ch09/01_pretrain.py（CPU）。训练循环、调度、梯度累积、日志代码与原书一致，只改了下面列出的行。",
+ "dlfs6_commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
+ "started": "2026-10-11T19:51:52-04:00",
+ "host": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "processor": "Intel64 Family 6 Model 167 Stepping 1, GenuineIntel",
+  "python": "3.12.9",
+  "torch": "2.14.1+cu130",
+  "cpu_count": 16,
+  "note": "运行时机器上还有其他任务在占用 CPU，墙钟时间只是上限"
+ },
+ "world_size": 1,
+ "command": "uv run python verify/_ch09_shrunk_run.py --work <dir> --iters 300 --micro 8 --warmup 30 --eval-interval 50",
+ "patches": [
+  {
+   "file": "ch09/01_pretrain.py",
+   "old": "context_len = 1024",
+   "new": "context_len = 128"
+  },
+  {
+   "file": "ch09/01_pretrain.py",
+   "old": "embed_dim = 768",
+   "new": "embed_dim = 128"
+  },
+  {
+   "file": "ch09/01_pretrain.py",
+   "old": "n_head = 12",
+   "new": "n_head = 4"
+  },
+  {
+   "file": "ch09/01_pretrain.py",
+   "old": "n_kv_head = 4",
+   "new": "n_kv_head = 2"
+  },
+  {
+   "file": "ch09/01_pretrain.py",
+   "old": "n_layer = 12",
+   "new": "n_layer = 2"
+  },
+  {
+   "file": "ch09/01_pretrain.py",
+   "old": "ff_dim = 2048",
+   "new": "ff_dim = 384"
+  },
+  {
+   "file": "ch09/01_pretrain.py",
+   "old": "micro_batch_size = 32",
+   "new": "micro_batch_size = 8"
+  },
+  {
+   "file": "ch09/01_pretrain.py",
+   "old": "warmup_iters = 500",
+   "new": "warmup_iters = 30"
+  },
+  {
+   "file": "ch09/01_pretrain.py",
+   "old": "max_iters = 100000",
+   "new": "max_iters = 300"
+  },
+  {
+   "file": "ch09/01_pretrain.py",
+   "old": "eval_interval = 1000",
+   "new": "eval_interval = 50"
+  },
+  {
+   "file": "ch09/01_pretrain.py",
+   "old": "train_data_path = 'webbot/owt_train.bin'",
+   "new": "train_data_path = 'webbot/owt_valid.bin'"
+  },
+  {
+   "file": "ch09/01_pretrain.py",
+   "old": "train_data = np.memmap(train_data_path, dtype=np.uint16, mode='r')",
+   "new": "train_data = np.memmap(train_data_path, dtype=np.uint16, mode='r')[:58046459]"
+  },
+  {
+   "file": "ch09/01_pretrain.py",
+   "old": "val_data = np.memmap(val_data_path, dtype=np.uint16, mode='r')",
+   "new": "val_data = np.memmap(val_data_path, dtype=np.uint16, mode='r')[58046459:58111995]"
+  },
+  {
+   "file": "ch09/01_pretrain.py",
+   "old": "model = torch.compile(model)",
+   "new": "pass  # model = torch.compile(model)：这台 Windows 机器上没有 cl.exe"
+  },
+  {
+   "file": "ch09/02_generate.py",
+   "old": "device = get_device()",
+   "new": "device = get_device()\nimport torch; torch.manual_seed(0)  # 采样可复现（原脚本没有固定种子）"
+  }
+ ],
+ "data": {
+  "train": "webbot/owt_valid.bin[:58046459]",
+  "val": "webbot/owt_valid.bin[58046459:58111995]"
+ },
+ "seconds": {
+  "pretrain": 1564.6,
+  "generate": 26.1
+ },
+ "exit_codes": [
+  0
+ ],
+ "wandb_calls_per_rank": {
+  "0": 310
+ },
+ "stdout_head": [
+  "学習データ: 58,046,459 tokens",
+  "検証データ: 65,536 tokens",
+  "パラメータ数: 13,193,856 (13.2M)",
+  "step 0: val_loss = 10.8349",
+  "step 50: val_loss = 8.3297",
+  "step 100: val_loss = 7.5056",
+  "step 150: val_loss = 7.2780",
+  "step 200: val_loss = 7.1367",
+  "step 250: val_loss = 7.0459",
+  "step 299: val_loss = 7.0164"
+ ],
+ "warnings": [
+  "UserWarning: CUDA is not available or torch_xla is imported. Disabling autocast."
+ ],
+ "cost_usd": 0.0,
+ "note": "运行之后，torch.compile 那一行补丁的注释被改短了（只改注释，执行的代码相同）。"
+}

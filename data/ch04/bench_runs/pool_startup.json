@@ -1,0 +1,50 @@
+{
+ "what": "Pool(n): start, one trivial task per worker, shutdown; workers import what ch04/04_bpe_parallel.py imports (regex, tqdm, ...)",
+ "start_method": "spawn",
+ "runs": {
+  "1": [
+   0.864,
+   0.856,
+   0.687
+  ],
+  "8": [
+   1.862,
+   1.336,
+   1.279
+  ],
+  "16": [
+   2.115,
+   1.581,
+   1.878
+  ]
+ },
+ "load": {
+  "mean": 100.0,
+  "min": 100.0,
+  "max": 100.0
+ },
+ "env": {
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "logical_cpus": 16,
+  "physical_cores": 8,
+  "ram_gb": 47.7,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "numpy": "2.5.4",
+  "regex": "2026.9.29",
+  "date": "2026-10-12 13:29",
+  "utc_offset": "-0400"
+ },
+ "provenance": {
+  "script": "verify/_ch04_bench.py",
+  "command": "python verify/_ch04_bench.py run pool_startup pretok_repeat shrink repeat_small",
+  "tutorial": {
+   "commit": "dda64b3d6eaa9e4a6e68de6b1b0a83fbedbab7b4",
+   "dirty": true
+  },
+  "dlfs6": {
+   "commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
+   "dirty": false
+  }
+ }
+}

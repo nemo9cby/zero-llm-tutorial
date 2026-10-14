@@ -1,0 +1,159 @@
+{
+ "fetched": "2026-10-12",
+ "hf": {
+  "dataset": "https://huggingface.co/datasets/koki0702/zero-llm-data",
+  "files": [
+   {
+    "path": "codebot/merge_rules.pkl",
+    "size": 7421,
+    "sha256": "7b1667406b2128a420b35a885f3efe03ce239d1d4669750e481d31a8f84f6943"
+   },
+   {
+    "path": "codebot/model_grpo.pt",
+    "size": 44516021,
+    "sha256": "e89848d846fe1a8bac5651dfac0c454685f401addbaaf340cf6ac8e9d939832d"
+   },
+   {
+    "path": "codebot/model_pretrain.pt",
+    "size": 44516353,
+    "sha256": "3e32e4103c5d58a89bed032b2c497e86eb26c58dd0ca42eeef7565d5910a3ecb"
+   },
+   {
+    "path": "codebot/model_sft.pt",
+    "size": 44515938,
+    "sha256": "8d3f09b5737e0fbd27c25e337e0f69373ff29e1c2aecf24c1323ca41a8354f14"
+   },
+   {
+    "path": "codebot/tiny_codes.bin",
+    "size": 5354796,
+    "sha256": "d1e082b13158191bbe990a3b926fd91002a18ddecab082fc8380bb9f4f58b495"
+   },
+   {
+    "path": "codebot/tiny_codes.txt",
+    "size": 6487033,
+    "sha256": null
+   },
+   {
+    "path": "codebot/tiny_codes_sft.json",
+    "size": 125591,
+    "sha256": null
+   },
+   {
+    "path": "storybot/merge_rules.pkl",
+    "size": 103877,
+    "sha256": "8fb285d93ae5a62379b03f2d298ceee90533e041b4d5ae9934a95cb2fb0ec364"
+   },
+   {
+    "path": "storybot/model_iter_500.pt",
+    "size": 90835030,
+    "sha256": "26bb92c130c0f4c1fc7c299cc113f7c940615351d993a1a56056436dd586cee9"
+   },
+   {
+    "path": "storybot/model_iter_5000.pt",
+    "size": 90835075,
+    "sha256": "9d07cea519b0c48f5fd1bbc011e8f25dd636bf59b4051b4868e499487935474a"
+   },
+   {
+    "path": "storybot/model_pretrain.pt",
+    "size": 90835030,
+    "sha256": "b32f3f0e6c45a7a00eb6d6fea8d8ec70c12781e6154ccc4b6bb7e9f5eff7b027"
+   },
+   {
+    "path": "storybot/tiny_stories_dpo.json",
+    "size": 73387,
+    "sha256": null
+   },
+   {
+    "path": "storybot/tiny_stories_train.bin",
+    "size": 1082458446,
+    "sha256": "74c89ae1d5d46d474304841ea1b62bbe9139e11f7579ee5d5fff409b97c2777c"
+   },
+   {
+    "path": "storybot/tiny_stories_train.txt",
+    "size": 2227753162,
+    "sha256": "6418d412de72888f52b5142c761ac21a582f7d1166f0bfbdb5f03ccfdec90443"
+   },
+   {
+    "path": "storybot/tiny_stories_valid.bin",
+    "size": 10931746,
+    "sha256": "05a36c44ba7b4db6ea2b888ede2968c397e16da2b830d04c1b9491c44ad61af2"
+   },
+   {
+    "path": "storybot/tiny_stories_valid.txt",
+    "size": 22502601,
+    "sha256": "6874bae9a4c1a4e7edcf0e53b86c17817e9cf881fc75ff2368da457b80c0585d"
+   },
+   {
+    "path": "webbot/merge_rules.pkl",
+    "size": 533514,
+    "sha256": "f83bb48ec8411cffeddc4757e3209186b43667ba45bcadf4c222c389aecb44d7"
+   },
+   {
+    "path": "webbot/owt_train.bin",
+    "size": 5298009600,
+    "sha256": "9e89fe25a0c1ad092f64d2b69105a8d5ffbd306f8179bfb02a5b17045e88f278"
+   },
+   {
+    "path": "webbot/owt_train.txt",
+    "size": 11920511059,
+    "sha256": "bbeb7f291a981ecfd5cf44b84d0f654b9e96c53dff99f2556b7d2cccaf8c1918"
+   },
+   {
+    "path": "webbot/owt_valid.bin",
+    "size": 128992132,
+    "sha256": "9f7945f7d654e462bd20627ded01f40378a95a02e3245c4fb9ffb242c99d04b4"
+   },
+   {
+    "path": "webbot/owt_valid.txt",
+    "size": 289998753,
+    "sha256": "2406f278e71829d273b315e9b403285baea7022b26a96d2728dd8b776ea40660"
+   }
+  ],
+  "status": [
+   {
+    "url": "https://huggingface.co/datasets/koki0702/zero-llm-data/resolve/main/storybot/model_dpo.pt",
+    "status": 404
+   },
+   {
+    "url": "https://huggingface.co/datasets/koki0702/zero-llm-data/resolve/main/webbot/model_pretrain.pt",
+    "status": 404
+   },
+   {
+    "url": "https://huggingface.co/datasets/koki0702/zero-llm-data/resolve/main/storybot/model_pretrain.pt",
+    "status": 302
+   }
+  ]
+ },
+ "github": {
+  "pull_6": {
+   "url": "https://github.com/oreilly-japan/deep-learning-from-scratch-6/pull/6",
+   "title": "fix: RMSNorm初期化時の引数を修正",
+   "state": "open",
+   "created_at": "2026-06-12"
+  },
+  "issue_4": {
+   "url": "https://github.com/oreilly-japan/deep-learning-from-scratch-6/issues/4",
+   "title": "ch06/07_llm_judge.py のバグ修正",
+   "state": "open",
+   "created_at": "2025-12-28"
+  },
+  "issue_7": {
+   "url": "https://github.com/oreilly-japan/deep-learning-from-scratch-6/issues/7",
+   "title": "[ch04] `05_eval.py` が repository に含まれていません",
+   "state": "open",
+   "created_at": "2026-07-28"
+  },
+  "wiki_errata": [
+   {
+    "url": "https://github.com/oreilly-japan/deep-learning-from-scratch-6/wiki/errata",
+    "status": 302,
+    "location": "https://github.com/oreilly-japan/deep-learning-from-scratch-6/wiki"
+   },
+   {
+    "url": "https://github.com/oreilly-japan/deep-learning-from-scratch-6/wiki",
+    "status": 302,
+    "location": "https://github.com/oreilly-japan/deep-learning-from-scratch-6"
+   }
+  ]
+ }
+}

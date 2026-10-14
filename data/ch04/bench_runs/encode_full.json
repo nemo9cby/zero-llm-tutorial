@@ -1,0 +1,51 @@
+{
+ "input": "storybot/tiny_stories_train.txt (2,227,753,162 bytes)",
+ "num_processes": 8,
+ "num_chunks": 64,
+ "run": {
+  "wall": 2269.683,
+  "cpu": 124.219,
+  "load": {
+   "mean": 99.5,
+   "min": 56.7,
+   "max": 100.0
+  }
+ },
+ "peak_rss_mib": 2093.5,
+ "peak_rss_method": "psutil rss of the process and its children, summed, sampled every 0.5 s",
+ "tokens": 541229223,
+ "out_bytes": 1082458446,
+ "out_sha256": "74c89ae1d5d46d474304841ea1b62bbe9139e11f7579ee5d5fff409b97c2777c",
+ "official": {
+  "file": "storybot/tiny_stories_train.bin",
+  "bytes": 1082458446,
+  "sha256": "74c89ae1d5d46d474304841ea1b62bbe9139e11f7579ee5d5fff409b97c2777c",
+  "source": "lfs.oid and size in GET https://huggingface.co/api/datasets/koki0702/zero-llm-data/tree/main/storybot (2026-10-12); the same listing gives merge_rules.pkl 8fb285d9... and tiny_stories_valid.bin 05a36c44..., which are the sha256 of the files in third_party/dlfs6/storybot"
+ },
+ "identical_to_official_train_bin": true,
+ "cache_dir_removed": true,
+ "env": {
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "logical_cpus": 16,
+  "physical_cores": 8,
+  "ram_gb": 47.7,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "numpy": "2.5.4",
+  "regex": "2026.9.29",
+  "date": "2026-10-12 15:28",
+  "utc_offset": "-0400"
+ },
+ "provenance": {
+  "script": "verify/_ch04_bench.py",
+  "command": "python verify/_ch04_bench.py run encode_full --train-full <train_full>",
+  "tutorial": {
+   "commit": "65925e94fe7bf5210f51371f1135e0a55982ef45",
+   "dirty": true
+  },
+  "dlfs6": {
+   "commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
+   "dirty": false
+  }
+ }
+}

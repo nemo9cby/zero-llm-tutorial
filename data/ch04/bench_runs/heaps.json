@@ -1,0 +1,74 @@
+{
+ "rows": [
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 1048933,
+   "occurrences": 253341,
+   "unique": 4658
+  },
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 2097704,
+   "occurrences": 506049,
+   "unique": 5980
+  },
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 5243189,
+   "occurrences": 1263202,
+   "unique": 8126
+  },
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 10485828,
+   "occurrences": 2524909,
+   "unique": 10132
+  },
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 22502601,
+   "occurrences": 5419001,
+   "unique": 13111,
+   "top10_share": 0.3194,
+   "top1000_share": 0.9254
+  },
+  {
+   "file": "train_prefix.txt",
+   "bytes": 1048928,
+   "occurrences": 253296,
+   "unique": 4741
+  },
+  {
+   "file": "train_prefix.txt",
+   "bytes": 10486323,
+   "occurrences": 2525586,
+   "unique": 10235
+  },
+  {
+   "file": "train_prefix.txt",
+   "bytes": 52429239,
+   "occurrences": 12629913,
+   "unique": 17376
+  },
+  {
+   "file": "train_prefix.txt",
+   "bytes": 104856833,
+   "occurrences": 25254556,
+   "unique": 21808,
+   "top10_share": 0.3193,
+   "top1000_share": 0.9249
+  }
+ ],
+ "env": {
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "logical_cpus": 16,
+  "physical_cores": 8,
+  "ram_gb": 47.7,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "numpy": "2.5.4",
+  "regex": "2026.9.29",
+  "note": "RTX 3060 Ti busy with the tutorial's training run during all measurements (CPU only here)",
+  "date": "2026-10-11 20:24"
+ }
+}

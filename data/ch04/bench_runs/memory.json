@@ -1,0 +1,65 @@
+{
+ "rows": [
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 22502601,
+   "mode": "naive_idslist",
+   "peak_mib": 661.0,
+   "info": "{'occurrences': 5419001}",
+   "wall": 21.3
+  },
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 22502601,
+   "mode": "findall_list",
+   "peak_mib": 363.6,
+   "info": "{'pretokens': 5419001}",
+   "wall": 9.3
+  },
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 22502601,
+   "mode": "whole",
+   "peak_mib": 102.3,
+   "info": "{'max_codepoint': 8230, 'str_bytes': 44986832, 'chars': 22493387}",
+   "wall": 13.3
+  },
+  {
+   "file": "tiny_stories_valid.txt",
+   "bytes": 22502601,
+   "mode": "chunked",
+   "peak_mib": 35.6,
+   "info": "{}",
+   "wall": 14.5
+  },
+  {
+   "file": "train_prefix.txt",
+   "bytes": 104856833,
+   "mode": "whole",
+   "peak_mib": 660.0,
+   "info": "{'max_codepoint': 127820, 'str_bytes': 419254676, 'chars': 104813654}",
+   "wall": 51.7
+  },
+  {
+   "file": "train_prefix.txt",
+   "bytes": 104856833,
+   "mode": "chunked",
+   "peak_mib": 46.3,
+   "info": "{}",
+   "wall": 68.9
+  }
+ ],
+ "method": "psutil peak_wset of a fresh process (Windows peak working set)",
+ "env": {
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "logical_cpus": 16,
+  "physical_cores": 8,
+  "ram_gb": 47.7,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "numpy": "2.5.4",
+  "regex": "2026.9.29",
+  "note": "RTX 3060 Ti busy with the tutorial's training run during all measurements (CPU only here)",
+  "date": "2026-10-11 20:23"
+ }
+}

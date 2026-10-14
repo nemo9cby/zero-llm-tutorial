@@ -1,0 +1,25 @@
+{
+ "codebot-3060ti": {
+  "steps": [
+   "01_pretrain",
+   "03_sft",
+   "09_grpo"
+  ]
+ },
+ "webbot-probe": {
+  "steps": [
+   "01_pretrain"
+  ]
+ },
+ "storybot-h100": {
+  "steps": [
+   "05_pretrain",
+   "08_dpo"
+  ]
+ },
+ "codebot-grpo-evalfix-3060ti": {
+  "steps": [
+   "09_grpo"
+  ]
+ }
+}

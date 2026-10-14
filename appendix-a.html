@@ -1,0 +1,1079 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>UTF-8 编码的原理｜从零构建大语言模型</title>
+<meta name="description" content="第 1 章把 str.encode(&quot;utf-8&quot;) 当作黑盒来用。本附录打开这个黑盒：码位怎样变成字节，为什么结果总在 0–255 之间，哪些字节序列不合法，以及 errors=&quot;replace&quot; 究竟替换了什么。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Serif+SC:wght@400;600;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,800;1,8..60,400&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/pygments.css">
+<script>
+  try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+</head>
+<body data-slug="appendix-a" data-packages="[&quot;numpy&quot;]">
+<a class="skip" href="#main">跳到正文</a>
+<header class="topbar">
+  <button class="nav-toggle" type="button" aria-controls="nav" aria-expanded="false">目录</button>
+  <a class="book-title" href="index.html">从零构建大语言模型</a>
+  <div class="topbar-tools">
+    <span class="verify-counter" hidden></span>
+    <button class="run-all" type="button" hidden><span class="label-long">运行本页全部验证</span><span class="label-short">全部验证</span></button>
+    <button class="theme-toggle" type="button" aria-label="切换明暗主题"><span class="label-long">明 / 暗</span><span class="label-short">◐</span></button>
+  </div>
+</header>
+<div class="layout">
+  <nav id="nav" class="nav" aria-label="章节"><ol class="nav-chapters"><li class="kind-chapter"><a href="ch00.html"><span class="nav-num">0</span>LLM 是如何炼成的</a></li><li class="kind-part"><a href="part1.html">第 I 部 基础篇：制作 CodeBot</a></li><li class="kind-chapter"><a href="ch01.html"><span class="nav-num">1</span>分词器【基础篇】</a></li><li class="kind-chapter"><a href="ch02.html"><span class="nav-num">2</span>模型【基础篇】</a></li><li class="kind-chapter"><a href="ch03.html"><span class="nav-num">3</span>训练【基础篇】</a></li><li class="kind-part"><a href="part2.html">第 II 部 应用篇：制作 StoryBot</a></li><li class="kind-chapter"><a href="ch04.html"><span class="nav-num">4</span>分词器【应用篇】</a></li><li class="kind-chapter"><a href="ch05.html"><span class="nav-num">5</span>模型【应用篇】</a></li><li class="kind-chapter"><a href="ch06.html"><span class="nav-num">6</span>训练【应用篇】</a></li><li class="kind-part"><a href="part3.html">第 III 部 挑战篇：制作 WebBot</a></li><li class="kind-chapter"><a href="ch07.html"><span class="nav-num">7</span>分词器【挑战篇】</a></li><li class="kind-chapter"><a href="ch08.html"><span class="nav-num">8</span>模型【挑战篇】</a></li><li class="kind-chapter"><a href="ch09.html"><span class="nav-num">9</span>训练【挑战篇】</a></li><li class="nav-group"><span class="nav-group-label">附录</span></li><li class="kind-appendix current"><a href="appendix-a.html"><span class="nav-num">A</span>UTF-8 编码的原理</a><ol><li><a href="#sA-1">A.1 三种编码：UTF-32、UTF-16 与 UTF-8</a></li><li><a href="#sA-2">A.2 UTF-8 的位模式</a></li><li><a href="#sA-3">A.3 解码与自同步</a></li><li><a href="#sA-4">A.4 不合法的字节序列</a></li><li><a href="#sA-5">A.5 errors=&quot;replace&quot;：一段坏字节换成几个 �</a></li><li><a href="#h-5db9fd7c">小结</a></li></ol></li><li class="kind-appendix"><a href="appendix-b.html"><span class="nav-num">B</span>Attention 缩放效果的证明</a></li><li class="kind-appendix"><a href="appendix-c.html"><span class="nav-num">C</span>带基线策略梯度的无偏性证明</a></li><li class="kind-appendix"><a href="appendix-d.html"><span class="nav-num">D</span>Adam 的偏差校正</a></li><li class="kind-appendix"><a href="appendix-e.html"><span class="nav-num">E</span>DPO 最优解的推导</a></li><li class="nav-group"><span class="nav-group-label">实践与参考</span></li><li class="kind-extra"><a href="playground.html"><span class="nav-num">P</span>CodeBot 工作台</a></li><li class="kind-extra"><a href="train-in-browser.html"><span class="nav-num">T</span>浏览器里训练迷你 GPT</a></li><li class="kind-extra"><a href="gpu.html"><span class="nav-num">G</span>GPU 实战手册</a></li><li class="kind-extra"><a href="cs336.html"><span class="nav-num">X</span>CS336 对照总表</a></li><li class="kind-extra"><a href="glossary.html"><span class="nav-num">Y</span>术语与命名对照</a></li><li class="kind-extra"><a href="errata.html"><span class="nav-num">Z</span>已知问题与修复</a></li></ol></nav>
+  <main id="main" class="page">
+    <article class="chapter"><header class="chapter-head"><div class="chapter-num">A</div><h1>UTF-8 编码的原理</h1><p class="chapter-lede">第 1 章把 str.encode(&quot;utf-8&quot;) 当作黑盒来用。本附录打开这个黑盒：码位怎样变成字节，为什么结果总在 0–255 之间，哪些字节序列不合法，以及 errors=&quot;replace&quot; 究竟替换了什么。</p></header><p><a href="ch01.html#s1-2">1.2 节</a>里，我们把 <code>str.encode(&quot;utf-8&quot;)</code> 当作一个黑盒来用：<code>A</code> 变成 1 个字节，<code>あ</code> 变成 3 个字节，<code>😁</code> 变成 4 个字节。字节级分词器之所以成立，靠的是两条性质：任何文字都能写成一串 0–255 的整数；这串整数还能原样变回文字。这两条性质来自 Unicode 编码的设计，DLFS6 选的是其中的 UTF-8。</p>
+<p>黑盒也留下了几个疑问。为什么 ASCII 字符只占 1 个字节，汉字却要 3 个？<a href="ch01.html#v-1.2-b">验证 1.2-b</a> 里，半个汉字为什么解不出来？用 <code>errors=&quot;replace&quot;</code> 时，两个坏字节为什么只变成了一个 <code>�</code>？</p>
+<p>本附录就来打开这个黑盒。我们先比较 UTF-32、UTF-16、UTF-8 三种编码，然后从位模式出发，亲手实现 UTF-8 的编码器和解码器，并把它们与 Python 内置的实现逐字节对拍。最后回到分词器，看看这些规则藏在 DLFS6 代码的哪些地方。</p>
+<h2 id="sA-1">A.1 三种编码：UTF-32、UTF-16 与 UTF-8</h2>
+<p>Unicode 给每个字符规定了一个码位，范围是 0 到 0x10FFFF（<a href="ch01.html#s1-1">1.1 节</a>）。码位只是一个整数。要把它存进文件、在网络上传输，还得规定怎样把这个整数写成字节，这种规定就是<strong>编码</strong>（encoding）。常用的编码有三种：UTF-32、UTF-16 和 UTF-8。</p>
+<p>先来看结果。下面把 <code>A</code>、<code>あ</code>、<code>😁</code> 分别用三种编码写成字节。编码名后面的 <code>-be</code> 表示高位字节在前（big-endian），这样写出来的字节顺序与码位的十六进制写法一致：</p>
+<div class="verify" id="v-A-a" data-cell="{&quot;id&quot;: &quot;A-a&quot;, &quot;golden&quot;: &quot;A  U+0041\n    UTF-32  4 字节  00 00 00 41\n    UTF-16  2 字节  00 41\n    UTF-8   1 字节  41\nあ  U+3042\n    UTF-32  4 字节  00 00 30 42\n    UTF-16  2 字节  30 42\n    UTF-8   3 字节  E3 81 82\n😁  U+1F601\n    UTF-32  4 字节  00 01 F6 01\n    UTF-16  4 字节  D8 3D DE 01\n    UTF-8   4 字节  F0 9F 98 81\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 A-a</span><span class="verify-title">同一个字符，三种编码</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="k">for</span> <span class="n">ch</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">"A"</span><span class="p">,</span> <span class="s2">"あ"</span><span class="p">,</span> <span class="s2">"😁"</span><span class="p">]:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">ch</span><span class="si">}</span><span class="s2">  U+</span><span class="si">{</span><span class="nb">ord</span><span class="p">(</span><span class="n">ch</span><span class="p">)</span><span class="si">:</span><span class="s2">04X</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">enc</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">"utf-32-be"</span><span class="p">,</span> <span class="s2">"utf-16-be"</span><span class="p">,</span> <span class="s2">"utf-8"</span><span class="p">]:</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="n">ch</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">enc</span><span class="p">)</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"    </span><span class="si">{</span><span class="n">enc</span><span class="p">[:</span><span class="mi">6</span><span class="p">]</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">:</span><span class="s2">&lt;6</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">b</span><span class="p">)</span><span class="si">}</span><span class="s2"> 字节  </span><span class="si">{</span><span class="n">b</span><span class="o">.</span><span class="n">hex</span><span class="p">(</span><span class="s1">' '</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+<span class="k">assert</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-32-be"</span><span class="p">))</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="s2">"Aあ😁"</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">]</span>
+<span class="k">assert</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-16-be"</span><span class="p">))</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="s2">"Aあ😁"</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">]</span>
+<span class="k">assert</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="s2">"Aあ😁"</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="mi">4</span><span class="p">]</span>
+</code></pre><textarea class="verify-src" hidden>for ch in [&quot;A&quot;, &quot;あ&quot;, &quot;😁&quot;]:
+    print(f&quot;{ch}  U+{ord(ch):04X}&quot;)
+    for enc in [&quot;utf-32-be&quot;, &quot;utf-16-be&quot;, &quot;utf-8&quot;]:
+        b = ch.encode(enc)
+        print(f&quot;    {enc[:6].upper():&lt;6}  {len(b)} 字节  {b.hex(&#x27; &#x27;).upper()}&quot;)
+
+assert [len(c.encode(&quot;utf-32-be&quot;)) for c in &quot;Aあ😁&quot;] == [4, 4, 4]
+assert [len(c.encode(&quot;utf-16-be&quot;)) for c in &quot;Aあ😁&quot;] == [2, 2, 4]
+assert [len(c.encode(&quot;utf-8&quot;)) for c in &quot;Aあ😁&quot;] == [1, 3, 4]
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>A  U+0041
+    UTF-32  4 字节  00 00 00 41
+    UTF-16  2 字节  00 41
+    UTF-8   1 字节  41
+あ  U+3042
+    UTF-32  4 字节  00 00 30 42
+    UTF-16  2 字节  30 42
+    UTF-8   3 字节  E3 81 82
+😁  U+1F601
+    UTF-32  4 字节  00 01 F6 01
+    UTF-16  4 字节  D8 3D DE 01
+    UTF-8   4 字节  F0 9F 98 81
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>UTF-32 最简单：每个码位固定占 4 个字节，字节就是码位本身。代价是浪费，<code>A</code> 只需要 7 位，却占了 32 位，前 3 个字节全是 0。</p>
+<p>UTF-16 以 2 个字节为一个单位。U+FFFF 以内的码位直接写成一个单位；更大的码位放不下，就拆成两个单位，叫作<strong>代理对</strong>（surrogate pair）。为此，Unicode 专门把 U+D800–U+DFFF 这一段码位留了出来，永远不分配给任何字符。拆法是先减去 0x10000，剩下的 20 位一分为二，高 10 位加到 0xD800 上，低 10 位加到 0xDC00 上。以 <code>😁</code> 为例：</p>
+<div class="math block">
+<div class="math-block">\begin{aligned}
+&amp;v = \text{0x1F601} - \text{0x10000} = \text{0xF601}\\[-3pt]
+&amp;\quad{\footnotesize\text{（先减去 0x10000，剩下的不超过 20 位）}}\\[2pt]
+&amp;v = \underbrace{0000111101}_{\text{0x03D}}\;\underbrace{1000000001}_{\text{0x201}}\\[-3pt]
+&amp;\quad{\footnotesize\text{（写成 20 位，一分为二）}}\\[2pt]
+&amp;\text{0xD800} + \text{0x03D} = \text{0xD83D}\\[-3pt]
+&amp;\quad{\footnotesize\text{（高 10 位）}}\\[2pt]
+&amp;\text{0xDC00} + \text{0x201} = \text{0xDE01}\\[-3pt]
+&amp;\quad{\footnotesize\text{（低 10 位）}}
+\end{aligned}</div>
+</div>
+<p>两半拼起来正是上面输出里的 <code>D8 3D DE 01</code>。用代码再算一遍：</p>
+<div class="verify" id="v-A-b" data-cell="{&quot;id&quot;: &quot;A-b&quot;, &quot;golden&quot;: &quot;v      = 0000111101 1000000001\n代理对 = D83D DE01\nUTF-16 单位 2 个，码位 1 个\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 A-b</span><span class="verify-title">UTF-16 的代理对：高 10 位与低 10 位</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">cp</span> <span class="o">=</span> <span class="nb">ord</span><span class="p">(</span><span class="s2">"😁"</span><span class="p">)</span>
+<span class="n">v</span> <span class="o">=</span> <span class="n">cp</span> <span class="o">-</span> <span class="mh">0x10000</span>                 <span class="c1"># 剩下 20 位</span>
+<span class="n">hi</span> <span class="o">=</span> <span class="mh">0xD800</span> <span class="o">+</span> <span class="p">(</span><span class="n">v</span> <span class="o">&gt;&gt;</span> <span class="mi">10</span><span class="p">)</span>          <span class="c1"># 高 10 位</span>
+<span class="n">lo</span> <span class="o">=</span> <span class="mh">0xDC00</span> <span class="o">+</span> <span class="p">(</span><span class="n">v</span> <span class="o">&amp;</span> <span class="mh">0x3FF</span><span class="p">)</span>        <span class="c1"># 低 10 位</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"v      = </span><span class="si">{</span><span class="n">v</span><span class="w"> </span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="mi">10</span><span class="si">:</span><span class="s2">010b</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">v</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0x3FF</span><span class="si">:</span><span class="s2">010b</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"代理对 = </span><span class="si">{</span><span class="n">hi</span><span class="si">:</span><span class="s2">04X</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">lo</span><span class="si">:</span><span class="s2">04X</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="n">pair</span> <span class="o">=</span> <span class="n">hi</span><span class="o">.</span><span class="n">to_bytes</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s2">"big"</span><span class="p">)</span> <span class="o">+</span> <span class="n">lo</span><span class="o">.</span><span class="n">to_bytes</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s2">"big"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="s2">"😁"</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-16-be"</span><span class="p">)</span> <span class="o">==</span> <span class="n">pair</span>
+<span class="k">assert</span> <span class="mh">0xD800</span> <span class="o">&lt;=</span> <span class="n">hi</span> <span class="o">&lt;=</span> <span class="mh">0xDBFF</span> <span class="ow">and</span> <span class="mh">0xDC00</span> <span class="o">&lt;=</span> <span class="n">lo</span> <span class="o">&lt;=</span> <span class="mh">0xDFFF</span>  <span class="c1"># 都在留出的区间里</span>
+<span class="n">units</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">pair</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>                                   <span class="c1"># UTF-16 的单位个数</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"UTF-16 单位 </span><span class="si">{</span><span class="n">units</span><span class="si">}</span><span class="s2"> 个，码位 </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="s1">'😁'</span><span class="p">)</span><span class="si">}</span><span class="s2"> 个"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">units</span> <span class="o">==</span> <span class="mi">2</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="s2">"😁"</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>                     <span class="c1"># 见下面的提示框</span>
+</code></pre><textarea class="verify-src" hidden>cp = ord(&quot;😁&quot;)
+v = cp - 0x10000                 # 剩下 20 位
+hi = 0xD800 + (v &gt;&gt; 10)          # 高 10 位
+lo = 0xDC00 + (v &amp; 0x3FF)        # 低 10 位
+print(f&quot;v      = {v &gt;&gt; 10:010b} {v &amp; 0x3FF:010b}&quot;)
+print(f&quot;代理对 = {hi:04X} {lo:04X}&quot;)
+pair = hi.to_bytes(2, &quot;big&quot;) + lo.to_bytes(2, &quot;big&quot;)
+assert &quot;😁&quot;.encode(&quot;utf-16-be&quot;) == pair
+assert 0xD800 &lt;= hi &lt;= 0xDBFF and 0xDC00 &lt;= lo &lt;= 0xDFFF  # 都在留出的区间里
+units = len(pair) // 2                                   # UTF-16 的单位个数
+print(f&quot;UTF-16 单位 {units} 个，码位 {len(&#x27;😁&#x27;)} 个&quot;)
+assert units == 2 and len(&quot;😁&quot;) == 1                     # 见下面的提示框
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>v      = 0000111101 1000000001
+代理对 = D83D DE01
+UTF-16 单位 2 个，码位 1 个
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><aside class="callout callout-note"><div class="callout-title"><span class="callout-kind">注</span><span class="callout-text">网页里的字符串是 UTF-16</span></div>
+<p>JavaScript 的字符串按 UTF-16 的单位计数，所以 <code>&quot;😁&quot;.length</code> 是 2，而 Python 的 <code>len(&quot;😁&quot;)</code> 是 1（<a href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/length">MDN：String.length</a>，2026-10 查证；单位的个数见<a href="#v-A-b">验证 A-b</a> 的最后一行）。所以本附录的交互图在逐字符处理文字时，用 <code>[...text]</code> 按码位切分，避免把一个 emoji 劈成两半。</p>
+</aside>
+<p>UTF-8 是变长的：ASCII 字符只占 1 个字节，而且这个字节就等于码位本身。所以一个纯 ASCII 的文件，原封不动就是合法的 UTF-8 文件。另外，除了 U+0000 本身，UTF-8 的输出里不会出现值为 0 的字节（<a href="#v-A-f">验证 A-f</a> 会在全部码位上确认）；而用 UTF-16、UTF-32 写英文时，每个字符都带着值为 0 的字节（上面 <code>A</code> 的两行就是例子）。</p>
+<p>那么，为什么“任何字符都能写成 0–255 的数列”呢？分两步看。第一，Unicode 给每个字符都分配了一个码位，最大是 0x10FFFF，最多 21 位。第二，三种编码都按固定的规则把这个整数切成若干个 8 位的块，而且能原样拼回去（<a href="#v-A-f">验证 A-f</a> 会在全部码位上确认这一点）。8 位的块只能取 0–255。所以字节级分词器用哪一种编码都行，真正的区别在于长度：</p>
+<div class="verify" id="v-A-c" data-cell="{&quot;id&quot;: &quot;A-c&quot;, &quot;golden&quot;: &quot;31 个字符：UTF-8  31，UTF-16  62，UTF-32 124 字节\n 6 个字符：UTF-8  18，UTF-16  12，UTF-32  24 字节\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 A-c</span><span class="verify-title">英文和代码用 UTF-8 最短，中文用 UTF-16 更短</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="k">def</span><span class="w"> </span><span class="nf">size_in</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">enc</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">enc</span><span class="p">))</span>
+
+<span class="n">code</span><span class="p">,</span> <span class="n">zh</span> <span class="o">=</span> <span class="s2">"def add(a, b):</span><span class="se">\n</span><span class="s2">    return a + b"</span><span class="p">,</span> <span class="s2">"深度学习入门"</span>
+<span class="k">for</span> <span class="n">text</span> <span class="ow">in</span> <span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="n">zh</span><span class="p">):</span>
+    <span class="n">n8</span><span class="p">,</span> <span class="n">n16</span><span class="p">,</span> <span class="n">n32</span> <span class="o">=</span> <span class="p">(</span><span class="n">size_in</span><span class="p">(</span><span class="n">text</span><span class="p">,</span> <span class="n">e</span><span class="p">)</span>
+                    <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"utf-8"</span><span class="p">,</span> <span class="s2">"utf-16-be"</span><span class="p">,</span> <span class="s2">"utf-32-be"</span><span class="p">))</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">text</span><span class="p">)</span><span class="si">:</span><span class="s2">2d</span><span class="si">}</span><span class="s2"> 个字符：UTF-8 </span><span class="si">{</span><span class="n">n8</span><span class="si">:</span><span class="s2">3d</span><span class="si">}</span><span class="s2">，UTF-16 </span><span class="si">{</span><span class="n">n16</span><span class="si">:</span><span class="s2">3d</span><span class="si">}</span><span class="s2">，"</span>
+          <span class="sa">f</span><span class="s2">"UTF-32 </span><span class="si">{</span><span class="n">n32</span><span class="si">:</span><span class="s2">3d</span><span class="si">}</span><span class="s2"> 字节"</span><span class="p">)</span>
+
+<span class="k">assert</span> <span class="n">size_in</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="s2">"utf-8"</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">code</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">size_in</span><span class="p">(</span><span class="n">code</span><span class="p">,</span> <span class="s2">"utf-16-be"</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">code</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">size_in</span><span class="p">(</span><span class="n">zh</span><span class="p">,</span> <span class="s2">"utf-8"</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">zh</span><span class="p">)</span>          <span class="c1"># 中文：UTF-8 每字 3 字节</span>
+<span class="k">assert</span> <span class="n">size_in</span><span class="p">(</span><span class="n">zh</span><span class="p">,</span> <span class="s2">"utf-16-be"</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span> <span class="o">*</span> <span class="nb">len</span><span class="p">(</span><span class="n">zh</span><span class="p">)</span>      <span class="c1"># 而 UTF-16 每字 2 字节</span>
+<span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="mh">0x4E00</span> <span class="o">&lt;=</span> <span class="nb">ord</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="o">&lt;=</span> <span class="mh">0x9FFF</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">zh</span><span class="p">)</span>  <span class="c1"># 这几个字的码位范围</span>
+</code></pre><textarea class="verify-src" hidden>def size_in(text, enc):
+    return len(text.encode(enc))
+
+code, zh = &quot;def add(a, b):\n    return a + b&quot;, &quot;深度学习入门&quot;
+for text in (code, zh):
+    n8, n16, n32 = (size_in(text, e)
+                    for e in (&quot;utf-8&quot;, &quot;utf-16-be&quot;, &quot;utf-32-be&quot;))
+    print(f&quot;{len(text):2d} 个字符：UTF-8 {n8:3d}，UTF-16 {n16:3d}，&quot;
+          f&quot;UTF-32 {n32:3d} 字节&quot;)
+
+assert size_in(code, &quot;utf-8&quot;) == len(code)
+assert size_in(code, &quot;utf-16-be&quot;) == 2 * len(code)
+assert size_in(zh, &quot;utf-8&quot;) == 3 * len(zh)          # 中文：UTF-8 每字 3 字节
+assert size_in(zh, &quot;utf-16-be&quot;) == 2 * len(zh)      # 而 UTF-16 每字 2 字节
+assert all(0x4E00 &lt;= ord(c) &lt;= 0x9FFF for c in zh)  # 这几个字的码位范围
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>31 个字符：UTF-8  31，UTF-16  62，UTF-32 124 字节
+ 6 个字符：UTF-8  18，UTF-16  12，UTF-32  24 字节
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>对英文和代码来说，UTF-8 的长度是 UTF-16 的一半、UTF-32 的四分之一；对中文来说，UTF-8 反而比 UTF-16 多出一半。DLFS6 的三份语料（Python 代码、英文儿童短故事、英文网页）几乎全是 ASCII：<code>tiny_codes.txt</code> 里一个非 ASCII 字节都没有；TinyStories 的验证集里，非 ASCII 字节只占 0.06%；OpenWebText 的验证集里也只占 1.4%。</p>
+<div class="localcheck"><div class="localcheck-head"><span class="localcheck-label">本地验证</span><span class="localcheck-title">三份语料里非 ASCII 字节的比例：0、0.06%、1.4%</span></div><pre class="cmd"><code>uv run pytest verify/test_appendix.py::test_a_corpora_are_ascii</code></pre><details><summary>查看测试代码 verify/test_appendix.py</summary><pre class="code"><code><span class="k">def</span><span class="w"> </span><span class="nf">test_a_corpora_are_ascii</span><span class="p">(</span><span class="n">dlfs6_path</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""A.1：DLFS6 的三份语料几乎全是 ASCII。OWT 只有分词之后的 owt_valid.bin，用 WebBot 的词表把 token 换回字节再数。"""</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">storybot.tokenizer</span><span class="w"> </span><span class="kn">import</span> <span class="n">BPETokenizer</span>
+
+    <span class="n">paths</span> <span class="o">=</span> <span class="p">[</span><span class="n">dlfs6_path</span> <span class="o">/</span> <span class="n">p</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"codebot/tiny_codes.txt"</span><span class="p">,</span> <span class="s2">"storybot/tiny_stories_valid.txt"</span><span class="p">,</span>
+                                      <span class="s2">"webbot/owt_valid.bin"</span><span class="p">,</span> <span class="s2">"webbot/merge_rules.pkl"</span><span class="p">)]</span>
+    <span class="n">missing</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span><span class="o">.</span><span class="n">name</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">paths</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">p</span><span class="o">.</span><span class="n">is_file</span><span class="p">()]</span>
+    <span class="k">if</span> <span class="n">missing</span><span class="p">:</span>
+        <span class="n">pytest</span><span class="o">.</span><span class="n">skip</span><span class="p">(</span><span class="sa">f</span><span class="s2">"数据文件不在本地：</span><span class="si">{</span><span class="n">missing</span><span class="si">}</span><span class="s2">（运行 tools/fetch_data.py）"</span><span class="p">)</span>
+    <span class="n">codes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">fromfile</span><span class="p">(</span><span class="n">paths</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+    <span class="n">stories</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">fromfile</span><span class="p">(</span><span class="n">paths</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">codes</span><span class="o">.</span><span class="n">size</span> <span class="o">==</span> <span class="mi">6_487_033</span> <span class="ow">and</span> <span class="nb">int</span><span class="p">((</span><span class="n">codes</span> <span class="o">&gt;=</span> <span class="mh">0x80</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span> <span class="o">==</span> <span class="mi">0</span>          <span class="c1"># TinyCodes：纯 ASCII</span>
+    <span class="k">assert</span> <span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">((</span><span class="n">stories</span> <span class="o">&gt;=</span> <span class="mh">0x80</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span> <span class="o">*</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span> <span class="o">==</span> <span class="mf">0.06</span>             <span class="c1"># TinyStories 验证集：0.06%</span>
+
+    <span class="n">tok</span> <span class="o">=</span> <span class="n">BPETokenizer</span><span class="o">.</span><span class="n">load_from</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">paths</span><span class="p">[</span><span class="mi">3</span><span class="p">]))</span>
+    <span class="n">lengths</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">len</span><span class="p">(</span><span class="n">tok</span><span class="o">.</span><span class="n">id_to_bytes</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">tok</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">)])</span>
+    <span class="n">high</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="nb">sum</span><span class="p">(</span><span class="n">x</span> <span class="o">&gt;=</span> <span class="mh">0x80</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">tok</span><span class="o">.</span><span class="n">id_to_bytes</span><span class="p">[</span><span class="n">i</span><span class="p">])</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">tok</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">)])</span>
+    <span class="n">counts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">bincount</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">fromfile</span><span class="p">(</span><span class="n">paths</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint16</span><span class="p">),</span> <span class="n">minlength</span><span class="o">=</span><span class="n">tok</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">counts</span><span class="o">.</span><span class="n">size</span> <span class="o">==</span> <span class="n">tok</span><span class="o">.</span><span class="n">vocab_size</span> <span class="o">==</span> <span class="mi">50_000</span>
+    <span class="k">assert</span> <span class="nb">round</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">counts</span> <span class="o">@</span> <span class="n">high</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">counts</span> <span class="o">@</span> <span class="n">lengths</span><span class="p">)</span> <span class="o">*</span> <span class="mi">100</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="mf">1.4</span>  <span class="c1"># OWT 验证集：1.4%</span>
+</code></pre></details></div><p>所以选 UTF-8 是自然的。DLFS6 的分词器第一步就是 <code>text.encode(&quot;utf-8&quot;)</code>：</p>
+<figure class="listing" data-start="81"><figcaption><a class="listing-path" href="https://github.com/oreilly-japan/deep-learning-from-scratch-6/blob/c9b6e2ed531b08dd9f451a091a34e9645148e2e2/codebot/tokenizer.py#L81-L85" target="_blank" rel="noopener">codebot/tokenizer.py</a><span class="listing-range">第 81–85 行</span></figcaption><pre class="code numbered" style="counter-reset: line 80; --ln-digits: 2"><code><span class="line">    <span class="k">def</span><span class="w"> </span><span class="nf">_encode_text</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">text</span><span class="p">):</span></span>
+<span class="line">        <span class="n">ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">text</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span></span>
+<span class="line">        <span class="k">for</span> <span class="n">merge_pair</span><span class="p">,</span> <span class="n">new_id</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">merge_rules</span><span class="o">.</span><span class="n">items</span><span class="p">():</span></span>
+<span class="line">            <span class="n">ids</span> <span class="o">=</span> <span class="n">merge</span><span class="p">(</span><span class="n">ids</span><span class="p">,</span> <span class="n">merge_pair</span><span class="p">,</span> <span class="n">new_id</span><span class="p">)</span></span>
+<span class="line">        <span class="k">return</span> <span class="n">ids</span></span>
+</code></pre></figure><aside class="callout callout-cs336"><div class="callout-title"><span class="callout-kind">CS336 对照</span><span class="callout-text">A1 §2.2 unicode2</span></div>
+<p>CS336 作业 1 的 <code>unicode2</code> 小题问了三件事：为什么在 UTF-8 的字节上训练分词器，而不是 UTF-16 或 UTF-32；一个逐字节解码的函数错在哪里；什么样的两个字节无法解码。这三件事分别对应本附录的 A.1、A.5 和 A.4 节。读完之后，建议你合上本页，自己作答一遍（<a href="https://github.com/stanford-cs336/assignment1-basics">A1 仓库</a>，2026-10 查证）。</p>
+</aside>
+<h2 id="sA-2">A.2 UTF-8 的位模式</h2>
+<p>UTF-8 的规则可以写成一张表。码位越大，需要的位数越多，就用越多的字节来装：</p>
+<table>
+<thead>
+<tr>
+<th>码位范围</th>
+<th>可装的位数（x 的个数）</th>
+<th>字节序列（x 是码位的二进制位）</th>
+<th>字节数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>U+0000–U+007F</td>
+<td>7</td>
+<td><code>0xxxxxxx</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td>U+0080–U+07FF</td>
+<td>11</td>
+<td><code>110xxxxx 10xxxxxx</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td>U+0800–U+FFFF</td>
+<td>16</td>
+<td><code>1110xxxx 10xxxxxx 10xxxxxx</code></td>
+<td>3</td>
+</tr>
+<tr>
+<td>U+10000–U+10FFFF</td>
+<td>21</td>
+<td><code>11110xxx 10xxxxxx 10xxxxxx 10xxxxxx</code></td>
+<td>4</td>
+</tr>
+</tbody>
+</table>
+<p>每个字节开头的几位是固定的标记，剩下的 x 位用来装码位。规律只有两条：第一个字节开头有几个 1，这个字符就占几个字节（单字节的 ASCII 例外，开头是 0）；其余的字节一律以 <code>10</code> 开头。我们把第一个字节叫作<strong>首字节</strong>（lead byte），把以 <code>10</code> 开头的字节叫作<strong>后续字节</strong>（continuation byte）。数一数 x 的个数：2 字节能装 5+6=11 位，3 字节能装 4+6+6=16 位，4 字节能装 3+6+6+6=21 位，正好是表中第二列的数。码位本身的位数可以更少，比如 <code>é</code> 是 U+00E9，只有 8 位，装进 2 字节的模板时，前面补 0 凑满 11 位。</p>
+<p>开头的第一个问题也有了答案：ASCII 字符的码位小于 0x80，落在第 1 行；<code>あ</code> 是 U+3042，<code>深度学习入门</code> 这几个字的码位都在 U+4E00–U+9FFF 之间（<a href="#v-A-c">验证 A-c</a> 的最后一行），都落在第 3 行，所以要 3 个字节。</p>
+<p>下面手算 <code>あ</code> 的编码，每一步下面用小字写着理由：</p>
+<div class="math block">
+<div class="math-block">\begin{aligned}
+&amp;\operatorname{ord}(\text{あ}) = \text{0x3042}\\[-3pt]
+&amp;\quad{\footnotesize\text{（查码位）}}\\[2pt]
+&amp;\text{0x0800} \le \text{0x3042} \le \text{0xFFFF}\\[-3pt]
+&amp;\quad{\footnotesize\text{（表的第 3 行：3 个字节）}}\\[2pt]
+&amp;\text{0x3042} = 0011\;000001\;000010_{(2)}\\[-3pt]
+&amp;\quad{\footnotesize\text{（16 位，按 4+6+6 切开）}}\\[2pt]
+&amp;\to 1110\mathbf{0011}\;\;10\mathbf{000001}\;\;10\mathbf{000010}\\[-3pt]
+&amp;\quad{\footnotesize\text{（依次填进模板）}}\\[2pt]
+&amp;= \text{E3 81 82} = 227,\ 129,\ 130\\[-3pt]
+&amp;\quad{\footnotesize\text{（与 1.2 节的输出一致）}}
+\end{aligned}</div>
+</div>
+<p>把表格翻译成代码，就是下面的 <code>utf8_encode</code>。<code>&gt;&gt;</code> 把码位右移，取出高位的那一组；<code>&amp; 0x3F</code> 只保留低 6 位；<code>|</code> 把标记位和数据位拼在一起：</p>
+<div class="verify" id="v-A-d" data-cell="{&quot;id&quot;: &quot;A-d&quot;, &quot;golden&quot;: &quot;U+3042                      （码位）\n0011000001000010            （写成 16 位）\n0011 000001 000010          （按 4+6+6 切开）\n11100011 10000001 10000010  （填进模板）\nE3 81 82 = [227, 129, 130]  （字节）\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 A-d</span><span class="verify-title">亲手实现 UTF-8 编码器，手算 あ</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="k">def</span><span class="w"> </span><span class="nf">utf8_encode</span><span class="p">(</span><span class="n">cp</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""按 UTF-8 的位模式，把一个码位编码成字节值的列表。"""</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">cp</span> <span class="o">&lt;=</span> <span class="mh">0x10FFFF</span> <span class="ow">or</span> <span class="mh">0xD800</span> <span class="o">&lt;=</span> <span class="n">cp</span> <span class="o">&lt;=</span> <span class="mh">0xDFFF</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"U+</span><span class="si">{</span><span class="n">cp</span><span class="si">:</span><span class="s2">04X</span><span class="si">}</span><span class="s2"> 不是可以编码的字符"</span><span class="p">)</span>  <span class="c1"># 原因见 A.4 节</span>
+    <span class="k">if</span> <span class="n">cp</span> <span class="o">&lt;</span> <span class="mh">0x80</span><span class="p">:</span>       <span class="c1"># 7 位 ：0xxxxxxx</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">cp</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">cp</span> <span class="o">&lt;</span> <span class="mh">0x800</span><span class="p">:</span>      <span class="c1"># 11 位：110xxxxx 10xxxxxx</span>
+        <span class="k">return</span> <span class="p">[</span><span class="mh">0xC0</span> <span class="o">|</span> <span class="p">(</span><span class="n">cp</span> <span class="o">&gt;&gt;</span> <span class="mi">6</span><span class="p">),</span>
+                <span class="mh">0x80</span> <span class="o">|</span> <span class="p">(</span><span class="n">cp</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">)]</span>
+    <span class="k">if</span> <span class="n">cp</span> <span class="o">&lt;</span> <span class="mh">0x10000</span><span class="p">:</span>    <span class="c1"># 16 位：1110xxxx 10xxxxxx 10xxxxxx</span>
+        <span class="k">return</span> <span class="p">[</span><span class="mh">0xE0</span> <span class="o">|</span> <span class="p">(</span><span class="n">cp</span> <span class="o">&gt;&gt;</span> <span class="mi">12</span><span class="p">),</span>
+                <span class="mh">0x80</span> <span class="o">|</span> <span class="p">((</span><span class="n">cp</span> <span class="o">&gt;&gt;</span> <span class="mi">6</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">),</span>
+                <span class="mh">0x80</span> <span class="o">|</span> <span class="p">(</span><span class="n">cp</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">)]</span>
+    <span class="c1"># 21 位：11110xxx 10xxxxxx 10xxxxxx 10xxxxxx</span>
+    <span class="k">return</span> <span class="p">[</span><span class="mh">0xF0</span> <span class="o">|</span> <span class="p">(</span><span class="n">cp</span> <span class="o">&gt;&gt;</span> <span class="mi">18</span><span class="p">),</span>
+            <span class="mh">0x80</span> <span class="o">|</span> <span class="p">((</span><span class="n">cp</span> <span class="o">&gt;&gt;</span> <span class="mi">12</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">),</span>
+            <span class="mh">0x80</span> <span class="o">|</span> <span class="p">((</span><span class="n">cp</span> <span class="o">&gt;&gt;</span> <span class="mi">6</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">),</span>
+            <span class="mh">0x80</span> <span class="o">|</span> <span class="p">(</span><span class="n">cp</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">)]</span>
+
+<span class="n">cp</span> <span class="o">=</span> <span class="nb">ord</span><span class="p">(</span><span class="s2">"あ"</span><span class="p">)</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">utf8_encode</span><span class="p">(</span><span class="n">cp</span><span class="p">)</span>
+<span class="n">groups</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">cp</span><span class="w"> </span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="mi">12</span><span class="si">:</span><span class="s2">04b</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="p">(</span><span class="n">cp</span><span class="w"> </span><span class="o">&gt;&gt;</span><span class="w"> </span><span class="mi">6</span><span class="p">)</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0x3F</span><span class="si">:</span><span class="s2">06b</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">cp</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="mh">0x3F</span><span class="si">:</span><span class="s2">06b</span><span class="si">}</span><span class="s2">"</span>
+<span class="n">steps</span> <span class="o">=</span> <span class="p">[(</span><span class="sa">f</span><span class="s2">"U+</span><span class="si">{</span><span class="n">cp</span><span class="si">:</span><span class="s2">04X</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="s2">"码位"</span><span class="p">),</span>
+         <span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">cp</span><span class="si">:</span><span class="s2">016b</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="s2">"写成 16 位"</span><span class="p">),</span>
+         <span class="p">(</span><span class="n">groups</span><span class="p">,</span> <span class="s2">"按 4+6+6 切开"</span><span class="p">),</span>
+         <span class="p">(</span><span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">x</span><span class="si">:</span><span class="s2">08b</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">b</span><span class="p">),</span> <span class="s2">"填进模板"</span><span class="p">),</span>
+         <span class="p">(</span><span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">x</span><span class="si">:</span><span class="s2">02X</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">b</span><span class="p">)</span> <span class="o">+</span> <span class="sa">f</span><span class="s2">" = </span><span class="si">{</span><span class="n">b</span><span class="si">}</span><span class="s2">"</span><span class="p">,</span> <span class="s2">"字节"</span><span class="p">)]</span>
+<span class="k">for</span> <span class="n">value</span><span class="p">,</span> <span class="n">why</span> <span class="ow">in</span> <span class="n">steps</span><span class="p">:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">value</span><span class="si">:</span><span class="s2">&lt;28</span><span class="si">}</span><span class="s2">（</span><span class="si">{</span><span class="n">why</span><span class="si">}</span><span class="s2">）"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">b</span> <span class="o">==</span> <span class="p">[</span><span class="mi">227</span><span class="p">,</span> <span class="mi">129</span><span class="p">,</span> <span class="mi">130</span><span class="p">]</span> <span class="o">==</span> <span class="nb">list</span><span class="p">(</span><span class="s2">"あ"</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span>
+<span class="k">assert</span> <span class="nb">ord</span><span class="p">(</span><span class="s2">"é"</span><span class="p">)</span><span class="o">.</span><span class="n">bit_length</span><span class="p">()</span> <span class="o">==</span> <span class="mi">8</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">utf8_encode</span><span class="p">(</span><span class="nb">ord</span><span class="p">(</span><span class="s2">"é"</span><span class="p">)))</span> <span class="o">==</span> <span class="mi">2</span>   <span class="c1"># 8 位，装进 11 位的模板</span>
+</code></pre><textarea class="verify-src" hidden>def utf8_encode(cp):
+    &quot;&quot;&quot;按 UTF-8 的位模式，把一个码位编码成字节值的列表。&quot;&quot;&quot;
+    if not 0 &lt;= cp &lt;= 0x10FFFF or 0xD800 &lt;= cp &lt;= 0xDFFF:
+        raise ValueError(f&quot;U+{cp:04X} 不是可以编码的字符&quot;)  # 原因见 A.4 节
+    if cp &lt; 0x80:       # 7 位 ：0xxxxxxx
+        return [cp]
+    if cp &lt; 0x800:      # 11 位：110xxxxx 10xxxxxx
+        return [0xC0 | (cp &gt;&gt; 6),
+                0x80 | (cp &amp; 0x3F)]
+    if cp &lt; 0x10000:    # 16 位：1110xxxx 10xxxxxx 10xxxxxx
+        return [0xE0 | (cp &gt;&gt; 12),
+                0x80 | ((cp &gt;&gt; 6) &amp; 0x3F),
+                0x80 | (cp &amp; 0x3F)]
+    # 21 位：11110xxx 10xxxxxx 10xxxxxx 10xxxxxx
+    return [0xF0 | (cp &gt;&gt; 18),
+            0x80 | ((cp &gt;&gt; 12) &amp; 0x3F),
+            0x80 | ((cp &gt;&gt; 6) &amp; 0x3F),
+            0x80 | (cp &amp; 0x3F)]
+
+cp = ord(&quot;あ&quot;)
+b = utf8_encode(cp)
+groups = f&quot;{cp &gt;&gt; 12:04b} {(cp &gt;&gt; 6) &amp; 0x3F:06b} {cp &amp; 0x3F:06b}&quot;
+steps = [(f&quot;U+{cp:04X}&quot;, &quot;码位&quot;),
+         (f&quot;{cp:016b}&quot;, &quot;写成 16 位&quot;),
+         (groups, &quot;按 4+6+6 切开&quot;),
+         (&quot; &quot;.join(f&quot;{x:08b}&quot; for x in b), &quot;填进模板&quot;),
+         (&quot; &quot;.join(f&quot;{x:02X}&quot; for x in b) + f&quot; = {b}&quot;, &quot;字节&quot;)]
+for value, why in steps:
+    print(f&quot;{value:&lt;28}（{why}）&quot;)
+assert b == [227, 129, 130] == list(&quot;あ&quot;.encode(&quot;utf-8&quot;))
+assert ord(&quot;é&quot;).bit_length() == 8 and len(utf8_encode(ord(&quot;é&quot;))) == 2   # 8 位，装进 11 位的模板
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>U+3042                      （码位）
+0011000001000010            （写成 16 位）
+0011 000001 000010          （按 4+6+6 切开）
+11100011 10000001 10000010  （填进模板）
+E3 81 82 = [227, 129, 130]  （字节）
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><aside class="callout callout-think"><div class="callout-title"><span class="callout-kind">想一想</span><span class="callout-text">手算 😁（U+1F601）的 UTF-8 编码，结果应该与 1.2 节的哪几个 id 一致？</span></div>
+</aside>
+<details class="callout callout-answer"><summary>答案（先想一想再展开）</summary>
+<p>0x1F601 落在第 4 行，要 4 个字节。写成 21 位是 <code>000 011111 011000 000001</code>（按 3+6+6+6 切开），填进模板得到 <code>11110000 10011111 10011000 10000001</code>，也就是 <code>F0 9F 98 81</code> = 240、159、152、129。这正是 1.2 节 <code>hello世界😁</code> 编码结果的最后 4 个 id。</p>
+</details>
+<p>一个例子对上了，不等于所有码位都对。下面从四类码位里各随机抽 2,000 个，再加上每一类的上下边界，与 Python 的 <code>str.encode</code> 逐个比较。代理区 U+D800–U+DFFF 两边都应该拒绝：</p>
+<div class="verify" id="v-A-e" data-cell="{&quot;id&quot;: &quot;A-e&quot;, &quot;golden&quot;: &quot;U+0000–U+007F：2002 个码位，都是 1 字节，与 str.encode 一致\nU+0080–U+07FF：2002 个码位，都是 2 字节，与 str.encode 一致\nU+0800–U+FFFF：1934 个码位，都是 3 字节，与 str.encode 一致\nU+10000–U+10FFFF：2002 个码位，都是 4 字节，与 str.encode 一致\n第 3 类抽到的 2,002 个码位里有 68 个落进代理区，已先剔除\nU+D7FF → ED 9F BF（Python：ED 9F BF）\nU+D800 → 拒绝（Python：拒绝）\nU+DFFF → 拒绝（Python：拒绝）\nU+E000 → EE 80 80（Python：EE 80 80）\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 A-e</span><span class="verify-title">四类码位抽样对拍，代理区两边都拒绝</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">classes</span> <span class="o">=</span> <span class="p">[(</span><span class="mh">0x0000</span><span class="p">,</span> <span class="mh">0x007F</span><span class="p">),</span> <span class="p">(</span><span class="mh">0x0080</span><span class="p">,</span> <span class="mh">0x07FF</span><span class="p">),</span>
+           <span class="p">(</span><span class="mh">0x0800</span><span class="p">,</span> <span class="mh">0xFFFF</span><span class="p">),</span> <span class="p">(</span><span class="mh">0x10000</span><span class="p">,</span> <span class="mh">0x10FFFF</span><span class="p">)]</span>
+<span class="n">dropped</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="p">(</span><span class="n">lo</span><span class="p">,</span> <span class="n">hi</span><span class="p">)</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">classes</span><span class="p">,</span> <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+    <span class="n">drawn</span> <span class="o">=</span> <span class="p">[</span><span class="n">lo</span><span class="p">,</span> <span class="n">hi</span><span class="p">]</span> <span class="o">+</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="mi">2000</span><span class="p">)]</span>
+    <span class="n">cps</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">drawn</span> <span class="k">if</span> <span class="ow">not</span> <span class="mh">0xD800</span> <span class="o">&lt;=</span> <span class="n">c</span> <span class="o">&lt;=</span> <span class="mh">0xDFFF</span><span class="p">]</span>  <span class="c1"># 代理区另行检查</span>
+    <span class="n">dropped</span><span class="p">[</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">drawn</span><span class="p">)</span> <span class="o">-</span> <span class="nb">len</span><span class="p">(</span><span class="n">cps</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">cps</span><span class="p">:</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="n">utf8_encode</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">b</span><span class="p">)</span> <span class="o">==</span> <span class="n">n</span> <span class="ow">and</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">b</span><span class="p">)</span> <span class="o">==</span> <span class="nb">chr</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"U+</span><span class="si">{</span><span class="n">lo</span><span class="si">:</span><span class="s2">04X</span><span class="si">}</span><span class="s2">–U+</span><span class="si">{</span><span class="n">hi</span><span class="si">:</span><span class="s2">04X</span><span class="si">}</span><span class="s2">：</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">cps</span><span class="p">)</span><span class="si">}</span><span class="s2"> 个码位，都是 </span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2"> 字节，"</span>
+          <span class="s2">"与 str.encode 一致"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"第 3 类抽到的 </span><span class="si">{</span><span class="mi">2000</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> 个码位里有 </span><span class="si">{</span><span class="n">dropped</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="si">}</span><span class="s2"> 个落进代理区，已先剔除"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">dropped</span> <span class="o">==</span> <span class="p">{</span><span class="mi">1</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">3</span><span class="p">:</span> <span class="mi">68</span><span class="p">,</span> <span class="mi">4</span><span class="p">:</span> <span class="mi">0</span><span class="p">}</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">try_encode</span><span class="p">(</span><span class="n">encode</span><span class="p">,</span> <span class="n">c</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">encode</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">.</span><span class="n">hex</span><span class="p">(</span><span class="s2">" "</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+    <span class="k">except</span> <span class="p">(</span><span class="ne">ValueError</span><span class="p">,</span> <span class="ne">UnicodeEncodeError</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s2">"拒绝"</span>
+
+<span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="p">(</span><span class="mh">0xD7FF</span><span class="p">,</span> <span class="mh">0xD800</span><span class="p">,</span> <span class="mh">0xDFFF</span><span class="p">,</span> <span class="mh">0xE000</span><span class="p">):</span>
+    <span class="n">mine</span> <span class="o">=</span> <span class="n">try_encode</span><span class="p">(</span><span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">utf8_encode</span><span class="p">(</span><span class="n">c</span><span class="p">)),</span> <span class="n">c</span><span class="p">)</span>
+    <span class="n">ref</span> <span class="o">=</span> <span class="n">try_encode</span><span class="p">(</span><span class="k">lambda</span> <span class="n">c</span><span class="p">:</span> <span class="nb">chr</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">),</span> <span class="n">c</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"U+</span><span class="si">{</span><span class="n">c</span><span class="si">:</span><span class="s2">04X</span><span class="si">}</span><span class="s2"> → </span><span class="si">{</span><span class="n">mine</span><span class="si">}</span><span class="s2">（Python：</span><span class="si">{</span><span class="n">ref</span><span class="si">}</span><span class="s2">）"</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">mine</span> <span class="o">==</span> <span class="n">ref</span>
+</code></pre><textarea class="verify-src" hidden>import numpy as np
+
+rng = np.random.default_rng(0)
+classes = [(0x0000, 0x007F), (0x0080, 0x07FF),
+           (0x0800, 0xFFFF), (0x10000, 0x10FFFF)]
+dropped = {}
+for n, (lo, hi) in enumerate(classes, start=1):
+    drawn = [lo, hi] + [int(c) for c in rng.integers(lo, hi + 1, size=2000)]
+    cps = [c for c in drawn if not 0xD800 &lt;= c &lt;= 0xDFFF]  # 代理区另行检查
+    dropped[n] = len(drawn) - len(cps)
+    for c in cps:
+        b = utf8_encode(c)
+        assert len(b) == n and bytes(b) == chr(c).encode(&quot;utf-8&quot;)
+    print(f&quot;U+{lo:04X}–U+{hi:04X}：{len(cps)} 个码位，都是 {n} 字节，&quot;
+          &quot;与 str.encode 一致&quot;)
+print(f&quot;第 3 类抽到的 {2000 + 2:,} 个码位里有 {dropped[3]} 个落进代理区，已先剔除&quot;)
+assert dropped == {1: 0, 2: 0, 3: 68, 4: 0}
+
+def try_encode(encode, c):
+    try:
+        return encode(c).hex(&quot; &quot;).upper()
+    except (ValueError, UnicodeEncodeError):
+        return &quot;拒绝&quot;
+
+for c in (0xD7FF, 0xD800, 0xDFFF, 0xE000):
+    mine = try_encode(lambda c: bytes(utf8_encode(c)), c)
+    ref = try_encode(lambda c: chr(c).encode(&quot;utf-8&quot;), c)
+    print(f&quot;U+{c:04X} → {mine}（Python：{ref}）&quot;)
+    assert mine == ref
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>U+0000–U+007F：2002 个码位，都是 1 字节，与 str.encode 一致
+U+0080–U+07FF：2002 个码位，都是 2 字节，与 str.encode 一致
+U+0800–U+FFFF：1934 个码位，都是 3 字节，与 str.encode 一致
+U+10000–U+10FFFF：2002 个码位，都是 4 字节，与 str.encode 一致
+第 3 类抽到的 2,002 个码位里有 68 个落进代理区，已先剔除
+U+D7FF → ED 9F BF（Python：ED 9F BF）
+U+D800 → 拒绝（Python：拒绝）
+U+DFFF → 拒绝（Python：拒绝）
+U+E000 → EE 80 80（Python：EE 80 80）
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>第 3 类的范围包含了代理区，抽到的码位里有 68 个落在代理区里。它们先被剔除，留给最后四行单独检查，所以这一类只剩 1,934 个。</p>
+<p>抽样能发现大多数错误，但我们可以做得更彻底：把全部 1,112,064 个可编码的码位一次性对拍。这个数是 0 到 0x10FFFF 的 1,114,112 个码位，减去代理区的 2,048 个。码位从小到大排列时，字节数也是从小到大的，所以把四类码位分别用数组运算编好，再依次拼起来，就应该等于“所有字符连成的字符串”的 UTF-8 编码。构造这个字符串时，我们借用了 A.1 节的结论：UTF-32 的字节就是码位本身，所以把码位数组按 UTF-32 解码，就得到了包含全部字符的字符串。</p>
+<div class="verify" id="v-A-f" data-cell="{&quot;id&quot;: &quot;A-f&quot;, &quot;golden&quot;: &quot;1,112,064 个码位 → 4,382,592 个字节，其中值为 0 的字节 1 个\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 A-f</span><span class="verify-title">全部 1,112,064 个码位逐字节对拍（NumPy 向量化）</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">cps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mh">0x110000</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint32</span><span class="p">)</span>
+<span class="n">cps</span> <span class="o">=</span> <span class="n">cps</span><span class="p">[(</span><span class="n">cps</span> <span class="o">&lt;</span> <span class="mh">0xD800</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">cps</span> <span class="o">&gt;</span> <span class="mh">0xDFFF</span><span class="p">)]</span>                 <span class="c1"># 去掉代理区</span>
+<span class="n">c1</span><span class="p">,</span> <span class="n">c2</span><span class="p">,</span> <span class="n">c3</span><span class="p">,</span> <span class="n">c4</span> <span class="o">=</span> <span class="p">(</span><span class="n">cps</span><span class="p">[(</span><span class="n">cps</span> <span class="o">&gt;=</span> <span class="n">lo</span><span class="p">)</span> <span class="o">&amp;</span> <span class="p">(</span><span class="n">cps</span> <span class="o">&lt;=</span> <span class="n">hi</span><span class="p">)]</span> <span class="k">for</span> <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="ow">in</span> <span class="n">classes</span><span class="p">)</span>
+<span class="c1"># 与 utf8_encode 完全相同的位运算，只是一次算一整个数组</span>
+<span class="n">b1</span> <span class="o">=</span> <span class="n">c1</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span>
+<span class="n">b2</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="mh">0xC0</span> <span class="o">|</span> <span class="p">(</span><span class="n">c2</span> <span class="o">&gt;&gt;</span> <span class="mi">6</span><span class="p">),</span> <span class="mh">0x80</span> <span class="o">|</span> <span class="p">(</span><span class="n">c2</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">)],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">b3</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="mh">0xE0</span> <span class="o">|</span> <span class="p">(</span><span class="n">c3</span> <span class="o">&gt;&gt;</span> <span class="mi">12</span><span class="p">),</span> <span class="mh">0x80</span> <span class="o">|</span> <span class="p">((</span><span class="n">c3</span> <span class="o">&gt;&gt;</span> <span class="mi">6</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">),</span>
+               <span class="mh">0x80</span> <span class="o">|</span> <span class="p">(</span><span class="n">c3</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">)],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">b4</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="mh">0xF0</span> <span class="o">|</span> <span class="p">(</span><span class="n">c4</span> <span class="o">&gt;&gt;</span> <span class="mi">18</span><span class="p">),</span> <span class="mh">0x80</span> <span class="o">|</span> <span class="p">((</span><span class="n">c4</span> <span class="o">&gt;&gt;</span> <span class="mi">12</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">),</span>
+               <span class="mh">0x80</span> <span class="o">|</span> <span class="p">((</span><span class="n">c4</span> <span class="o">&gt;&gt;</span> <span class="mi">6</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">),</span> <span class="mh">0x80</span> <span class="o">|</span> <span class="p">(</span><span class="n">c4</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">)],</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">blocks</span> <span class="o">=</span> <span class="p">[</span><span class="n">b</span><span class="o">.</span><span class="n">ravel</span><span class="p">()</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="p">(</span><span class="n">b1</span><span class="p">,</span> <span class="n">b2</span><span class="p">,</span> <span class="n">b3</span><span class="p">,</span> <span class="n">b4</span><span class="p">)]</span>
+<span class="n">ours</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">blocks</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span><span class="o">.</span><span class="n">tobytes</span><span class="p">()</span>
+
+<span class="c1"># UTF-32 的字节就是码位本身：按 UTF-32 解码，得到全部字符连成的字符串</span>
+<span class="n">everything</span> <span class="o">=</span> <span class="n">cps</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="s2">"&lt;u4"</span><span class="p">)</span><span class="o">.</span><span class="n">tobytes</span><span class="p">()</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-32-le"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">cps</span><span class="p">)</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> 个码位 → </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">ours</span><span class="p">)</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> 个字节，其中值为 0 的字节 </span><span class="si">{</span><span class="n">ours</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="si">}</span><span class="s2"> 个"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="mh">0x110000</span> <span class="o">==</span> <span class="mi">1_114_112</span> <span class="ow">and</span> <span class="mh">0xDFFF</span> <span class="o">-</span> <span class="mh">0xD800</span> <span class="o">+</span> <span class="mi">1</span> <span class="o">==</span> <span class="mi">2_048</span>
+<span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">cps</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1_114_112</span> <span class="o">-</span> <span class="mi">2_048</span> <span class="o">==</span> <span class="mi">1_112_064</span> <span class="ow">and</span> <span class="nb">len</span><span class="p">(</span><span class="n">everything</span><span class="p">)</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">cps</span><span class="p">)</span>
+<span class="k">assert</span> <span class="p">(</span><span class="mh">0x10FFFF</span><span class="p">)</span><span class="o">.</span><span class="n">bit_length</span><span class="p">()</span> <span class="o">==</span> <span class="mi">21</span>                       <span class="c1"># 码位最多 21 位</span>
+<span class="k">assert</span> <span class="n">ours</span> <span class="o">==</span> <span class="n">everything</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">ours</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span> <span class="o">==</span> <span class="n">everything</span>                  <span class="c1"># 还能原样拼回去</span>
+<span class="k">for</span> <span class="n">enc</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"utf-16-be"</span><span class="p">,</span> <span class="s2">"utf-32-be"</span><span class="p">):</span>                     <span class="c1"># 另外两种编码也一样</span>
+    <span class="k">assert</span> <span class="n">everything</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="n">enc</span><span class="p">)</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">enc</span><span class="p">)</span> <span class="o">==</span> <span class="n">everything</span>
+<span class="k">assert</span> <span class="n">ours</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span>                                  <span class="c1"># 只有 U+0000 本身</span>
+</code></pre><textarea class="verify-src" hidden>cps = np.arange(0x110000, dtype=np.uint32)
+cps = cps[(cps &lt; 0xD800) | (cps &gt; 0xDFFF)]                 # 去掉代理区
+c1, c2, c3, c4 = (cps[(cps &gt;= lo) &amp; (cps &lt;= hi)] for lo, hi in classes)
+# 与 utf8_encode 完全相同的位运算，只是一次算一整个数组
+b1 = c1[:, None]
+b2 = np.stack([0xC0 | (c2 &gt;&gt; 6), 0x80 | (c2 &amp; 0x3F)], axis=1)
+b3 = np.stack([0xE0 | (c3 &gt;&gt; 12), 0x80 | ((c3 &gt;&gt; 6) &amp; 0x3F),
+               0x80 | (c3 &amp; 0x3F)], axis=1)
+b4 = np.stack([0xF0 | (c4 &gt;&gt; 18), 0x80 | ((c4 &gt;&gt; 12) &amp; 0x3F),
+               0x80 | ((c4 &gt;&gt; 6) &amp; 0x3F), 0x80 | (c4 &amp; 0x3F)], axis=1)
+blocks = [b.ravel() for b in (b1, b2, b3, b4)]
+ours = np.concatenate(blocks).astype(np.uint8).tobytes()
+
+# UTF-32 的字节就是码位本身：按 UTF-32 解码，得到全部字符连成的字符串
+everything = cps.astype(&quot;&lt;u4&quot;).tobytes().decode(&quot;utf-32-le&quot;)
+print(f&quot;{len(cps):,} 个码位 → {len(ours):,} 个字节，其中值为 0 的字节 {ours.count(0)} 个&quot;)
+assert 0x110000 == 1_114_112 and 0xDFFF - 0xD800 + 1 == 2_048
+assert len(cps) == 1_114_112 - 2_048 == 1_112_064 and len(everything) == len(cps)
+assert (0x10FFFF).bit_length() == 21                       # 码位最多 21 位
+assert ours == everything.encode(&quot;utf-8&quot;)
+assert ours.decode(&quot;utf-8&quot;) == everything                  # 还能原样拼回去
+for enc in (&quot;utf-16-be&quot;, &quot;utf-32-be&quot;):                     # 另外两种编码也一样
+    assert everything.encode(enc).decode(enc) == everything
+assert ours.count(0) == 1                                  # 只有 U+0000 本身
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>1,112,064 个码位 → 4,382,592 个字节，其中值为 0 的字节 1 个
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>一百多万个码位，四百多万个字节，一个不差。下面的交互图可以输入任意文字，看看每个字符的码位是怎样被拆开、填进模板的。</p>
+<figure class="widget" id="fig-A-1" data-widget="appendix-utf8" data-config="{&quot;mode&quot;: &quot;encode&quot;, &quot;text&quot;: &quot;Aé世😁&quot;}"><div class="widget-mount"><noscript>此交互图需要 JavaScript。</noscript></div><figcaption><span class="fignum">图 A-1</span>码位的每一位都原样出现在字节里：首字节的标记告诉我们一共几个字节，后续字节都以 10 开头。</figcaption></figure><h2 id="sA-3">A.3 解码与自同步</h2>
+<p>解码是编码的逆过程：读首字节，数开头有几个 1，就知道这个字符一共几个字节；去掉每个字节的标记位，把剩下的数据位拼起来，就得到码位。以 <code>E3 81 82</code> 为例：</p>
+<div class="math block">
+<div class="math-block">\begin{aligned}
+&amp;\text{E3 81 82}\\
+&amp;= 1110\,0011\;\;10\,000001\;\;10\,000010_{(2)}\\[-3pt]
+&amp;\quad{\footnotesize\text{（写成二进制）}}\\[2pt]
+&amp;\to 0011\;000001\;000010_{(2)}\\[-3pt]
+&amp;\quad{\footnotesize\text{（去掉标记位）}}\\[2pt]
+&amp;= \text{0x3042} = \text{あ}\\[-3pt]
+&amp;\quad{\footnotesize\text{（拼起来就是码位）}}
+\end{aligned}</div>
+</div>
+<p>这里有一个容易被忽略的设计：三种字节的取值范围互不重叠。ASCII 是 <code>00–7F</code>，后续字节是 <code>80–BF</code>，首字节则落在 <code>C2–F4</code>（剩下的 <code>C0</code>、<code>C1</code>、<code>F5–FF</code> 永远不会出现，原因见 A.4 节）。我们用 A.2 节的全部编码结果来确认这一点：</p>
+<div class="verify" id="v-A-g" data-cell="{&quot;id&quot;: &quot;A-g&quot;, &quot;golden&quot;: &quot;首字节  ：C2–F4，共 51 个\n后续字节：80–BF，共 64 个\n从不出现： C0 C1 F5 F6 F7 F8 F9 FA FB FC FD FE FF\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 A-g</span><span class="verify-title">三种字节互不重叠；13 个字节值永远不出现</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">first</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">b2</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">b3</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">b4</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]])</span>
+<span class="n">rest</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">b2</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span> <span class="n">b3</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">ravel</span><span class="p">(),</span>
+                       <span class="n">b4</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">ravel</span><span class="p">()])</span>
+<span class="n">lead</span><span class="p">,</span> <span class="n">cont</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">first</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()),</span> <span class="nb">set</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">unique</span><span class="p">(</span><span class="n">rest</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">())</span>
+<span class="n">unused</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">))</span> <span class="o">-</span> <span class="nb">set</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mh">0x80</span><span class="p">))</span> <span class="o">-</span> <span class="n">lead</span> <span class="o">-</span> <span class="n">cont</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"首字节  ：</span><span class="si">{</span><span class="nb">min</span><span class="p">(</span><span class="n">lead</span><span class="p">)</span><span class="si">:</span><span class="s2">02X</span><span class="si">}</span><span class="s2">–</span><span class="si">{</span><span class="nb">max</span><span class="p">(</span><span class="n">lead</span><span class="p">)</span><span class="si">:</span><span class="s2">02X</span><span class="si">}</span><span class="s2">，共 </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">lead</span><span class="p">)</span><span class="si">}</span><span class="s2"> 个"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"后续字节：</span><span class="si">{</span><span class="nb">min</span><span class="p">(</span><span class="n">cont</span><span class="p">)</span><span class="si">:</span><span class="s2">02X</span><span class="si">}</span><span class="s2">–</span><span class="si">{</span><span class="nb">max</span><span class="p">(</span><span class="n">cont</span><span class="p">)</span><span class="si">:</span><span class="s2">02X</span><span class="si">}</span><span class="s2">，共 </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">cont</span><span class="p">)</span><span class="si">}</span><span class="s2"> 个"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"从不出现："</span><span class="p">,</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">x</span><span class="si">:</span><span class="s2">02X</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">unused</span><span class="p">))</span>
+<span class="k">assert</span> <span class="n">lead</span> <span class="o">==</span> <span class="nb">set</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mh">0xC2</span><span class="p">,</span> <span class="mh">0xF5</span><span class="p">))</span> <span class="ow">and</span> <span class="n">cont</span> <span class="o">==</span> <span class="nb">set</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="mh">0x80</span><span class="p">,</span> <span class="mh">0xC0</span><span class="p">))</span>
+<span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">unused</span><span class="p">)</span> <span class="o">==</span> <span class="mi">13</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">lead</span> <span class="o">&amp;</span> <span class="n">cont</span>
+
+<span class="c1"># 手算的解码：去掉标记位，把数据位拼起来</span>
+<span class="n">cp</span> <span class="o">=</span> <span class="p">((</span><span class="mh">0xE3</span> <span class="o">&amp;</span> <span class="mh">0x0F</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="mi">12</span><span class="p">)</span> <span class="o">|</span> <span class="p">((</span><span class="mh">0x81</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="mi">6</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="mh">0x82</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">chr</span><span class="p">(</span><span class="n">cp</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"あ"</span>
+</code></pre><textarea class="verify-src" hidden>first = np.concatenate([b2[:, 0], b3[:, 0], b4[:, 0]])
+rest = np.concatenate([b2[:, 1:].ravel(), b3[:, 1:].ravel(),
+                       b4[:, 1:].ravel()])
+lead, cont = set(np.unique(first).tolist()), set(np.unique(rest).tolist())
+unused = sorted(set(range(256)) - set(range(0x80)) - lead - cont)
+print(f&quot;首字节  ：{min(lead):02X}–{max(lead):02X}，共 {len(lead)} 个&quot;)
+print(f&quot;后续字节：{min(cont):02X}–{max(cont):02X}，共 {len(cont)} 个&quot;)
+print(&quot;从不出现：&quot;, &quot; &quot;.join(f&quot;{x:02X}&quot; for x in unused))
+assert lead == set(range(0xC2, 0xF5)) and cont == set(range(0x80, 0xC0))
+assert len(unused) == 13 and not lead &amp; cont
+
+# 手算的解码：去掉标记位，把数据位拼起来
+cp = ((0xE3 &amp; 0x0F) &lt;&lt; 12) | ((0x81 &amp; 0x3F) &lt;&lt; 6) | (0x82 &amp; 0x3F)
+assert chr(cp) == &quot;あ&quot;
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>首字节  ：C2–F4，共 51 个
+后续字节：80–BF，共 64 个
+从不出现： C0 C1 F5 F6 F7 F8 F9 FA FB FC FD FE FF
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>范围不重叠，带来了两个好处。第一，随便从文件中间的哪个字节开始，只要跳过开头的后续字节（最多 3 个），就一定站在某个字符的起点上，从那里开始解码即可。这种性质叫作<strong>自同步</strong>（self-synchronizing）。第二，多字节字符里的每个字节都不小于 0x80，所以 ASCII 字节绝不会出现在某个汉字或 emoji 的“肚子”里。</p>
+<div class="verify" id="v-A-h" data-cell="{&quot;id&quot;: &quot;A-h&quot;, &quot;golden&quot;: &quot;15 个起点都能对齐，最多跳过 3 个字节\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 A-h</span><span class="verify-title">从任意字节出发，最多跳过 3 个后续字节就能对齐</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">text</span> <span class="o">=</span> <span class="s2">"hello世界😁"</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">text</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
+<span class="n">max_skip</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="k">for</span> <span class="n">start</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)):</span>
+    <span class="n">i</span> <span class="o">=</span> <span class="n">start</span>
+    <span class="k">while</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="ow">and</span> <span class="mh">0x80</span> <span class="o">&lt;=</span> <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mh">0xBF</span><span class="p">:</span>  <span class="c1"># 跳过后续字节</span>
+        <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="n">max_skip</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">max_skip</span><span class="p">,</span> <span class="n">i</span> <span class="o">-</span> <span class="n">start</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">text</span><span class="o">.</span><span class="n">endswith</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">:]</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span>   <span class="c1"># 剩下的都能解码</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="si">}</span><span class="s2"> 个起点都能对齐，最多跳过 </span><span class="si">{</span><span class="n">max_skip</span><span class="si">}</span><span class="s2"> 个字节"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">max_skip</span> <span class="o">==</span> <span class="mi">3</span>
+</code></pre><textarea class="verify-src" hidden>text = &quot;hello世界😁&quot;
+data = text.encode(&quot;utf-8&quot;)
+max_skip = 0
+for start in range(len(data)):
+    i = start
+    while i &lt; len(data) and 0x80 &lt;= data[i] &lt;= 0xBF:  # 跳过后续字节
+        i += 1
+    max_skip = max(max_skip, i - start)
+    assert text.endswith(data[i:].decode(&quot;utf-8&quot;))   # 剩下的都能解码
+print(f&quot;{len(data)} 个起点都能对齐，最多跳过 {max_skip} 个字节&quot;)
+assert max_skip == 3
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>15 个起点都能对齐，最多跳过 3 个字节
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>第二个好处在 DLFS6 里派上了用场。<a href="ch04.html#s4-3">4.3 节</a>训练分词器时，要把好几 GB 的文件切成若干块，一块一块地读（<a href="ch04.html#s4-4">4.4 节</a>再把这些块分给多个进程并行处理）。负责切分的 <code>find_chunk_boundaries</code> 先按字节数把文件等分，再从每个切点往后，按 4096 个字节一块地读，把切点挪到读到的第一个 <code>&lt;|endoftext|&gt;</code> 上：</p>
+<figure class="listing" data-start="45"><figcaption><a class="listing-path" href="https://github.com/oreilly-japan/deep-learning-from-scratch-6/blob/c9b6e2ed531b08dd9f451a091a34e9645148e2e2/storybot/tokenizer.py#L45-L77" target="_blank" rel="noopener">storybot/tokenizer.py</a><span class="listing-range">第 45–77 行</span></figcaption><pre class="code numbered" style="counter-reset: line 44; --ln-digits: 2"><code><span class="line">        <span class="n">chunk_size</span> <span class="o">=</span> <span class="n">file_size</span> <span class="o">//</span> <span class="n">num_chunks</span></span>
+<span class="line"></span>
+<span class="line">        <span class="c1"># チャンクの開始位置を計算（等間隔）</span></span>
+<span class="line">        <span class="n">chunk_boundaries</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="n">chunk_size</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_chunks</span><span class="p">)]</span></span>
+<span class="line">        <span class="n">chunk_boundaries</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">file_size</span><span class="p">)</span>  <span class="c1"># 最後にファイル終端を追加</span></span>
+<span class="line"></span>
+<span class="line">        <span class="n">buffer_size</span> <span class="o">=</span> <span class="mi">4096</span>  <span class="c1"># 境界から先読みするバイト数</span></span>
+<span class="line"></span>
+<span class="line">        <span class="c1"># 境界位置の調整（終了トークンを探す）</span></span>
+<span class="line">        <span class="k">for</span> <span class="n">bi</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">chunk_boundaries</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">):</span></span>
+<span class="line">            <span class="n">chunk_position</span> <span class="o">=</span> <span class="n">chunk_boundaries</span><span class="p">[</span><span class="n">bi</span><span class="p">]</span></span>
+<span class="line">            <span class="n">file</span><span class="o">.</span><span class="n">seek</span><span class="p">(</span><span class="n">chunk_position</span><span class="p">)</span>  <span class="c1"># 境界の推定位置から開始</span></span>
+<span class="line"></span>
+<span class="line">            <span class="k">while</span> <span class="kc">True</span><span class="p">:</span></span>
+<span class="line">                <span class="n">buffer</span> <span class="o">=</span> <span class="n">file</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">buffer_size</span><span class="p">)</span>  <span class="c1"># バッファサイズ分を読む</span></span>
+<span class="line"></span>
+<span class="line">                <span class="c1"># ファイル終端に達した場合</span></span>
+<span class="line">                <span class="k">if</span> <span class="n">buffer</span> <span class="o">==</span> <span class="sa">b</span><span class="s2">""</span><span class="p">:</span></span>
+<span class="line">                    <span class="n">chunk_boundaries</span><span class="p">[</span><span class="n">bi</span><span class="p">]</span> <span class="o">=</span> <span class="n">file_size</span></span>
+<span class="line">                    <span class="k">break</span></span>
+<span class="line"></span>
+<span class="line">                <span class="c1"># 読み取ったチャンクで終了トークンを検索</span></span>
+<span class="line">                <span class="n">end_position</span> <span class="o">=</span> <span class="n">buffer</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">byte_end_token</span><span class="p">)</span></span>
+<span class="line">                <span class="k">if</span> <span class="n">end_position</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span></span>
+<span class="line">                    <span class="c1"># 見つかった場合、その位置を新しい境界とする</span></span>
+<span class="line">                    <span class="n">chunk_boundaries</span><span class="p">[</span><span class="n">bi</span><span class="p">]</span> <span class="o">=</span> <span class="n">chunk_position</span> <span class="o">+</span> <span class="n">end_position</span></span>
+<span class="line">                    <span class="k">break</span></span>
+<span class="line"></span>
+<span class="line">                <span class="c1"># 見つからなかった場合、次のバッファ位置に移動</span></span>
+<span class="line">                <span class="n">chunk_position</span> <span class="o">+=</span> <span class="n">buffer_size</span></span>
+<span class="line"></span>
+<span class="line">    <span class="c1"># 重複を除去し、ソートして返す</span></span>
+<span class="line">    <span class="k">return</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">chunk_boundaries</span><span class="p">))</span></span>
+</code></pre></figure><p>这一块里找不到时，<code>chunk_position += buffer_size</code> 把起点往后挪一块再读；最后 <code>sorted(set(...))</code> 去掉重合的切点，下面验证 A-i 里的 <code>sorted({0, len(blob), *moved})</code> 就是照着它写的。</p>
+<p>等分的切点可能正好落在一个汉字的中间，挪过之后就不会了：<code>&lt;|endoftext|&gt;</code> 全是 ASCII 字节，它的起点不可能在任何多字节字符的内部。于是每一块都能单独解码。我们在内存里模拟一遍：</p>
+<div class="verify" id="v-A-i" data-cell="{&quot;id&quot;: &quot;A-i&quot;, &quot;golden&quot;: &quot;等分：8 块里有 4 块无法单独解码\n对齐：8 块里有 0 块无法单独解码\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 A-i</span><span class="verify-title">把切点挪到 &lt;|endoftext|&gt;，每一块都能单独解码</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">end</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">"&lt;|endoftext|&gt;"</span>
+<span class="n">docs</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"从前有一只猫，它每天都在窗台上晒太阳。"</span><span class="p">,</span> <span class="s2">"Hello, 世界! 😁"</span><span class="p">,</span>
+        <span class="s2">"def f(x):</span><span class="se">\n</span><span class="s2">    return x"</span><span class="p">]</span> <span class="o">*</span> <span class="mi">37</span>
+<span class="n">blob</span> <span class="o">=</span> <span class="n">end</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">d</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">docs</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">decodable</span><span class="p">(</span><span class="n">chunk</span><span class="p">):</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">chunk</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
+        <span class="k">return</span> <span class="kc">True</span>
+    <span class="k">except</span> <span class="ne">UnicodeDecodeError</span><span class="p">:</span>
+        <span class="k">return</span> <span class="kc">False</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">move_to_end_token</span><span class="p">(</span><span class="n">cut</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""从切点往后找最近的 &lt;|endoftext|&gt;，找不到就挪到末尾。"""</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">blob</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">end</span><span class="p">,</span> <span class="n">cut</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="n">blob</span><span class="p">)</span> <span class="k">if</span> <span class="n">p</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span> <span class="k">else</span> <span class="n">p</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">count_bad</span><span class="p">(</span><span class="n">cuts</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="ow">not</span> <span class="n">decodable</span><span class="p">(</span><span class="n">blob</span><span class="p">[</span><span class="n">a</span><span class="p">:</span><span class="n">b</span><span class="p">])</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">cuts</span><span class="p">,</span> <span class="n">cuts</span><span class="p">[</span><span class="mi">1</span><span class="p">:]))</span>
+
+<span class="n">num_chunks</span> <span class="o">=</span> <span class="mi">8</span>
+<span class="n">size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">blob</span><span class="p">)</span> <span class="o">//</span> <span class="n">num_chunks</span>
+<span class="n">naive</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="n">size</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_chunks</span><span class="p">)]</span> <span class="o">+</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">blob</span><span class="p">)]</span>     <span class="c1"># 等分</span>
+<span class="n">moved</span> <span class="o">=</span> <span class="nb">map</span><span class="p">(</span><span class="n">move_to_end_token</span><span class="p">,</span> <span class="n">naive</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+<span class="n">aligned</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">({</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">blob</span><span class="p">),</span> <span class="o">*</span><span class="n">moved</span><span class="p">})</span>                          <span class="c1"># 挪过之后</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"等分：</span><span class="si">{</span><span class="n">num_chunks</span><span class="si">}</span><span class="s2"> 块里有 </span><span class="si">{</span><span class="n">count_bad</span><span class="p">(</span><span class="n">naive</span><span class="p">)</span><span class="si">}</span><span class="s2"> 块无法单独解码"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"对齐：</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">aligned</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2"> 块里有 </span><span class="si">{</span><span class="n">count_bad</span><span class="p">(</span><span class="n">aligned</span><span class="p">)</span><span class="si">}</span><span class="s2"> 块无法单独解码"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">count_bad</span><span class="p">(</span><span class="n">naive</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">count_bad</span><span class="p">(</span><span class="n">aligned</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span>
+<span class="n">chunks</span> <span class="o">=</span> <span class="p">[</span><span class="n">blob</span><span class="p">[</span><span class="n">a</span><span class="p">:</span><span class="n">b</span><span class="p">]</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">aligned</span><span class="p">,</span> <span class="n">aligned</span><span class="p">[</span><span class="mi">1</span><span class="p">:])]</span>
+<span class="k">assert</span> <span class="sa">b</span><span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">chunks</span><span class="p">)</span> <span class="o">==</span> <span class="n">blob</span>
+</code></pre><textarea class="verify-src" hidden>end = b&quot;&lt;|endoftext|&gt;&quot;
+docs = [&quot;从前有一只猫，它每天都在窗台上晒太阳。&quot;, &quot;Hello, 世界! 😁&quot;,
+        &quot;def f(x):\n    return x&quot;] * 37
+blob = end.join(d.encode(&quot;utf-8&quot;) for d in docs)
+
+def decodable(chunk):
+    try:
+        chunk.decode(&quot;utf-8&quot;)
+        return True
+    except UnicodeDecodeError:
+        return False
+
+def move_to_end_token(cut):
+    &quot;&quot;&quot;从切点往后找最近的 &lt;|endoftext|&gt;，找不到就挪到末尾。&quot;&quot;&quot;
+    p = blob.find(end, cut)
+    return len(blob) if p == -1 else p
+
+def count_bad(cuts):
+    return sum(not decodable(blob[a:b]) for a, b in zip(cuts, cuts[1:]))
+
+num_chunks = 8
+size = len(blob) // num_chunks
+naive = [i * size for i in range(num_chunks)] + [len(blob)]     # 等分
+moved = map(move_to_end_token, naive[1:-1])
+aligned = sorted({0, len(blob), *moved})                          # 挪过之后
+print(f&quot;等分：{num_chunks} 块里有 {count_bad(naive)} 块无法单独解码&quot;)
+print(f&quot;对齐：{len(aligned) - 1} 块里有 {count_bad(aligned)} 块无法单独解码&quot;)
+assert count_bad(naive) &gt; 0 and count_bad(aligned) == 0
+chunks = [blob[a:b] for a, b in zip(aligned, aligned[1:])]
+assert b&quot;&quot;.join(chunks) == blob
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>等分：8 块里有 4 块无法单独解码
+对齐：8 块里有 0 块无法单独解码
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>这里的模拟把 <code>find_chunk_boundaries</code> 的循环读取简化成了一次 <code>bytes.find</code>。两者有一处不同：真正的函数每次读 4096 个字节，只在这一块里找，恰好跨在两块之间的 <code>&lt;|endoftext|&gt;</code> 会被错过，切点于是挪到下一个，而不是最近的那个。这不影响结论：不管挪到哪一个 <code>&lt;|endoftext|&gt;</code> 上，切点都落在字符的边界上。下面的本地测试在磁盘文件上运行真正的函数，确认每一块都能单独解码，也确认了“跨在两块之间的会被错过”：</p>
+<div class="localcheck"><div class="localcheck-head"><span class="localcheck-label">本地验证</span><span class="localcheck-title">真实的 find_chunk_boundaries 切出的每一块都能单独解码；跨在两块之间的 &lt;|endoftext|&gt; 会被错过</span></div><pre class="cmd"><code>uv run pytest verify/test_appendix.py::test_a_chunk_boundaries</code></pre><details><summary>查看测试代码 verify/test_appendix.py</summary><pre class="code"><code><span class="k">def</span><span class="w"> </span><span class="nf">test_a_chunk_boundaries</span><span class="p">(</span><span class="n">dlfs6_path</span><span class="p">,</span> <span class="n">tmp_path</span><span class="p">):</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">storybot.tokenizer</span><span class="w"> </span><span class="kn">import</span> <span class="n">find_chunk_boundaries</span>
+
+    <span class="n">end</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">"&lt;|endoftext|&gt;"</span>
+    <span class="n">docs</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"从前有一只猫，它喜欢晒太阳。"</span><span class="p">,</span> <span class="s2">"Hello, 世界! 😁 naïve café"</span><span class="p">,</span> <span class="s2">"def f(x):</span><span class="se">\n</span><span class="s2">    return x  # ✓"</span><span class="p">,</span>
+            <span class="s2">"日本語のテキストも混ぜておく。"</span><span class="p">]</span> <span class="o">*</span> <span class="mi">300</span>
+    <span class="n">blob</span> <span class="o">=</span> <span class="n">end</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">d</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">docs</span><span class="p">)</span>
+    <span class="n">path</span> <span class="o">=</span> <span class="n">tmp_path</span> <span class="o">/</span> <span class="s2">"corpus.txt"</span>
+    <span class="n">path</span><span class="o">.</span><span class="n">write_bytes</span><span class="p">(</span><span class="n">blob</span><span class="p">)</span>
+
+    <span class="n">naive_bad</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">num_chunks</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">7</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">64</span><span class="p">):</span>
+        <span class="n">bounds</span> <span class="o">=</span> <span class="n">find_chunk_boundaries</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="p">),</span> <span class="n">num_chunks</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">bounds</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">bounds</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">blob</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">bounds</span><span class="p">,</span> <span class="n">bounds</span><span class="p">[</span><span class="mi">1</span><span class="p">:]):</span>
+            <span class="k">assert</span> <span class="n">a</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">blob</span><span class="p">[</span><span class="n">a</span><span class="p">:</span><span class="n">a</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">end</span><span class="p">)]</span> <span class="o">==</span> <span class="n">end</span>   <span class="c1"># 每个内部切点都落在 &lt;|endoftext|&gt; 上</span>
+            <span class="n">blob</span><span class="p">[</span><span class="n">a</span><span class="p">:</span><span class="n">b</span><span class="p">]</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>                       <span class="c1"># 严格解码：切开字符就会抛异常</span>
+        <span class="n">size</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">blob</span><span class="p">)</span> <span class="o">//</span> <span class="n">num_chunks</span>
+        <span class="n">naive</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="n">size</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_chunks</span><span class="p">)]</span> <span class="o">+</span> <span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">blob</span><span class="p">)]</span>
+        <span class="n">naive_bad</span> <span class="o">+=</span> <span class="nb">sum</span><span class="p">(</span><span class="ow">not</span> <span class="n">_is_utf8</span><span class="p">(</span><span class="n">blob</span><span class="p">[</span><span class="n">a</span><span class="p">:</span><span class="n">b</span><span class="p">])</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">naive</span><span class="p">,</span> <span class="n">naive</span><span class="p">[</span><span class="mi">1</span><span class="p">:]))</span>
+    <span class="k">assert</span> <span class="n">naive_bad</span> <span class="o">&gt;</span> <span class="mi">0</span>  <span class="c1"># 对照：不挪切点的话，确实会把字符切开</span>
+
+    <span class="c1"># 附录 A.3：函数每次只在 4096 字节的一块里找，跨在两块之间的 &lt;|endoftext|&gt; 会被错过。</span>
+    <span class="c1"># 2 万字节、切成 2 块，等分的切点是 10,000；第一个 token 从 14,091 开始（跨过 14,096 这条块界），</span>
+    <span class="c1"># 第二个从 17,096 开始，完整地落在第二块里。最近的是第一个，函数挪到的却是第二个。</span>
+    <span class="n">straddle</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="sa">b</span><span class="s2">"x"</span> <span class="o">*</span> <span class="mi">20_000</span><span class="p">)</span>
+    <span class="n">first</span><span class="p">,</span> <span class="n">second</span> <span class="o">=</span> <span class="mi">10_000</span> <span class="o">+</span> <span class="mi">4096</span> <span class="o">-</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">10_000</span> <span class="o">+</span> <span class="mi">4096</span> <span class="o">+</span> <span class="mi">3000</span>
+    <span class="n">straddle</span><span class="p">[</span><span class="n">first</span><span class="p">:</span><span class="n">first</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">end</span><span class="p">)]</span> <span class="o">=</span> <span class="n">end</span>
+    <span class="n">straddle</span><span class="p">[</span><span class="n">second</span><span class="p">:</span><span class="n">second</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="n">end</span><span class="p">)]</span> <span class="o">=</span> <span class="n">end</span>
+    <span class="n">path2</span> <span class="o">=</span> <span class="n">tmp_path</span> <span class="o">/</span> <span class="s2">"straddle.txt"</span>
+    <span class="n">path2</span><span class="o">.</span><span class="n">write_bytes</span><span class="p">(</span><span class="nb">bytes</span><span class="p">(</span><span class="n">straddle</span><span class="p">))</span>
+    <span class="k">assert</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">straddle</span><span class="p">)</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="n">end</span><span class="p">,</span> <span class="mi">10_000</span><span class="p">)</span> <span class="o">==</span> <span class="n">first</span>                       <span class="c1"># 最近的那个</span>
+    <span class="k">assert</span> <span class="n">find_chunk_boundaries</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">path2</span><span class="p">),</span> <span class="mi">2</span><span class="p">)</span> <span class="o">==</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="n">second</span><span class="p">,</span> <span class="mi">20_000</span><span class="p">]</span>      <span class="c1"># 函数挪到的是下一个</span>
+</code></pre></details></div><h2 id="sA-4">A.4 不合法的字节序列</h2>
+<p>UTF-8 的规则也决定了哪些字节序列不合法。归纳起来有下面五种情况：</p>
+<table>
+<thead>
+<tr>
+<th>情况</th>
+<th>例子</th>
+<th>为什么不合法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>孤立的后续字节</td>
+<td><code>80</code></td>
+<td>后续字节前面必须有首字节</td>
+</tr>
+<tr>
+<td>序列被截断</td>
+<td><code>E4 B8</code></td>
+<td>首字节 <code>E4</code> 说一共 3 个字节，只来了 2 个</td>
+</tr>
+<tr>
+<td>超长编码（overlong）</td>
+<td><code>C0 80</code>、<code>E0 80 80</code></td>
+<td>同一个码位只允许最短的写法</td>
+</tr>
+<tr>
+<td>代理区</td>
+<td><code>ED A0 80</code>（U+D800）</td>
+<td>这段码位留给 UTF-16 的代理对，不是字符</td>
+</tr>
+<tr>
+<td>超出 U+10FFFF</td>
+<td><code>F4 90 80 80</code></td>
+<td>Unicode 的码位到 0x10FFFF 为止</td>
+</tr>
+</tbody>
+</table>
+<p>开头的第二个问题也有了答案：半个“世” <code>E4 B8</code> 正是第 2 种情况。首字节 <code>E4</code> 说一共 3 个字节，却只来了 2 个，序列在中途就断了。</p>
+<p>前两种情况直接违反了 A.2 节的模板，后三种则需要解释一下。</p>
+<p>先看超长编码。如果不管规矩，硬把 <code>C0 80</code> 按模板拆开，数据位是 <code>00000</code> 和 <code>000000</code>，拼起来就是 U+0000。可 U+0000 明明只需要一个字节 <code>00</code>。如果两种写法都算合法，同一段文字就会有多种字节表示，分词器给出的 token 序列也就不再唯一。更危险的是安全检查：一个程序禁止输入里出现 NUL 字节 <code>00</code>，却放过了 <code>C0 80</code>，后面的解码器又把它还原成了 NUL。这正是 UTF-8 的规范 RFC 3629 在第 10 节举的例子，所以规范要求只接受最短的写法（<a href="https://www.rfc-editor.org/rfc/rfc3629">RFC 3629</a>，2026-10 查证）。这也解释了首字节为什么从 <code>C2</code> 开始：<code>C0</code> 和 <code>C1</code> 开头的 2 字节序列只能装下小于 0x80 的码位，必然是超长编码。</p>
+<p>再看后两种。代理区 U+D800–U+DFFF 是 A.1 节里留给 UTF-16 的“零件”，单独出现没有意义。至于上限，早期的规范 RFC 2279 允许最多 6 个字节；RFC 3629 把范围收窄到 0x10FFFF，也就是 UTF-16 能表示的范围，于是最多 4 个字节。这样一来，首字节 <code>F5–FF</code> 就永远不会出现了：<code>F5–F7</code> 开头的 4 字节序列表示的码位都超过了 0x10FFFF；<code>F8–FD</code> 属于已经废除的 5、6 字节格式；<code>FE</code> 和 <code>FF</code> 则连旧规范里都没有用到（<a href="https://www.rfc-editor.org/rfc/rfc2279">RFC 2279</a>，2026-10 查证）。</p>
+<p>把这些规则合起来，就是 Unicode 标准中的“合法 UTF-8 字节序列”表（<a href="https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G27506">Unicode 16.0 第 3.9.3 节，表 3-7</a>，2026-10 查证）。它的关键在于：第 2 个字节允许的范围取决于首字节：</p>
+<table>
+<thead>
+<tr>
+<th>码位范围</th>
+<th>首字节</th>
+<th>第 2 个</th>
+<th>第 3 个</th>
+<th>第 4 个</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>U+0000–U+007F</td>
+<td><code>00–7F</code></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>U+0080–U+07FF</td>
+<td><code>C2–DF</code></td>
+<td><code>80–BF</code></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>U+0800–U+0FFF</td>
+<td><code>E0</code></td>
+<td><strong><code>A0–BF</code></strong></td>
+<td><code>80–BF</code></td>
+<td></td>
+</tr>
+<tr>
+<td>U+1000–U+CFFF</td>
+<td><code>E1–EC</code></td>
+<td><code>80–BF</code></td>
+<td><code>80–BF</code></td>
+<td></td>
+</tr>
+<tr>
+<td>U+D000–U+D7FF</td>
+<td><code>ED</code></td>
+<td><strong><code>80–9F</code></strong></td>
+<td><code>80–BF</code></td>
+<td></td>
+</tr>
+<tr>
+<td>U+E000–U+FFFF</td>
+<td><code>EE–EF</code></td>
+<td><code>80–BF</code></td>
+<td><code>80–BF</code></td>
+<td></td>
+</tr>
+<tr>
+<td>U+10000–U+3FFFF</td>
+<td><code>F0</code></td>
+<td><strong><code>90–BF</code></strong></td>
+<td><code>80–BF</code></td>
+<td><code>80–BF</code></td>
+</tr>
+<tr>
+<td>U+40000–U+FFFFF</td>
+<td><code>F1–F3</code></td>
+<td><code>80–BF</code></td>
+<td><code>80–BF</code></td>
+<td><code>80–BF</code></td>
+</tr>
+<tr>
+<td>U+100000–U+10FFFF</td>
+<td><code>F4</code></td>
+<td><strong><code>80–8F</code></strong></td>
+<td><code>80–BF</code></td>
+<td><code>80–BF</code></td>
+</tr>
+</tbody>
+</table>
+<p>加粗的四格各自排除了一种不合法的情况：</p>
+<ul>
+<li><code>E0</code> 后面不能是 <code>80–9F</code>，否则是超长编码；</li>
+<li><code>ED</code> 后面不能是 <code>A0–BF</code>，否则落进代理区；</li>
+<li><code>F0</code> 后面不能是 <code>80–8F</code>，否则是超长编码；</li>
+<li><code>F4</code> 后面不能是 <code>90–BF</code>，否则超出 0x10FFFF。</li>
+</ul>
+<p>把这张表原样搬进代码，就是下面的 <code>TABLE_3_7</code> 和解码器 <code>utf8_decode</code>。遇到不合法的序列时，它与 Python 一样抛出 <code>UnicodeDecodeError</code>，并且报告出错的起止位置和原因。<code>errors=&quot;replace&quot;</code> 那一支在 A.5 节解释：</p>
+<div class="verify" id="v-A-j" data-cell="{&quot;id&quot;: &quot;A-j&quot;, &quot;golden&quot;: &quot;80           0–1  invalid start byte        孤立的后续字节\nE4 B8        0–2  unexpected end of data    序列被截断\nC0 80        0–1  invalid start byte        超长编码\nE0 80 80     0–1  invalid continuation byte 超长编码（3 字节）\nED A0 80     0–1  invalid continuation byte 代理区 U+D800\nF4 90 80 80  0–1  invalid continuation byte 超出 U+10FFFF\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 A-j</span><span class="verify-title">照着表 3-7 实现解码器：五种不合法情况与 Python 报错一致</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="c1"># 表 3-7 的每一行：(首字节范围, 总字节数, 第 2 个字节的范围)</span>
+<span class="n">TABLE_3_7</span> <span class="o">=</span> <span class="p">[((</span><span class="mh">0xC2</span><span class="p">,</span> <span class="mh">0xDF</span><span class="p">),</span> <span class="mi">2</span><span class="p">,</span> <span class="p">(</span><span class="mh">0x80</span><span class="p">,</span> <span class="mh">0xBF</span><span class="p">)),</span>
+             <span class="p">((</span><span class="mh">0xE0</span><span class="p">,</span> <span class="mh">0xE0</span><span class="p">),</span> <span class="mi">3</span><span class="p">,</span> <span class="p">(</span><span class="mh">0xA0</span><span class="p">,</span> <span class="mh">0xBF</span><span class="p">)),</span>   <span class="c1"># 排除超长编码</span>
+             <span class="p">((</span><span class="mh">0xE1</span><span class="p">,</span> <span class="mh">0xEC</span><span class="p">),</span> <span class="mi">3</span><span class="p">,</span> <span class="p">(</span><span class="mh">0x80</span><span class="p">,</span> <span class="mh">0xBF</span><span class="p">)),</span>
+             <span class="p">((</span><span class="mh">0xED</span><span class="p">,</span> <span class="mh">0xED</span><span class="p">),</span> <span class="mi">3</span><span class="p">,</span> <span class="p">(</span><span class="mh">0x80</span><span class="p">,</span> <span class="mh">0x9F</span><span class="p">)),</span>   <span class="c1"># 排除代理区</span>
+             <span class="p">((</span><span class="mh">0xEE</span><span class="p">,</span> <span class="mh">0xEF</span><span class="p">),</span> <span class="mi">3</span><span class="p">,</span> <span class="p">(</span><span class="mh">0x80</span><span class="p">,</span> <span class="mh">0xBF</span><span class="p">)),</span>
+             <span class="p">((</span><span class="mh">0xF0</span><span class="p">,</span> <span class="mh">0xF0</span><span class="p">),</span> <span class="mi">4</span><span class="p">,</span> <span class="p">(</span><span class="mh">0x90</span><span class="p">,</span> <span class="mh">0xBF</span><span class="p">)),</span>   <span class="c1"># 排除超长编码</span>
+             <span class="p">((</span><span class="mh">0xF1</span><span class="p">,</span> <span class="mh">0xF3</span><span class="p">),</span> <span class="mi">4</span><span class="p">,</span> <span class="p">(</span><span class="mh">0x80</span><span class="p">,</span> <span class="mh">0xBF</span><span class="p">)),</span>
+             <span class="p">((</span><span class="mh">0xF4</span><span class="p">,</span> <span class="mh">0xF4</span><span class="p">),</span> <span class="mi">4</span><span class="p">,</span> <span class="p">(</span><span class="mh">0x80</span><span class="p">,</span> <span class="mh">0x8F</span><span class="p">))]</span>   <span class="c1"># 不超过 U+10FFFF</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">lookup</span><span class="p">(</span><span class="n">b0</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""首字节 → (总字节数, 第 2 个字节的下限, 上限)；不能当首字节时长度为 0。"""</span>
+    <span class="k">for</span> <span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">last</span><span class="p">),</span> <span class="n">length</span><span class="p">,</span> <span class="p">(</span><span class="n">lo</span><span class="p">,</span> <span class="n">hi</span><span class="p">)</span> <span class="ow">in</span> <span class="n">TABLE_3_7</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">first</span> <span class="o">&lt;=</span> <span class="n">b0</span> <span class="o">&lt;=</span> <span class="n">last</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">length</span><span class="p">,</span> <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span>
+    <span class="k">return</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">utf8_decode</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"strict"</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""按表 3-7 解码。errors 取 "strict" 或 "replace"。"""</span>
+    <span class="n">out</span><span class="p">,</span> <span class="n">i</span><span class="p">,</span> <span class="n">n</span> <span class="o">=</span> <span class="p">[],</span> <span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="k">while</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">n</span><span class="p">:</span>
+        <span class="n">b0</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">b0</span> <span class="o">&lt;</span> <span class="mh">0x80</span><span class="p">:</span>                          <span class="c1"># ASCII</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">chr</span><span class="p">(</span><span class="n">b0</span><span class="p">))</span>
+            <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">continue</span>
+        <span class="n">length</span><span class="p">,</span> <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">lookup</span><span class="p">(</span><span class="n">b0</span><span class="p">)</span>
+        <span class="n">j</span> <span class="o">=</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span>                              <span class="c1"># j 停在第一个“不对”的字节上</span>
+        <span class="k">while</span> <span class="n">j</span> <span class="o">&lt;</span> <span class="n">i</span> <span class="o">+</span> <span class="n">length</span> <span class="ow">and</span> <span class="n">j</span> <span class="o">&lt;</span> <span class="n">n</span> <span class="ow">and</span> <span class="n">lo</span> <span class="o">&lt;=</span> <span class="n">data</span><span class="p">[</span><span class="n">j</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="n">hi</span><span class="p">:</span>
+            <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="mh">0x80</span><span class="p">,</span> <span class="mh">0xBF</span>                <span class="c1"># 第 3、4 个字节都是 80–BF</span>
+            <span class="n">j</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="k">if</span> <span class="n">length</span> <span class="ow">and</span> <span class="n">j</span> <span class="o">==</span> <span class="n">i</span> <span class="o">+</span> <span class="n">length</span><span class="p">:</span>         <span class="c1"># 完整而且合法</span>
+            <span class="n">cp</span> <span class="o">=</span> <span class="n">b0</span> <span class="o">&amp;</span> <span class="p">(</span><span class="mh">0x7F</span> <span class="o">&gt;&gt;</span> <span class="n">length</span><span class="p">)</span>         <span class="c1"># 首字节里的数据位</span>
+            <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">j</span><span class="p">):</span>
+                <span class="n">cp</span> <span class="o">=</span> <span class="p">(</span><span class="n">cp</span> <span class="o">&lt;&lt;</span> <span class="mi">6</span><span class="p">)</span> <span class="o">|</span> <span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">&amp;</span> <span class="mh">0x3F</span><span class="p">)</span>  <span class="c1"># 每个后续字节 6 位</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">chr</span><span class="p">(</span><span class="n">cp</span><span class="p">))</span>
+        <span class="k">elif</span> <span class="n">errors</span> <span class="o">==</span> <span class="s2">"strict"</span><span class="p">:</span>
+            <span class="n">reason</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"invalid start byte"</span> <span class="k">if</span> <span class="n">length</span> <span class="o">==</span> <span class="mi">0</span> <span class="k">else</span>
+                      <span class="s2">"unexpected end of data"</span> <span class="k">if</span> <span class="n">j</span> <span class="o">==</span> <span class="n">n</span> <span class="k">else</span>
+                      <span class="s2">"invalid continuation byte"</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">UnicodeDecodeError</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">data</span><span class="p">),</span> <span class="n">i</span><span class="p">,</span> <span class="n">j</span><span class="p">,</span> <span class="n">reason</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">chr</span><span class="p">(</span><span class="mh">0xFFFD</span><span class="p">))</span>  <span class="c1"># data[i:j] 换成一个 U+FFFD（A.5 节）</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="n">j</span>
+    <span class="k">return</span> <span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">outcome</span><span class="p">(</span><span class="n">decode</span><span class="p">,</span> <span class="n">data</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""解码成功返回文字；失败返回 (起点, 终点, 原因)。"""</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">decode</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="k">except</span> <span class="ne">UnicodeDecodeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">end</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">reason</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">python_decode</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+    <span class="k">return</span> <span class="n">data</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
+
+<span class="n">bad</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"孤立的后续字节"</span><span class="p">:</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\x80</span><span class="s2">"</span><span class="p">,</span> <span class="s2">"序列被截断"</span><span class="p">:</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\xe4\xb8</span><span class="s2">"</span><span class="p">,</span>
+       <span class="s2">"超长编码"</span><span class="p">:</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\xc0\x80</span><span class="s2">"</span><span class="p">,</span> <span class="s2">"超长编码（3 字节）"</span><span class="p">:</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\xe0\x80\x80</span><span class="s2">"</span><span class="p">,</span>
+       <span class="s2">"代理区 U+D800"</span><span class="p">:</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\xed\xa0\x80</span><span class="s2">"</span><span class="p">,</span>
+       <span class="s2">"超出 U+10FFFF"</span><span class="p">:</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\xf4\x90\x80\x80</span><span class="s2">"</span><span class="p">}</span>
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">bad</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="n">mine</span> <span class="o">=</span> <span class="n">outcome</span><span class="p">(</span><span class="n">utf8_decode</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">mine</span> <span class="o">==</span> <span class="n">outcome</span><span class="p">(</span><span class="n">python_decode</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+    <span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">reason</span> <span class="o">=</span> <span class="n">mine</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">data</span><span class="o">.</span><span class="n">hex</span><span class="p">(</span><span class="s1">' '</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">:</span><span class="s2">&lt;12</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">start</span><span class="si">}</span><span class="s2">–</span><span class="si">{</span><span class="n">stop</span><span class="si">}</span><span class="s2">  </span><span class="si">{</span><span class="n">reason</span><span class="si">:</span><span class="s2">&lt;25</span><span class="si">}</span><span class="s2"> </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">utf8_decode</span><span class="p">(</span><span class="s2">"hello世界😁"</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span> <span class="o">==</span> <span class="s2">"hello世界😁"</span>
+</code></pre><textarea class="verify-src" hidden># 表 3-7 的每一行：(首字节范围, 总字节数, 第 2 个字节的范围)
+TABLE_3_7 = [((0xC2, 0xDF), 2, (0x80, 0xBF)),
+             ((0xE0, 0xE0), 3, (0xA0, 0xBF)),   # 排除超长编码
+             ((0xE1, 0xEC), 3, (0x80, 0xBF)),
+             ((0xED, 0xED), 3, (0x80, 0x9F)),   # 排除代理区
+             ((0xEE, 0xEF), 3, (0x80, 0xBF)),
+             ((0xF0, 0xF0), 4, (0x90, 0xBF)),   # 排除超长编码
+             ((0xF1, 0xF3), 4, (0x80, 0xBF)),
+             ((0xF4, 0xF4), 4, (0x80, 0x8F))]   # 不超过 U+10FFFF
+
+def lookup(b0):
+    &quot;&quot;&quot;首字节 → (总字节数, 第 2 个字节的下限, 上限)；不能当首字节时长度为 0。&quot;&quot;&quot;
+    for (first, last), length, (lo, hi) in TABLE_3_7:
+        if first &lt;= b0 &lt;= last:
+            return length, lo, hi
+    return 0, 0, 0
+
+def utf8_decode(data, errors=&quot;strict&quot;):
+    &quot;&quot;&quot;按表 3-7 解码。errors 取 &quot;strict&quot; 或 &quot;replace&quot;。&quot;&quot;&quot;
+    out, i, n = [], 0, len(data)
+    while i &lt; n:
+        b0 = data[i]
+        if b0 &lt; 0x80:                          # ASCII
+            out.append(chr(b0))
+            i += 1
+            continue
+        length, lo, hi = lookup(b0)
+        j = i + 1                              # j 停在第一个“不对”的字节上
+        while j &lt; i + length and j &lt; n and lo &lt;= data[j] &lt;= hi:
+            lo, hi = 0x80, 0xBF                # 第 3、4 个字节都是 80–BF
+            j += 1
+        if length and j == i + length:         # 完整而且合法
+            cp = b0 &amp; (0x7F &gt;&gt; length)         # 首字节里的数据位
+            for k in range(i + 1, j):
+                cp = (cp &lt;&lt; 6) | (data[k] &amp; 0x3F)  # 每个后续字节 6 位
+            out.append(chr(cp))
+        elif errors == &quot;strict&quot;:
+            reason = (&quot;invalid start byte&quot; if length == 0 else
+                      &quot;unexpected end of data&quot; if j == n else
+                      &quot;invalid continuation byte&quot;)
+            raise UnicodeDecodeError(&quot;utf-8&quot;, bytes(data), i, j, reason)
+        else:
+            out.append(chr(0xFFFD))  # data[i:j] 换成一个 U+FFFD（A.5 节）
+        i = j
+    return &quot;&quot;.join(out)
+
+def outcome(decode, data):
+    &quot;&quot;&quot;解码成功返回文字；失败返回 (起点, 终点, 原因)。&quot;&quot;&quot;
+    try:
+        return decode(data)
+    except UnicodeDecodeError as e:
+        return (e.start, e.end, e.reason)
+
+def python_decode(data):
+    return data.decode(&quot;utf-8&quot;)
+
+bad = {&quot;孤立的后续字节&quot;: b&quot;\x80&quot;, &quot;序列被截断&quot;: b&quot;\xe4\xb8&quot;,
+       &quot;超长编码&quot;: b&quot;\xc0\x80&quot;, &quot;超长编码（3 字节）&quot;: b&quot;\xe0\x80\x80&quot;,
+       &quot;代理区 U+D800&quot;: b&quot;\xed\xa0\x80&quot;,
+       &quot;超出 U+10FFFF&quot;: b&quot;\xf4\x90\x80\x80&quot;}
+for name, data in bad.items():
+    mine = outcome(utf8_decode, data)
+    assert mine == outcome(python_decode, data)
+    start, stop, reason = mine
+    print(f&quot;{data.hex(&#x27; &#x27;).upper():&lt;12} {start}–{stop}  {reason:&lt;25} {name}&quot;)
+assert utf8_decode(&quot;hello世界😁&quot;.encode(&quot;utf-8&quot;)) == &quot;hello世界😁&quot;
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>80           0–1  invalid start byte        孤立的后续字节
+E4 B8        0–2  unexpected end of data    序列被截断
+C0 80        0–1  invalid start byte        超长编码
+E0 80 80     0–1  invalid continuation byte 超长编码（3 字节）
+ED A0 80     0–1  invalid continuation byte 代理区 U+D800
+F4 90 80 80  0–1  invalid continuation byte 超出 U+10FFFF
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>六个例子都对上了，连出错的位置和原因的措辞都与 Python 相同。不过，六个例子仍然只是六个例子。下面随机生成 2,000 段 1–7 个字节的字节串，一半从全部 256 个字节值里抽，另一半专门从各个区间的边界值里抽（这样更容易撞上刁钻的情况），逐一比较两个解码器的结果：</p>
+<div class="verify" id="v-A-k" data-cell="{&quot;id&quot;: &quot;A-k&quot;, &quot;golden&quot;: &quot;2000 段字节串，其中 1816 段不合法；成功的结果与报错位置全部一致\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 A-k</span><span class="verify-title">2,000 段随机字节：严格模式下的结果与报错逐一相同</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">edges</span> <span class="o">=</span> <span class="p">[</span><span class="mh">0x00</span><span class="p">,</span> <span class="mh">0x41</span><span class="p">,</span> <span class="mh">0x7F</span><span class="p">,</span> <span class="mh">0x80</span><span class="p">,</span> <span class="mh">0x8F</span><span class="p">,</span> <span class="mh">0x90</span><span class="p">,</span> <span class="mh">0x9F</span><span class="p">,</span> <span class="mh">0xA0</span><span class="p">,</span> <span class="mh">0xBF</span><span class="p">,</span>
+         <span class="mh">0xC0</span><span class="p">,</span> <span class="mh">0xC1</span><span class="p">,</span> <span class="mh">0xC2</span><span class="p">,</span> <span class="mh">0xDF</span><span class="p">,</span> <span class="mh">0xE0</span><span class="p">,</span> <span class="mh">0xE1</span><span class="p">,</span> <span class="mh">0xEC</span><span class="p">,</span> <span class="mh">0xED</span><span class="p">,</span> <span class="mh">0xEE</span><span class="p">,</span>
+         <span class="mh">0xEF</span><span class="p">,</span> <span class="mh">0xF0</span><span class="p">,</span> <span class="mh">0xF1</span><span class="p">,</span> <span class="mh">0xF3</span><span class="p">,</span> <span class="mh">0xF4</span><span class="p">,</span> <span class="mh">0xF5</span><span class="p">,</span> <span class="mh">0xFF</span><span class="p">]</span>   <span class="c1"># 各个区间的边界</span>
+<span class="n">cases</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2000</span><span class="p">):</span>
+    <span class="n">pool</span> <span class="o">=</span> <span class="n">edges</span> <span class="k">if</span> <span class="n">t</span> <span class="o">%</span> <span class="mi">2</span> <span class="k">else</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">8</span><span class="p">))</span>
+    <span class="n">cases</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">bytes</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">x</span><span class="p">)</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">rng</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">pool</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">n</span><span class="p">)))</span>
+<span class="n">n_bad</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="k">for</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">cases</span><span class="p">:</span>
+    <span class="n">ref</span> <span class="o">=</span> <span class="n">outcome</span><span class="p">(</span><span class="n">python_decode</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">outcome</span><span class="p">(</span><span class="n">utf8_decode</span><span class="p">,</span> <span class="n">data</span><span class="p">)</span> <span class="o">==</span> <span class="n">ref</span><span class="p">,</span> <span class="n">data</span>
+    <span class="n">n_bad</span> <span class="o">+=</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ref</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">cases</span><span class="p">)</span><span class="si">}</span><span class="s2"> 段字节串，其中 </span><span class="si">{</span><span class="n">n_bad</span><span class="si">}</span><span class="s2"> 段不合法；"</span>
+      <span class="s2">"成功的结果与报错位置全部一致"</span><span class="p">)</span>
+</code></pre><textarea class="verify-src" hidden>rng = np.random.default_rng(1)
+edges = [0x00, 0x41, 0x7F, 0x80, 0x8F, 0x90, 0x9F, 0xA0, 0xBF,
+         0xC0, 0xC1, 0xC2, 0xDF, 0xE0, 0xE1, 0xEC, 0xED, 0xEE,
+         0xEF, 0xF0, 0xF1, 0xF3, 0xF4, 0xF5, 0xFF]   # 各个区间的边界
+cases = []
+for t in range(2000):
+    pool = edges if t % 2 else range(256)
+    n = int(rng.integers(1, 8))
+    cases.append(bytes(int(x) for x in rng.choice(pool, size=n)))
+n_bad = 0
+for data in cases:
+    ref = outcome(python_decode, data)
+    assert outcome(utf8_decode, data) == ref, data
+    n_bad += isinstance(ref, tuple)
+print(f&quot;{len(cases)} 段字节串，其中 {n_bad} 段不合法；&quot;
+      &quot;成功的结果与报错位置全部一致&quot;)
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>2000 段字节串，其中 1816 段不合法；成功的结果与报错位置全部一致
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><h2 id="sA-5">A.5 errors=&quot;replace&quot;：一段坏字节换成几个 �</h2>
+<p>现在可以回答开头的问题了。严格模式遇到坏字节就报错；<code>errors=&quot;replace&quot;</code> 则把坏字节换成替换字符 U+FFFD（显示为 <code>�</code>）然后继续。问题在于“换几个”：两个坏字节，是换成一个 <code>�</code> 还是两个？</p>
+<p>Unicode 标准推荐的做法叫“按最大子部分替换”（<a href="https://www.unicode.org/versions/Unicode16.0.0/core-spec/chapter-3/#G66453">第 3.9.6 节</a>，2026-10 查证）。从出错的位置开始，找出最长的一段字节，这段字节要么是某个合法序列的开头，要么只有 1 个字节；这一段叫作<strong>最大子部分</strong>（maximal subpart），整段只换成一个 U+FFFD，然后从它后面接着解码。标准本身并不强制这种做法，但 Python 的解码器遵守它（下面的验证会逐字对拍），浏览器里的 <code>TextDecoder</code> 也遵守它（<a href="https://encoding.spec.whatwg.org/#utf-8-decoder">WHATWG Encoding 标准的 UTF-8 解码器</a>，2026-10 查证）。</p>
+<p>A.4 节解码器里的变量 <code>j</code> 正是为此设计的：它从首字节往前走，停在第一个“不对”的字节上，<code>data[i:j]</code> 就是最大子部分。于是：</p>
+<ul>
+<li>半个“世” <code>E4 B8</code>：这两个字节是合法序列 <code>E4 B8 96</code> 的开头，属于同一个最大子部分，只换成<strong>一个</strong> <code>�</code>。这就是<a href="ch01.html#v-1.2-b">验证 1.2-b</a> 的输出。</li>
+<li>超长编码 <code>C0 80</code>：<code>C0</code> 不可能是任何合法序列的开头，单独成一段；<code>80</code> 是孤立的后续字节，又成一段，所以换成<strong>两个</strong> <code>�</code>。</li>
+<li>代理区 <code>ED A0 80</code>：<code>ED</code> 后面只允许 <code>80–9F</code>，<code>A0</code> 不对，于是 <code>ED</code> 单独成一段，<code>A0</code>、<code>80</code> 各成一段，一共<strong>三个</strong> <code>�</code>。</li>
+</ul>
+<div class="verify" id="v-A-l" data-cell="{&quot;id&quot;: &quot;A-l&quot;, &quot;golden&quot;: &quot;E4 B8        → &#x27;�&#x27;（1 个 U+FFFD）\nE4 B8 41     → &#x27;�A&#x27;（1 个 U+FFFD）\nC0 80        → &#x27;��&#x27;（2 个 U+FFFD）\nED A0 80     → &#x27;���&#x27;（3 个 U+FFFD）\nF0 9F 98     → &#x27;�&#x27;（1 个 U+FFFD）\n2000 段随机字节：替换结果与 Python 逐字相同\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 A-l</span><span class="verify-title">按最大子部分替换：与 errors=replace 的结果逐字相同</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">examples</span> <span class="o">=</span> <span class="p">[</span><span class="sa">b</span><span class="s2">"</span><span class="se">\xe4\xb8</span><span class="s2">"</span><span class="p">,</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\xe4\xb8</span><span class="s2">A"</span><span class="p">,</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\xc0\x80</span><span class="s2">"</span><span class="p">,</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\xed\xa0\x80</span><span class="s2">"</span><span class="p">,</span>
+            <span class="sa">b</span><span class="s2">"</span><span class="se">\xf0\x9f\x98</span><span class="s2">"</span><span class="p">]</span>
+<span class="k">for</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">examples</span><span class="p">:</span>
+    <span class="n">mine</span> <span class="o">=</span> <span class="n">utf8_decode</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"replace"</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">mine</span> <span class="o">==</span> <span class="n">data</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"replace"</span><span class="p">)</span>
+    <span class="n">k</span> <span class="o">=</span> <span class="n">mine</span><span class="o">.</span><span class="n">count</span><span class="p">(</span><span class="nb">chr</span><span class="p">(</span><span class="mh">0xFFFD</span><span class="p">))</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">data</span><span class="o">.</span><span class="n">hex</span><span class="p">(</span><span class="s1">' '</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span><span class="si">:</span><span class="s2">&lt;12</span><span class="si">}</span><span class="s2"> → </span><span class="si">{</span><span class="n">mine</span><span class="si">!r}</span><span class="s2">（</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2"> 个 U+FFFD）"</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">data</span> <span class="ow">in</span> <span class="n">cases</span><span class="p">:</span>                       <span class="c1"># A-k 的 2,000 段随机字节</span>
+    <span class="n">ref</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"replace"</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">utf8_decode</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"replace"</span><span class="p">)</span> <span class="o">==</span> <span class="n">ref</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">cases</span><span class="p">)</span><span class="si">}</span><span class="s2"> 段随机字节：替换结果与 Python 逐字相同"</span><span class="p">)</span>
+</code></pre><textarea class="verify-src" hidden>examples = [b&quot;\xe4\xb8&quot;, b&quot;\xe4\xb8A&quot;, b&quot;\xc0\x80&quot;, b&quot;\xed\xa0\x80&quot;,
+            b&quot;\xf0\x9f\x98&quot;]
+for data in examples:
+    mine = utf8_decode(data, errors=&quot;replace&quot;)
+    assert mine == data.decode(&quot;utf-8&quot;, errors=&quot;replace&quot;)
+    k = mine.count(chr(0xFFFD))
+    print(f&quot;{data.hex(&#x27; &#x27;).upper():&lt;12} → {mine!r}（{k} 个 U+FFFD）&quot;)
+
+for data in cases:                       # A-k 的 2,000 段随机字节
+    ref = data.decode(&quot;utf-8&quot;, errors=&quot;replace&quot;)
+    assert utf8_decode(data, errors=&quot;replace&quot;) == ref
+print(f&quot;{len(cases)} 段随机字节：替换结果与 Python 逐字相同&quot;)
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>E4 B8        → &#x27;�&#x27;（1 个 U+FFFD）
+E4 B8 41     → &#x27;�A&#x27;（1 个 U+FFFD）
+C0 80        → &#x27;��&#x27;（2 个 U+FFFD）
+ED A0 80     → &#x27;���&#x27;（3 个 U+FFFD）
+F0 9F 98     → &#x27;�&#x27;（1 个 U+FFFD）
+2000 段随机字节：替换结果与 Python 逐字相同
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>DLFS6 的 BPE 分词器从 <a href="ch01.html#s1-4">1.4 节</a>起，<code>decode</code> 都用 <code>errors=&quot;replace&quot;</code>：</p>
+<figure class="listing" data-start="47"><figcaption><a class="listing-path" href="https://github.com/oreilly-japan/deep-learning-from-scratch-6/blob/c9b6e2ed531b08dd9f451a091a34e9645148e2e2/ch01/04_bpe_tokenizer.py#L47-L56" target="_blank" rel="noopener">ch01/04_bpe_tokenizer.py</a><span class="listing-range">第 47–56 行</span></figcaption><pre class="code numbered" style="counter-reset: line 46; --ln-digits: 2"><code><span class="line">    <span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">ids</span><span class="p">):</span></span>
+<span class="line">        <span class="c1"># 各トークンIDを対応するバイト列に変換</span></span>
+<span class="line">        <span class="n">byte_list</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">id_to_bytes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ids</span><span class="p">]</span></span>
+<span class="line"></span>
+<span class="line">        <span class="c1"># すべてのバイト列を連結</span></span>
+<span class="line">        <span class="n">combined_bytes</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">byte_list</span><span class="p">)</span></span>
+<span class="line"></span>
+<span class="line">        <span class="c1"># バイト列をUTF-8テキストに変換</span></span>
+<span class="line">        <span class="n">text</span> <span class="o">=</span> <span class="n">combined_bytes</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"replace"</span><span class="p">)</span></span>
+<span class="line">        <span class="k">return</span> <span class="n">text</span></span>
+</code></pre></figure><p>它解码的是拼好的整段字节，所以只要模型最终生成的是完整的字符，就不会出现 <code>�</code>。麻烦出在“逐个 token 显示”的场合：一个汉字的 3 个字节如果分属 3 个 token，逐个解码就会得到 3 个 <code>�</code>。另外，替换是有损的，<code>�</code> 再编码回去是 <code>EF BF BD</code>，原来的字节已经找不回来了。流式输出的正确做法是先攒字节，等一个字符完整了再输出，Python 的增量解码器做的正是这件事：</p>
+<div class="verify" id="v-A-m" data-cell="{&quot;id&quot;: &quot;A-m&quot;, &quot;golden&quot;: &quot;逐个解码： ���\n半个“世”替换后再编码： EF BF BD\n增量解码： [&#x27;&#x27;, &#x27;&#x27;, &#x27;世&#x27;, &#x27;&#x27;, &#x27;&#x27;, &#x27;界&#x27;, &#x27;&#x27;, &#x27;&#x27;, &#x27;&#x27;, &#x27;😁&#x27;]\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 A-m</span><span class="verify-title">逐 token 解码得到 3 个 �；增量解码器先攒字节再输出</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">ids</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="s2">"世"</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">))</span>                     <span class="c1"># [228, 184, 150]</span>
+<span class="n">per_token</span> <span class="o">=</span> <span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">utf8_decode</span><span class="p">(</span><span class="nb">bytes</span><span class="p">([</span><span class="n">i</span><span class="p">]),</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"replace"</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ids</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"逐个解码："</span><span class="p">,</span> <span class="n">per_token</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">per_token</span> <span class="o">==</span> <span class="nb">chr</span><span class="p">(</span><span class="mh">0xFFFD</span><span class="p">)</span> <span class="o">*</span> <span class="mi">3</span>
+
+<span class="n">half</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">([</span><span class="mi">228</span><span class="p">,</span> <span class="mi">184</span><span class="p">])</span>
+<span class="n">lossy</span> <span class="o">=</span> <span class="n">half</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"replace"</span><span class="p">)</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"半个“世”替换后再编码："</span><span class="p">,</span> <span class="n">lossy</span><span class="o">.</span><span class="n">hex</span><span class="p">(</span><span class="s2">" "</span><span class="p">)</span><span class="o">.</span><span class="n">upper</span><span class="p">())</span>
+<span class="k">assert</span> <span class="n">lossy</span> <span class="o">==</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\xef\xbf\xbd</span><span class="s2">"</span> <span class="o">!=</span> <span class="n">half</span>              <span class="c1"># 原来的字节找不回来了</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">codecs</span>
+<span class="n">dec</span> <span class="o">=</span> <span class="n">codecs</span><span class="o">.</span><span class="n">getincrementaldecoder</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)()</span>
+<span class="n">pieces</span> <span class="o">=</span> <span class="p">[</span><span class="n">dec</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="nb">bytes</span><span class="p">([</span><span class="n">b</span><span class="p">]))</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="s2">"世界😁"</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)]</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"增量解码："</span><span class="p">,</span> <span class="n">pieces</span><span class="p">)</span>
+<span class="k">assert</span> <span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pieces</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"世界😁"</span> <span class="ow">and</span> <span class="nb">chr</span><span class="p">(</span><span class="mh">0xFFFD</span><span class="p">)</span> <span class="ow">not</span> <span class="ow">in</span> <span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">pieces</span><span class="p">)</span>
+</code></pre><textarea class="verify-src" hidden>ids = list(&quot;世&quot;.encode(&quot;utf-8&quot;))                     # [228, 184, 150]
+per_token = &quot;&quot;.join(utf8_decode(bytes([i]), errors=&quot;replace&quot;) for i in ids)
+print(&quot;逐个解码：&quot;, per_token)
+assert per_token == chr(0xFFFD) * 3
+
+half = bytes([228, 184])
+lossy = half.decode(&quot;utf-8&quot;, errors=&quot;replace&quot;).encode(&quot;utf-8&quot;)
+print(&quot;半个“世”替换后再编码：&quot;, lossy.hex(&quot; &quot;).upper())
+assert lossy == b&quot;\xef\xbf\xbd&quot; != half              # 原来的字节找不回来了
+
+import codecs
+dec = codecs.getincrementaldecoder(&quot;utf-8&quot;)()
+pieces = [dec.decode(bytes([b])) for b in &quot;世界😁&quot;.encode(&quot;utf-8&quot;)]
+print(&quot;增量解码：&quot;, pieces)
+assert &quot;&quot;.join(pieces) == &quot;世界😁&quot; and chr(0xFFFD) not in &quot;&quot;.join(pieces)
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>逐个解码： ���
+半个“世”替换后再编码： EF BF BD
+增量解码： [&#x27;&#x27;, &#x27;&#x27;, &#x27;世&#x27;, &#x27;&#x27;, &#x27;&#x27;, &#x27;界&#x27;, &#x27;&#x27;, &#x27;&#x27;, &#x27;&#x27;, &#x27;😁&#x27;]
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>“半个字符”的 token 并不是理论上的担心。WebBot 的分词器是在 OpenWebText 上训练的，词表有 5 万个 token（<a href="ch07.html#s7-1">7.1 节</a>），其中有 157 个合并出来的 token，单独拿出来不是合法的 UTF-8。150 个以不完整的序列结尾，例如 id 290 是 <code>E2 80</code>，它是弯引号 <code>’</code> <code>“</code> <code>”</code> 和破折号 <code>—</code> 共同的前两个字节。另外 7 个以后续字节开头，例如 id 6091 是 <code>82 AC</code>，它是欧元符号 <code>€</code>（<code>E2 82 AC</code>）的后两个字节。下面的本地测试读取真实的 WebBot 词表，确认这些数字，也逐个检查了这两种结构：150 个交给增量解码器时不报错，只是留下了等待后续的字节；7 个的第一个字节都在 <code>80–BF</code> 之间。然后用本页的解码器与 DLFS6 的 <code>decode</code> 对拍，先逐个解码 5 万个 token，再解码随机拼成的 token 序列：</p>
+<div class="localcheck"><div class="localcheck-head"><span class="localcheck-label">本地验证</span><span class="localcheck-title">WebBot 词表：157 个“半个字符”的 token；本页解码器与 DLFS6 的 decode 逐字相同</span></div><pre class="cmd"><code>uv run pytest verify/test_appendix.py::test_a_decode_matches_dlfs6</code></pre><details><summary>查看测试代码 verify/test_appendix.py</summary><pre class="code"><code><span class="k">def</span><span class="w"> </span><span class="nf">test_a_decode_matches_dlfs6</span><span class="p">(</span><span class="n">dlfs6_path</span><span class="p">):</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">storybot.tokenizer</span><span class="w"> </span><span class="kn">import</span> <span class="n">BPETokenizer</span>  <span class="c1"># WebBot 复用 StoryBot 的分词器（ch07/01_bpe_train.py）</span>
+
+    <span class="n">utf8_decode</span> <span class="o">=</span> <span class="n">page_namespace</span><span class="p">(</span><span class="s2">"appendix-a"</span><span class="p">,</span> <span class="n">upto</span><span class="o">=</span><span class="s2">"A-j"</span><span class="p">)[</span><span class="s2">"utf8_decode"</span><span class="p">]</span>
+    <span class="n">tok</span> <span class="o">=</span> <span class="n">BPETokenizer</span><span class="o">.</span><span class="n">load_from</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">dlfs6_path</span> <span class="o">/</span> <span class="s2">"webbot"</span> <span class="o">/</span> <span class="s2">"merge_rules.pkl"</span><span class="p">))</span>
+    <span class="k">assert</span> <span class="n">tok</span><span class="o">.</span><span class="n">vocab_size</span> <span class="o">==</span> <span class="mi">50_000</span>
+
+    <span class="c1"># 合并出来的 token 里，单独解码不合法的有 157 个：150 个以不完整的序列结尾，7 个以后续字节开头</span>
+    <span class="n">reasons</span> <span class="o">=</span> <span class="n">Counter</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="n">tok</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">):</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="n">tok</span><span class="o">.</span><span class="n">id_to_bytes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">b</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">UnicodeDecodeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">reasons</span><span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">reason</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="k">if</span> <span class="n">e</span><span class="o">.</span><span class="n">reason</span> <span class="o">==</span> <span class="s2">"invalid start byte"</span><span class="p">:</span>
+                <span class="k">assert</span> <span class="n">e</span><span class="o">.</span><span class="n">start</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="mh">0x80</span> <span class="o">&lt;=</span> <span class="n">b</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;=</span> <span class="mh">0xBF</span><span class="p">,</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>       <span class="c1"># 以后续字节开头</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># 不完整的结尾：增量解码器不报错，只是把末尾的字节留着等后续</span>
+                <span class="n">dec</span> <span class="o">=</span> <span class="n">codecs</span><span class="o">.</span><span class="n">getincrementaldecoder</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)()</span>
+                <span class="n">text</span> <span class="o">=</span> <span class="n">dec</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">final</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+                <span class="n">pending</span> <span class="o">=</span> <span class="n">dec</span><span class="o">.</span><span class="n">getstate</span><span class="p">()[</span><span class="mi">0</span><span class="p">]</span>
+                <span class="k">assert</span> <span class="n">pending</span> <span class="ow">and</span> <span class="n">text</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span> <span class="o">+</span> <span class="n">pending</span> <span class="o">==</span> <span class="n">b</span><span class="p">,</span> <span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">b</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">reasons</span> <span class="o">==</span> <span class="p">{</span><span class="s2">"unexpected end of data"</span><span class="p">:</span> <span class="mi">150</span><span class="p">,</span> <span class="s2">"invalid start byte"</span><span class="p">:</span> <span class="mi">7</span><span class="p">}</span>
+    <span class="k">assert</span> <span class="n">tok</span><span class="o">.</span><span class="n">id_to_bytes</span><span class="p">[</span><span class="mi">290</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"’"</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)[:</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\xe2\x80</span><span class="s2">"</span>
+    <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)[:</span><span class="mi">2</span><span class="p">]</span> <span class="o">==</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\xe2\x80</span><span class="s2">"</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="s2">"’“”—"</span><span class="p">)</span>   <span class="c1"># 弯引号与破折号共用这两个字节</span>
+    <span class="k">assert</span> <span class="n">tok</span><span class="o">.</span><span class="n">id_to_bytes</span><span class="p">[</span><span class="mi">6091</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"€"</span><span class="o">.</span><span class="n">encode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)[</span><span class="mi">1</span><span class="p">:]</span> <span class="o">==</span> <span class="sa">b</span><span class="s2">"</span><span class="se">\x82\xac</span><span class="s2">"</span>
+
+    <span class="c1"># 本页的解码器与 DLFS6 的 decode（errors="replace"）逐字相同：先逐个 token，再随机拼成序列</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">tok</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">):</span>
+        <span class="n">b</span> <span class="o">=</span> <span class="n">tok</span><span class="o">.</span><span class="n">id_to_bytes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="n">utf8_decode</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"replace"</span><span class="p">)</span> <span class="o">==</span> <span class="n">tok</span><span class="o">.</span><span class="n">decode</span><span class="p">([</span><span class="n">i</span><span class="p">]),</span> <span class="n">i</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">ref</span> <span class="o">=</span> <span class="n">b</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">"utf-8"</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">UnicodeDecodeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">ref</span> <span class="o">=</span> <span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">end</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">reason</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">mine</span> <span class="o">=</span> <span class="n">utf8_decode</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">UnicodeDecodeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">mine</span> <span class="o">=</span> <span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">start</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">end</span><span class="p">,</span> <span class="n">e</span><span class="o">.</span><span class="n">reason</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">mine</span> <span class="o">==</span> <span class="n">ref</span><span class="p">,</span> <span class="n">i</span>
+    <span class="n">partial</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">tok</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="n">_is_utf8</span><span class="p">(</span><span class="n">tok</span><span class="o">.</span><span class="n">id_to_bytes</span><span class="p">[</span><span class="n">i</span><span class="p">])]</span>
+    <span class="n">rng</span> <span class="o">=</span> <span class="n">random</span><span class="o">.</span><span class="n">Random</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3000</span><span class="p">):</span>
+        <span class="n">ids</span> <span class="o">=</span> <span class="p">[</span><span class="n">rng</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">partial</span><span class="p">)</span> <span class="k">if</span> <span class="n">rng</span><span class="o">.</span><span class="n">random</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mf">0.5</span> <span class="k">else</span> <span class="n">rng</span><span class="o">.</span><span class="n">randrange</span><span class="p">(</span><span class="n">tok</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">)</span>
+               <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">rng</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">8</span><span class="p">))]</span>
+        <span class="n">joined</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">""</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">tok</span><span class="o">.</span><span class="n">id_to_bytes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">ids</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">utf8_decode</span><span class="p">(</span><span class="n">joined</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s2">"replace"</span><span class="p">)</span> <span class="o">==</span> <span class="n">tok</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">ids</span><span class="p">),</span> <span class="n">ids</span>
+</code></pre></details></div><p>下面的交互图可以输入任意字节，看看解码器怎样划分最大子部分。图里同时给出了浏览器内置 <code>TextDecoder</code> 的结果作为对照。</p>
+<figure class="widget" id="fig-A-2" data-widget="appendix-utf8" data-config="{&quot;mode&quot;: &quot;decode&quot;, &quot;hex&quot;: &quot;E4 B8 41 C0 80 ED A0 80 F0 9F 98 81&quot;}"><div class="widget-mount"><noscript>此交互图需要 JavaScript。</noscript></div><figcaption><span class="fignum">图 A-2</span>每个框是一个最大子部分：实线框是合法的序列，解出一个字符；虚线框是不合法的一段，整段只换成一个 �。</figcaption></figure><h2 id="h-5db9fd7c">小结</h2>
+<p>本附录打开了 <code>str.encode(&quot;utf-8&quot;)</code> 这个黑盒。UTF-8 用首字节开头的 1 的个数表示字节数，用 <code>10</code> 标记后续字节，把码位的二进制位依次填进模板。我们照着规则实现了编码器，并在全部 1,112,064 个码位上与 Python 逐字节对拍。三类字节的取值范围互不重叠，这让 UTF-8 可以从任意位置同步，也让 DLFS6 能放心地在原始字节里寻找 <code>&lt;|endoftext|&gt;</code> 来切分大文件。</p>
+<p>规则的另一面是“不合法”：截断、孤立的后续字节、超长编码、代理区、超出 0x10FFFF。我们照着 Unicode 的表 3-7 实现了解码器，它的报错位置、原因和替换结果都与 Python 完全一致。<code>errors=&quot;replace&quot;</code> 按最大子部分替换，所以半个汉字只换成一个 <code>�</code>；而逐个 token 解码会把一个汉字变成三个 <code>�</code>。</p>
+<h3 id="h-e021fa97">本附录所学的内容</h3>
+<ul>
+<li>每个字符的码位不超过 0x10FFFF（21 位），三种编码都把它切成 8 位的块，还能原样拼回去，所以任何字符都能写成 0–255 的数列；对英文和代码，UTF-8 最短（<a href="#v-A-a">验证 A-a</a>、<a href="#v-A-c">验证 A-c</a>、<a href="#v-A-f">验证 A-f</a>）。</li>
+<li>UTF-8 按“首字节标记 + 每个后续字节 6 位”的模板编码，<code>あ</code> 是 <code>E3 81 82</code>；这条规则在全部 1,112,064 个码位上与 Python 一致（<a href="#v-A-d">验证 A-d</a>、<a href="#v-A-f">验证 A-f</a>）。</li>
+<li>首字节、后续字节、ASCII 的取值范围互不重叠，有 13 个字节值永远不出现；因此 UTF-8 可以自同步（<a href="#v-A-g">验证 A-g</a>、<a href="#v-A-h">验证 A-h</a>）。</li>
+<li>把切点挪到 <code>&lt;|endoftext|&gt;</code> 上，每一块都能单独解码，这就是 <code>find_chunk_boundaries</code> 的做法（<a href="#v-A-i">验证 A-i</a>）。</li>
+<li>超长编码、代理区、超出 0x10FFFF 都不合法，表 3-7 用首字节的范围（排除 <code>C0</code>、<code>C1</code>、<code>F5–FF</code>）和四格加粗的第 2 字节范围把它们一并排除（<a href="#v-A-j">验证 A-j</a>、<a href="#v-A-k">验证 A-k</a>）。</li>
+<li><code>errors=&quot;replace&quot;</code> 把每个最大子部分换成一个 U+FFFD：半个“世”是一个 <code>�</code>，逐 token 解码是三个；替换有损，流式输出要用增量解码（<a href="#v-A-l">验证 A-l</a>、<a href="#v-A-m">验证 A-m</a>）。</li>
+</ul>
+<p>字节的问题到此为止。<a href="appendix-b.html">附录 B</a> 回到第 2 章的 Attention，证明那个让 softmax 不再饱和的 <span class="math inline"><span class="math-inline">\sqrt{d}</span></span> 从何而来。</p>
+<nav class="pager"><a class="prev" href="ch09.html"><span>上一章</span>训练【挑战篇】：多卡训练 WebBot</a><a class="next" href="appendix-b.html"><span>下一章</span>Attention 缩放效果的证明</a></nav></article>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" defer></script>
+<script type="module" src="js/runtime.js"></script>
+</body>
+</html>

@@ -1,0 +1,1882 @@
+{
+ "generated": "2026-10-12T15:04:57-04:00",
+ "cs336_a1": {
+  "repo": "https://github.com/stanford-cs336/assignment1-basics",
+  "commit": "a158843b20107949f1a8d7df1b05cd33b9166712",
+  "commit_date": "2026-04-07T13:49:07-07:00",
+  "handout": "cs336_assignment1_basics.pdf (v26.0.3)"
+ },
+ "dlfs6_commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
+ "env": {
+  "python": "3.12.9",
+  "torch": "2.14.1+cu130",
+  "numpy": "2.5.4",
+  "platform": "Windows-11",
+  "device": "cpu",
+  "cpu_count": 16,
+  "note": "同一台机器上还在跑其他构建、测试和基准任务，CPU 接近满载",
+  "system_cpu_percent": {
+   "as_shipped": 100.0,
+   "one_line_fixes": 100.0
+  }
+ },
+ "command": "CUDA_VISIBLE_DEVICES=-1 uv run --with einops --with psutil python verify/cs336/run_a1.py --a1 <A1 clone> --web --note <machine state>",
+ "fixes": {
+  "rmsnorm_eps": {
+   "file": "storybot/model.py",
+   "before": "nn.RMSNorm(embed_dim)",
+   "after": "nn.RMSNorm(embed_dim, eps=1e-5)"
+  },
+  "bpe_tiebreak": {
+   "file": "ch04/02_bpe_cache.py",
+   "before": [
+    "    merge_rules = {}\n",
+    "key=lambda pair: (pair_counts[pair], pair[0], pair[1])",
+    "        merge_rules[best_pair] = new_id\n"
+   ],
+   "after": [
+    "    merge_rules = {}\n    vocab_bytes = {i: bytes([i]) for i in range(256)}  # 新增：id → 字节串\n",
+    "key=lambda pair: (pair_counts[pair], vocab_bytes[pair[0]], vocab_bytes[pair[1]])",
+    "        merge_rules[best_pair] = new_id\n        vocab_bytes[new_id] = vocab_bytes[best_pair[0]] + vocab_bytes[best_pair[1]]  # 新增\n"
+   ]
+  },
+  "get_batch": {
+   "file": "ch06/05_pretrain.py",
+   "before": "torch.randint(len(data) - context_len - 1, (batch_size,))",
+   "after": "torch.randint(len(data) - context_len, (batch_size,))"
+  }
+ },
+ "summary": {
+  "as_shipped": {
+   "passed": 36,
+   "failed": 10,
+   "skipped": 2
+  },
+  "one_line_fixes": {
+   "passed": 41,
+   "failed": 5,
+   "skipped": 2
+  }
+ },
+ "pytest_tail": {
+  "as_shipped": "10 failed, 36 passed, 2 skipped in 46.19s",
+  "one_line_fixes": "5 failed, 41 passed, 2 skipped in 41.04s"
+ },
+ "diagnostics": {
+  "as_shipped": {
+   "train_bpe": [
+    {
+     "corpus": "corpus.en",
+     "vocab_size": 500,
+     "n_merges": 243,
+     "n_reference": 243,
+     "identical_positions": 170,
+     "first_divergence": 92,
+     "exact": false,
+     "same_set": false,
+     "train_seconds_runs": [
+      0.955,
+      0.994,
+      1.027,
+      1.04,
+      1.112
+     ],
+     "train_seconds_min": 0.955,
+     "train_seconds_median": 1.027,
+     "dlfs6_at_first": "(b' c', b'om')",
+     "reference_at_first": "(b't', b'h')"
+    },
+    {
+     "corpus": "tinystories_sample_5M.txt",
+     "vocab_size": 1000,
+     "n_merges": 743,
+     "n_reference": 743,
+     "identical_positions": 637,
+     "first_divergence": 34,
+     "exact": false,
+     "vocab_values_equal": true,
+     "dlfs6_at_first": "(b' s', b'a')",
+     "reference_at_first": "(b'i', b'm')"
+    }
+   ],
+   "rmsnorm_vs_snapshot": {
+    "nn.RMSNorm(d) default eps": 1.7404556274414062e-05,
+    "nn.RMSNorm(d, eps=1e-5)": 1.1920928955078125e-07,
+    "ch05/03 RMSNorm (eps=1e-5, 手写)": 2.384185791015625e-07,
+    "finfo(float32).eps": 1.1920928955078125e-07
+   }
+  },
+  "one_line_fixes": {
+   "train_bpe": [
+    {
+     "corpus": "corpus.en",
+     "vocab_size": 500,
+     "n_merges": 243,
+     "n_reference": 243,
+     "identical_positions": 243,
+     "first_divergence": null,
+     "exact": true,
+     "same_set": true,
+     "train_seconds_runs": [
+      0.997,
+      0.984,
+      1.043,
+      1.115,
+      1.115
+     ],
+     "train_seconds_min": 0.984,
+     "train_seconds_median": 1.043
+    },
+    {
+     "corpus": "tinystories_sample_5M.txt",
+     "vocab_size": 1000,
+     "n_merges": 743,
+     "n_reference": 743,
+     "identical_positions": 743,
+     "first_divergence": null,
+     "exact": true,
+     "vocab_values_equal": true
+    }
+   ],
+   "rmsnorm_vs_snapshot": {
+    "nn.RMSNorm(d) default eps": 1.7404556274414062e-05,
+    "nn.RMSNorm(d, eps=1e-5)": 1.1920928955078125e-07,
+    "ch05/03 RMSNorm (eps=1e-5, 手写)": 2.384185791015625e-07,
+    "finfo(float32).eps": 1.1920928955078125e-07
+   }
+  }
+ },
+ "bpe_speed": {
+  "corpus": "corpus.en",
+  "vocab_size": 500,
+  "rounds": 5,
+  "gate_seconds": 1.5,
+  "system_cpu_percent": 100.0,
+  "runs": {
+   "as_shipped": {
+    "wall": [
+     0.954,
+     1.09,
+     1.1,
+     1.107,
+     1.072
+    ],
+    "cpu": [
+     0.75,
+     0.812,
+     0.859,
+     0.875,
+     0.906
+    ]
+   },
+   "one_line_fixes": {
+    "wall": [
+     1.07,
+     1.017,
+     1.107,
+     1.077,
+     1.054
+    ],
+    "cpu": [
+     0.844,
+     0.875,
+     0.953,
+     1.0,
+     0.953
+    ]
+   }
+  }
+ },
+ "catalog": {
+  "run_linear": {
+   "kind": "torch",
+   "dlfs6": "nn.Linear(bias=False)，storybot/model.py 的全部投影"
+  },
+  "run_embedding": {
+   "kind": "torch",
+   "dlfs6": "nn.Embedding，storybot GPT.embed"
+  },
+  "run_swiglu": {
+   "kind": "dlfs6",
+   "dlfs6": "storybot/model.py SwiGLU（W/V/O ↔ w1/w3/w2）"
+  },
+  "run_scaled_dot_product_attention": {
+   "kind": "torch",
+   "dlfs6": "F.scaled_dot_product_attention（webbot/model.py）"
+  },
+  "run_multihead_self_attention": {
+   "kind": "dlfs6",
+   "dlfs6": "storybot/model.py MultiHeadAttention（rope=None）"
+  },
+  "run_multihead_self_attention_with_rope": {
+   "kind": "dlfs6",
+   "dlfs6": "storybot/model.py MultiHeadAttention + RoPE"
+  },
+  "run_rope": {
+   "kind": "dlfs6",
+   "dlfs6": "storybot/model.py RoPE（相邻两维配对）"
+  },
+  "run_transformer_block": {
+   "kind": "dlfs6",
+   "dlfs6": "storybot/model.py Block"
+  },
+  "run_transformer_lm": {
+   "kind": "dlfs6",
+   "dlfs6": "storybot/model.py GPT"
+  },
+  "run_rmsnorm": {
+   "kind": "torch",
+   "dlfs6": "nn.RMSNorm(embed_dim)，eps 用默认值"
+  },
+  "run_silu": {
+   "kind": "dlfs6",
+   "dlfs6": "storybot/model.py silu"
+  },
+  "run_get_batch": {
+   "kind": "dlfs6",
+   "dlfs6": "ch06/05_pretrain.py get_batch"
+  },
+  "run_softmax": {
+   "kind": "torch",
+   "dlfs6": "F.softmax"
+  },
+  "run_cross_entropy": {
+   "kind": "torch",
+   "dlfs6": "F.cross_entropy"
+  },
+  "run_gradient_clipping": {
+   "kind": "torch",
+   "dlfs6": "torch.nn.utils.clip_grad_norm_"
+  },
+  "get_adamw_cls": {
+   "kind": "dlfs6",
+   "dlfs6": "ch06/02_adamw.py AdamW"
+  },
+  "run_get_lr_cosine_schedule": {
+   "kind": "design",
+   "dlfs6": "ch06/03_lr_scheduler.py get_lr（warmup + 线性衰减到 0）"
+  },
+  "run_save_checkpoint": {
+   "kind": "none",
+   "dlfs6": "GPT.save 只存权重与配置"
+  },
+  "run_load_checkpoint": {
+   "kind": "none",
+   "dlfs6": "GPT.load_from 只读权重与配置"
+  },
+  "get_tokenizer": {
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）"
+  },
+  "run_train_bpe": {
+   "kind": "dlfs6",
+   "dlfs6": "ch04/02_bpe_cache.py train_bpe"
+  }
+ },
+ "tests": [
+  {
+   "test": "test_get_batch",
+   "file": "test_data.py",
+   "adapter": "run_get_batch",
+   "kind": "dlfs6",
+   "dlfs6": "ch06/05_pretrain.py get_batch",
+   "as_shipped": {
+    "outcome": "failed",
+    "duration": 2.6361,
+    "message": "assert 91 == (93 - 1)\n+  where 91 = max(Counter({...}))",
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 0.0,
+     "atol": 0.0,
+     "rtol": 1e-07,
+     "tol_ratio": 0.0,
+     "n": 224,
+     "n_violations": 0
+    },
+    "n_comparisons": 1000
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 2.9101,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 0.0,
+     "atol": 0.0,
+     "rtol": 1e-07,
+     "tol_ratio": 0.0,
+     "n": 224,
+     "n_violations": 0
+    },
+    "n_comparisons": 1000
+   }
+  },
+  {
+   "test": "test_4d_scaled_dot_product_attention",
+   "file": "test_model.py",
+   "adapter": "run_scaled_dot_product_attention",
+   "kind": "torch",
+   "dlfs6": "F.scaled_dot_product_attention（webbot/model.py）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.0369,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 3.5762786865234375e-07,
+     "atol": 1e-05,
+     "rtol": 0.0001,
+     "tol_ratio": 0.009818636865585163,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.0213,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 3.5762786865234375e-07,
+     "atol": 1e-05,
+     "rtol": 0.0001,
+     "tol_ratio": 0.009818636865585163,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   }
+  },
+  {
+   "test": "test_embedding",
+   "file": "test_model.py",
+   "adapter": "run_embedding",
+   "kind": "torch",
+   "dlfs6": "nn.Embedding，storybot GPT.embed",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.037,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 0.0,
+     "atol": 0.01,
+     "rtol": 0.0001,
+     "tol_ratio": 0.0,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.0294,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 0.0,
+     "atol": 0.01,
+     "rtol": 0.0001,
+     "tol_ratio": 0.0,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   }
+  },
+  {
+   "test": "test_linear",
+   "file": "test_model.py",
+   "adapter": "run_linear",
+   "kind": "torch",
+   "dlfs6": "nn.Linear(bias=False)，storybot/model.py 的全部投影",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.1651,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 2.384185791015625e-07,
+     "atol": 0.01,
+     "rtol": 0.0001,
+     "tol_ratio": 2.3516725100182513e-05,
+     "n": 6144,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.0833,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 2.384185791015625e-07,
+     "atol": 0.01,
+     "rtol": 0.0001,
+     "tol_ratio": 2.3516725100182513e-05,
+     "n": 6144,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   }
+  },
+  {
+   "test": "test_multihead_self_attention",
+   "file": "test_model.py",
+   "adapter": "run_multihead_self_attention",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/model.py MultiHeadAttention（rope=None）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.0187,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 1.1920928955078125e-07,
+     "atol": 1e-05,
+     "rtol": 0.0001,
+     "tol_ratio": 0.008506053102621997,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.0182,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 1.1920928955078125e-07,
+     "atol": 1e-05,
+     "rtol": 0.0001,
+     "tol_ratio": 0.008506053102621997,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   }
+  },
+  {
+   "test": "test_multihead_self_attention_with_rope",
+   "file": "test_model.py",
+   "adapter": "run_multihead_self_attention_with_rope",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/model.py MultiHeadAttention + RoPE",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.0204,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 1.6391277313232422e-07,
+     "atol": 1e-05,
+     "rtol": 0.0001,
+     "tol_ratio": 0.007173997393052246,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.0203,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 1.6391277313232422e-07,
+     "atol": 1e-05,
+     "rtol": 0.0001,
+     "tol_ratio": 0.007173997393052246,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   }
+  },
+  {
+   "test": "test_rmsnorm",
+   "file": "test_model.py",
+   "adapter": "run_rmsnorm",
+   "kind": "torch",
+   "dlfs6": "nn.RMSNorm(embed_dim)，eps 用默认值",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.0225,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 1.7404556274414062e-05,
+     "atol": 0.0001,
+     "rtol": 0.0001,
+     "tol_ratio": 0.048140412606592645,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.0177,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 1.1920928955078125e-07,
+     "atol": 0.0001,
+     "rtol": 0.0001,
+     "tol_ratio": 0.0007313891717028601,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   }
+  },
+  {
+   "test": "test_rope",
+   "file": "test_model.py",
+   "adapter": "run_rope",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/model.py RoPE（相邻两维配对）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.0218,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 2.980232238769531e-07,
+     "atol": 1e-05,
+     "rtol": 0.0001,
+     "tol_ratio": 0.01496495464165005,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.0291,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 2.980232238769531e-07,
+     "atol": 1e-05,
+     "rtol": 0.0001,
+     "tol_ratio": 0.01496495464165005,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   }
+  },
+  {
+   "test": "test_scaled_dot_product_attention",
+   "file": "test_model.py",
+   "adapter": "run_scaled_dot_product_attention",
+   "kind": "torch",
+   "dlfs6": "F.scaled_dot_product_attention（webbot/model.py）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.0159,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 3.5762786865234375e-07,
+     "atol": 1e-05,
+     "rtol": 0.0001,
+     "tol_ratio": 0.009818636865585163,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.0144,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 3.5762786865234375e-07,
+     "atol": 1e-05,
+     "rtol": 0.0001,
+     "tol_ratio": 0.009818636865585163,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   }
+  },
+  {
+   "test": "test_silu_matches_pytorch",
+   "file": "test_model.py",
+   "adapter": "run_silu",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/model.py silu",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.0014,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 5.960464477539063e-08,
+     "atol": 1e-05,
+     "rtol": 1e-07,
+     "tol_ratio": 0.005921196926473416,
+     "n": 10,
+     "n_violations": 0,
+     "actual": [
+      0.131366,
+      0.663169,
+      0.325293,
+      0.291048,
+      0.706123,
+      0.516221,
+      0.702631,
+      0.117739,
+      0.670959,
+      0.007506
+     ],
+     "desired": [
+      0.131366,
+      0.663169,
+      0.325293,
+      0.291048,
+      0.706123,
+      0.516221,
+      0.702631,
+      0.117739,
+      0.670959,
+      0.007506
+     ]
+    },
+    "n_comparisons": 1
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.0013,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 5.960464477539063e-08,
+     "atol": 1e-05,
+     "rtol": 1e-07,
+     "tol_ratio": 0.005921196926473416,
+     "n": 10,
+     "n_violations": 0,
+     "actual": [
+      0.131366,
+      0.663169,
+      0.325293,
+      0.291048,
+      0.706123,
+      0.516221,
+      0.702631,
+      0.117739,
+      0.670959,
+      0.007506
+     ],
+     "desired": [
+      0.131366,
+      0.663169,
+      0.325293,
+      0.291048,
+      0.706123,
+      0.516221,
+      0.702631,
+      0.117739,
+      0.670959,
+      0.007506
+     ]
+    },
+    "n_comparisons": 1
+   }
+  },
+  {
+   "test": "test_swiglu",
+   "file": "test_model.py",
+   "adapter": "run_swiglu",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/model.py SwiGLU（W/V/O ↔ w1/w3/w2）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.0206,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 4.76837158203125e-07,
+     "atol": 1e-05,
+     "rtol": 0.0001,
+     "tol_ratio": 0.012821852682676934,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.0166,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 4.76837158203125e-07,
+     "atol": 1e-05,
+     "rtol": 0.0001,
+     "tol_ratio": 0.012821852682676934,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   }
+  },
+  {
+   "test": "test_transformer_block",
+   "file": "test_model.py",
+   "adapter": "run_transformer_block",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/model.py Block",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.0222,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 9.202957153320312e-05,
+     "atol": 0.0001,
+     "rtol": 0.0001,
+     "tol_ratio": 0.21421810979930758,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.0205,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 7.152557373046875e-07,
+     "atol": 0.0001,
+     "rtol": 0.0001,
+     "tol_ratio": 0.0046922728296229285,
+     "n": 3072,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   }
+  },
+  {
+   "test": "test_transformer_lm",
+   "file": "test_model.py",
+   "adapter": "run_transformer_lm",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/model.py GPT",
+   "as_shipped": {
+    "outcome": "failed",
+    "duration": 0.1454,
+    "message": "AssertionError:\nNot equal to tolerance rtol=0.01, atol=0.0001\nArray 'array' does not match snapshot for test_transformer_lm\nMismatched elements: 3 / 480000 (0.000625%)\nMismatch at indices:\n[1, 3, 1802]: 0.00014150254719424993 (ACTUAL), 0.0002570548967923969 (DESIRED)\n[1, 11, 4263]: 0.028720509260892868 (ACTUAL), 0.029112379997968674 (DESIRED)\n[1, 11, 6689]: 0.007039195857942104 (ACTUAL), 0.007279286626726389 (DESIRED)",
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 0.00046253204345703125,
+     "atol": 0.0001,
+     "rtol": 0.01,
+     "tol_ratio": 1.389471533002578,
+     "n": 480000,
+     "n_violations": 3
+    },
+    "n_comparisons": 1
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.1082,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 1.049041748046875e-05,
+     "atol": 0.0001,
+     "rtol": 0.01,
+     "tol_ratio": 0.03244265071853454,
+     "n": 480000,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   }
+  },
+  {
+   "test": "test_transformer_lm_truncated_input",
+   "file": "test_model.py",
+   "adapter": "run_transformer_lm",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/model.py GPT",
+   "as_shipped": {
+    "outcome": "failed",
+    "duration": 0.1158,
+    "message": "AssertionError:\nNot equal to tolerance rtol=0.0001, atol=0.0001\nArray 'array' does not match snapshot for test_transformer_lm_truncated_input\nMismatched elements: 34 / 240000 (0.0142%)\nFirst 5 mismatches are at indices:\n[0, 2, 343]: 0.2241498827934265 (ACTUAL), 0.22401081025600433 (DESIRED)\n[0, 2, 412]: -0.25076961517333984 (ACTUAL), -0.25089967250823975 (DESIRED)\n[0, 2, 491]: -0.1771956831216812 (ACTUAL), -0.17705605924129486 (DESIRED)",
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 0.0003795623779296875,
+     "atol": 0.0001,
+     "rtol": 0.0001,
+     "tol_ratio": 1.5265736995151018,
+     "n": 240000,
+     "n_violations": 34
+    },
+    "n_comparisons": 1
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.0811,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 9.5367431640625e-06,
+     "atol": 0.0001,
+     "rtol": 0.0001,
+     "tol_ratio": 0.03962153199833621,
+     "n": 240000,
+     "n_violations": 0
+    },
+    "n_comparisons": 1
+   }
+  },
+  {
+   "test": "test_cross_entropy",
+   "file": "test_nn_utils.py",
+   "adapter": "run_cross_entropy",
+   "kind": "torch",
+   "dlfs6": "F.cross_entropy",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.0027,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 0.0,
+     "atol": 0.0001,
+     "rtol": 1e-07,
+     "tol_ratio": 0.0,
+     "n": 1,
+     "n_violations": 0,
+     "actual": [
+      1.609473
+     ],
+     "desired": [
+      1.609473
+     ]
+    },
+    "n_comparisons": 2
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.0019,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 0.0,
+     "atol": 0.0001,
+     "rtol": 1e-07,
+     "tol_ratio": 0.0,
+     "n": 1,
+     "n_violations": 0,
+     "actual": [
+      1.609473
+     ],
+     "desired": [
+      1.609473
+     ]
+    },
+    "n_comparisons": 2
+   }
+  },
+  {
+   "test": "test_gradient_clipping",
+   "file": "test_nn_utils.py",
+   "adapter": "run_gradient_clipping",
+   "kind": "torch",
+   "dlfs6": "torch.nn.utils.clip_grad_norm_",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.2124,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 0.0,
+     "atol": 1e-05,
+     "rtol": 1e-07,
+     "tol_ratio": 0.0,
+     "n": 25,
+     "n_violations": 0,
+     "actual": [
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894
+     ],
+     "desired": [
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894
+     ]
+    },
+    "n_comparisons": 5
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.0049,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 0.0,
+     "atol": 1e-05,
+     "rtol": 1e-07,
+     "tol_ratio": 0.0,
+     "n": 25,
+     "n_violations": 0,
+     "actual": [
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894
+     ],
+     "desired": [
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894,
+      0.000894
+     ]
+    },
+    "n_comparisons": 5
+   }
+  },
+  {
+   "test": "test_softmax_matches_pytorch",
+   "file": "test_nn_utils.py",
+   "adapter": "run_softmax",
+   "kind": "torch",
+   "dlfs6": "F.softmax",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.0036,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 5.811452865600586e-07,
+     "atol": 1e-05,
+     "rtol": 1e-07,
+     "tol_ratio": 0.05797658256288117,
+     "n": 15,
+     "n_violations": 0,
+     "actual": [
+      0.143383,
+      0.206504,
+      0.235291,
+      0.236423,
+      0.178399,
+      0.169894,
+      0.163477,
+      0.333711,
+      0.177039,
+      0.155878,
+      0.140232,
+      0.237934,
+      0.136824,
+      0.24824,
+      0.236771
+     ],
+     "desired": [
+      0.143383,
+      0.206504,
+      0.235291,
+      0.236423,
+      0.178399,
+      0.169894,
+      0.163477,
+      0.333711,
+      0.17704,
+      0.155878,
+      0.140231,
+      0.237934,
+      0.136824,
+      0.248239,
+      0.236771
+     ]
+    },
+    "n_comparisons": 2
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.0018,
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 5.811452865600586e-07,
+     "atol": 1e-05,
+     "rtol": 1e-07,
+     "tol_ratio": 0.05797658256288117,
+     "n": 15,
+     "n_violations": 0,
+     "actual": [
+      0.143383,
+      0.206504,
+      0.235291,
+      0.236423,
+      0.178399,
+      0.169894,
+      0.163477,
+      0.333711,
+      0.177039,
+      0.155878,
+      0.140232,
+      0.237934,
+      0.136824,
+      0.24824,
+      0.236771
+     ],
+     "desired": [
+      0.143383,
+      0.206504,
+      0.235291,
+      0.236423,
+      0.178399,
+      0.169894,
+      0.163477,
+      0.333711,
+      0.17704,
+      0.155878,
+      0.140231,
+      0.237934,
+      0.136824,
+      0.248239,
+      0.236771
+     ]
+    },
+    "n_comparisons": 2
+   }
+  },
+  {
+   "test": "test_adamw",
+   "file": "test_optimizer.py",
+   "adapter": "get_adamw_cls",
+   "kind": "dlfs6",
+   "dlfs6": "ch06/02_adamw.py AdamW",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 6.1618,
+    "worst": {
+     "kind": "torch.allclose",
+     "max_abs_diff": 4.76837158203125e-06,
+     "atol": 0.0001,
+     "rtol": 1e-05,
+     "tol_ratio": 0.043890455939707196,
+     "n": 6,
+     "n_violations": 0,
+     "actual": [
+      0.864261,
+      0.882205,
+      0.20757,
+      0.055349,
+      -0.521916,
+      -0.390392
+     ],
+     "desired": [
+      0.864256,
+      0.882201,
+      0.207574,
+      0.055346,
+      -0.521912,
+      -0.39039
+     ]
+    },
+    "n_comparisons": 1
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 5.1745,
+    "worst": {
+     "kind": "torch.allclose",
+     "max_abs_diff": 4.76837158203125e-06,
+     "atol": 0.0001,
+     "rtol": 1e-05,
+     "tol_ratio": 0.043890455939707196,
+     "n": 6,
+     "n_violations": 0,
+     "actual": [
+      0.864261,
+      0.882205,
+      0.20757,
+      0.055349,
+      -0.521916,
+      -0.390392
+     ],
+     "desired": [
+      0.864256,
+      0.882201,
+      0.207574,
+      0.055346,
+      -0.521912,
+      -0.39039
+     ]
+    },
+    "n_comparisons": 1
+   }
+  },
+  {
+   "test": "test_get_lr_cosine_schedule",
+   "file": "test_optimizer.py",
+   "adapter": "run_get_lr_cosine_schedule",
+   "kind": "design",
+   "dlfs6": "ch06/03_lr_scheduler.py get_lr（warmup + 线性衰减到 0）",
+   "as_shipped": {
+    "outcome": "failed",
+    "duration": 0.0025,
+    "message": "AssertionError:\nNot equal to tolerance rtol=1e-07, atol=0\n\nMismatched elements: 17 / 25 (68%)\nFirst 5 mismatches are at indices:\n[8]: 0.9285714285714286 (ACTUAL), 0.9887175604818206 (DESIRED)\n[9]: 0.8571428571428572 (ACTUAL), 0.9554359905560885 (DESIRED)\n[10]: 0.7857142857142857 (ACTUAL), 0.9018241671106134 (DESIRED)",
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 0.11628469655071583,
+     "atol": 0.0,
+     "rtol": 1e-07,
+     "tol_ratio": 10000000.0,
+     "n": 25,
+     "n_violations": 17,
+     "actual": [
+      0.0,
+      0.142857,
+      0.285714,
+      0.428571,
+      0.571429,
+      0.714286,
+      0.857143,
+      1.0,
+      0.928571,
+      0.857143,
+      0.785714,
+      0.714286,
+      0.642857,
+      0.571429,
+      0.5,
+      0.428571,
+      0.357143,
+      0.285714,
+      0.214286,
+      0.142857,
+      0.071429,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "desired": [
+      0.0,
+      0.142857,
+      0.285714,
+      0.428571,
+      0.571429,
+      0.714286,
+      0.857143,
+      1.0,
+      0.988718,
+      0.955436,
+      0.901824,
+      0.83057,
+      0.745248,
+      0.650134,
+      0.55,
+      0.449866,
+      0.354752,
+      0.26943,
+      0.198176,
+      0.144564,
+      0.111282,
+      0.1,
+      0.1,
+      0.1,
+      0.1
+     ]
+    },
+    "n_comparisons": 1
+   },
+   "one_line_fixes": {
+    "outcome": "failed",
+    "duration": 0.0027,
+    "message": "AssertionError:\nNot equal to tolerance rtol=1e-07, atol=0\n\nMismatched elements: 17 / 25 (68%)\nFirst 5 mismatches are at indices:\n[8]: 0.9285714285714286 (ACTUAL), 0.9887175604818206 (DESIRED)\n[9]: 0.8571428571428572 (ACTUAL), 0.9554359905560885 (DESIRED)\n[10]: 0.7857142857142857 (ACTUAL), 0.9018241671106134 (DESIRED)",
+    "worst": {
+     "kind": "numpy.testing.assert_allclose",
+     "max_abs_diff": 0.11628469655071583,
+     "atol": 0.0,
+     "rtol": 1e-07,
+     "tol_ratio": 10000000.0,
+     "n": 25,
+     "n_violations": 17,
+     "actual": [
+      0.0,
+      0.142857,
+      0.285714,
+      0.428571,
+      0.571429,
+      0.714286,
+      0.857143,
+      1.0,
+      0.928571,
+      0.857143,
+      0.785714,
+      0.714286,
+      0.642857,
+      0.571429,
+      0.5,
+      0.428571,
+      0.357143,
+      0.285714,
+      0.214286,
+      0.142857,
+      0.071429,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "desired": [
+      0.0,
+      0.142857,
+      0.285714,
+      0.428571,
+      0.571429,
+      0.714286,
+      0.857143,
+      1.0,
+      0.988718,
+      0.955436,
+      0.901824,
+      0.83057,
+      0.745248,
+      0.650134,
+      0.55,
+      0.449866,
+      0.354752,
+      0.26943,
+      0.198176,
+      0.144564,
+      0.111282,
+      0.1,
+      0.1,
+      0.1,
+      0.1
+     ]
+    },
+    "n_comparisons": 1
+   }
+  },
+  {
+   "test": "test_checkpointing",
+   "file": "test_serialization.py",
+   "adapter": "run_save_checkpoint",
+   "kind": "none",
+   "dlfs6": "GPT.save 只存权重与配置",
+   "as_shipped": {
+    "outcome": "failed",
+    "duration": 0.05,
+    "message": "NotImplementedError: DLFS6 GPT.save() stores weights + config only (no optimizer state, no iteration)"
+   },
+   "one_line_fixes": {
+    "outcome": "failed",
+    "duration": 0.0674,
+    "message": "NotImplementedError: DLFS6 GPT.save() stores weights + config only (no optimizer state, no iteration)"
+   }
+  },
+  {
+   "test": "test_address_matches_tiktoken",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.5604
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.4982
+   }
+  },
+  {
+   "test": "test_address_roundtrip",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.5363
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.5986
+   }
+  },
+  {
+   "test": "test_ascii_string_matches_tiktoken",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.5495
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.5436
+   }
+  },
+  {
+   "test": "test_empty_matches_tiktoken",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.9787
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 1.003
+   }
+  },
+  {
+   "test": "test_encode_iterable_memory_usage",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "none",
+   "dlfs6": "没有 encode_iterable（大文件用 encode_file 分块编码）",
+   "as_shipped": {
+    "outcome": "skipped",
+    "duration": 0.0006,
+    "message": "Skipped: rlimit support for non-linux systems is spotty."
+   },
+   "one_line_fixes": {
+    "outcome": "skipped",
+    "duration": 0.0006,
+    "message": "Skipped: rlimit support for non-linux systems is spotty."
+   }
+  },
+  {
+   "test": "test_encode_iterable_tinystories_matches_tiktoken",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "none",
+   "dlfs6": "没有 encode_iterable（大文件用 encode_file 分块编码）",
+   "as_shipped": {
+    "outcome": "failed",
+    "duration": 0.4605,
+    "message": "AttributeError: 'DLFS6Tokenizer' object has no attribute 'encode_iterable'"
+   },
+   "one_line_fixes": {
+    "outcome": "failed",
+    "duration": 0.4815,
+    "message": "AttributeError: 'DLFS6Tokenizer' object has no attribute 'encode_iterable'"
+   }
+  },
+  {
+   "test": "test_encode_iterable_tinystories_sample_roundtrip",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "none",
+   "dlfs6": "没有 encode_iterable（大文件用 encode_file 分块编码）",
+   "as_shipped": {
+    "outcome": "failed",
+    "duration": 0.6863,
+    "message": "AttributeError: 'DLFS6Tokenizer' object has no attribute 'encode_iterable'"
+   },
+   "one_line_fixes": {
+    "outcome": "failed",
+    "duration": 0.4477,
+    "message": "AttributeError: 'DLFS6Tokenizer' object has no attribute 'encode_iterable'"
+   }
+  },
+  {
+   "test": "test_encode_memory_usage",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "skipped",
+    "duration": 0.0005,
+    "message": "Skipped: rlimit support for non-linux systems is spotty."
+   },
+   "one_line_fixes": {
+    "outcome": "skipped",
+    "duration": 0.0005,
+    "message": "Skipped: rlimit support for non-linux systems is spotty."
+   }
+  },
+  {
+   "test": "test_encode_special_token_double_newline_non_whitespace",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.6002
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.5386
+   }
+  },
+  {
+   "test": "test_encode_special_token_trailing_newlines",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.5973
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.4877
+   }
+  },
+  {
+   "test": "test_german_matches_tiktoken",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.6775
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.5783
+   }
+  },
+  {
+   "test": "test_german_roundtrip",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.5973
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.5152
+   }
+  },
+  {
+   "test": "test_overlapping_special_tokens",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "none",
+   "dlfs6": "BPETokenizer 只支持一个结束 token",
+   "as_shipped": {
+    "outcome": "failed",
+    "duration": 0.3957,
+    "message": "NotImplementedError: DLFS6 BPETokenizer supports exactly one special token (end_token)"
+   },
+   "one_line_fixes": {
+    "outcome": "failed",
+    "duration": 0.3193,
+    "message": "NotImplementedError: DLFS6 BPETokenizer supports exactly one special token (end_token)"
+   }
+  },
+  {
+   "test": "test_roundtrip_ascii_string",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.5702
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.523
+   }
+  },
+  {
+   "test": "test_roundtrip_empty",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.6726
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.6079
+   }
+  },
+  {
+   "test": "test_roundtrip_single_character",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.5535
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.5045
+   }
+  },
+  {
+   "test": "test_roundtrip_single_unicode_character",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.5202
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.6062
+   }
+  },
+  {
+   "test": "test_roundtrip_unicode_string",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.4809
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.503
+   }
+  },
+  {
+   "test": "test_roundtrip_unicode_string_with_special_tokens",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.591
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.4882
+   }
+  },
+  {
+   "test": "test_single_character_matches_tiktoken",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.5281
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.5128
+   }
+  },
+  {
+   "test": "test_single_unicode_character_matches_tiktoken",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.6371
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.5284
+   }
+  },
+  {
+   "test": "test_tinystories_matches_tiktoken",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 1.0353
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.5456
+   }
+  },
+  {
+   "test": "test_tinystories_sample_roundtrip",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.5587
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.4509
+   }
+  },
+  {
+   "test": "test_unicode_string_matches_tiktoken",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.4982
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.5231
+   }
+  },
+  {
+   "test": "test_unicode_string_with_special_tokens_matches_tiktoken",
+   "file": "test_tokenizer.py",
+   "adapter": "get_tokenizer",
+   "kind": "dlfs6",
+   "dlfs6": "storybot/tokenizer.py BPETokenizer（按 rank 合并）",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 0.8
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 0.4974
+   }
+  },
+  {
+   "test": "test_train_bpe",
+   "file": "test_train_bpe.py",
+   "adapter": "run_train_bpe",
+   "kind": "dlfs6",
+   "dlfs6": "ch04/02_bpe_cache.py train_bpe",
+   "as_shipped": {
+    "outcome": "failed",
+    "duration": 1.1159,
+    "message": "AssertionError: assert [(b' ', b't')...', b'e'), ...] == [(b' ', b't')...', b'e'), ...]\n\nAt index 92 diff: (b' c', b'om') != (b't', b'h')\nUse -v to get more diff"
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 1.2877
+   }
+  },
+  {
+   "test": "test_train_bpe_special_tokens",
+   "file": "test_train_bpe.py",
+   "adapter": "run_train_bpe",
+   "kind": "dlfs6",
+   "dlfs6": "ch04/02_bpe_cache.py train_bpe",
+   "as_shipped": {
+    "outcome": "failed",
+    "duration": 6.0274,
+    "message": "AssertionError: Data for key 'merges' does not match snapshot for test_train_bpe_special_tokens\nassert [(b'h', b'e')...', b'd'), ...] == [(b'h', b'e')...', b'd'), ...]\n\nAt index 34 diff: (b' s', b'a') != (b'i', b'm')\nUse -v to get more diff"
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 5.1283
+   }
+  },
+  {
+   "test": "test_train_bpe_speed",
+   "file": "test_train_bpe.py",
+   "adapter": "run_train_bpe",
+   "kind": "dlfs6",
+   "dlfs6": "ch04/02_bpe_cache.py train_bpe",
+   "as_shipped": {
+    "outcome": "passed",
+    "duration": 1.4271
+   },
+   "one_line_fixes": {
+    "outcome": "passed",
+    "duration": 1.0512
+   }
+  }
+ ],
+ "speed_history": [
+  {
+   "generated": "2026-10-11T19:57:23-04:00",
+   "note": "timings were taken while another training job was running on the same machine",
+   "bpe_tiebreak_after": "key=lambda pair: (pair_counts[pair], id_bytes(pair[0], merge_rules), id_bytes(pair[1], merge_rules))",
+   "speed_test": {
+    "as_shipped": "passed",
+    "one_line_fixes": "failed"
+   },
+   "speed_test_seconds": {
+    "as_shipped": 1.2903,
+    "one_line_fixes": 2.0133
+   },
+   "train_seconds_runs": {
+    "as_shipped": [
+     1.283,
+     1.267,
+     1.459,
+     1.348,
+     1.519
+    ],
+    "one_line_fixes": [
+     2.232,
+     1.796,
+     2.286,
+     2.162,
+     2.483
+    ]
+   }
+  },
+  {
+   "generated": "2026-10-12T15:04:57-04:00",
+   "note": "同一台机器上还在跑其他构建、测试和基准任务，CPU 接近满载",
+   "bpe_tiebreak_after": [
+    "    merge_rules = {}\n    vocab_bytes = {i: bytes([i]) for i in range(256)}  # 新增：id → 字节串\n",
+    "key=lambda pair: (pair_counts[pair], vocab_bytes[pair[0]], vocab_bytes[pair[1]])",
+    "        merge_rules[best_pair] = new_id\n        vocab_bytes[new_id] = vocab_bytes[best_pair[0]] + vocab_bytes[best_pair[1]]  # 新增\n"
+   ],
+   "speed_test": {
+    "as_shipped": "passed",
+    "one_line_fixes": "passed"
+   },
+   "speed_test_seconds": {
+    "as_shipped": 1.4271,
+    "one_line_fixes": 1.0512
+   },
+   "train_seconds_runs": {
+    "as_shipped": [
+     0.955,
+     0.994,
+     1.027,
+     1.04,
+     1.112
+    ],
+    "one_line_fixes": [
+     0.997,
+     0.984,
+     1.043,
+     1.115,
+     1.115
+    ]
+   },
+   "system_cpu_percent": {
+    "as_shipped": 100.0,
+    "one_line_fixes": 100.0
+   },
+   "bpe_speed": {
+    "corpus": "corpus.en",
+    "vocab_size": 500,
+    "rounds": 5,
+    "gate_seconds": 1.5,
+    "system_cpu_percent": 100.0,
+    "runs": {
+     "as_shipped": {
+      "wall": [
+       0.954,
+       1.09,
+       1.1,
+       1.107,
+       1.072
+      ],
+      "cpu": [
+       0.75,
+       0.812,
+       0.859,
+       0.875,
+       0.906
+      ]
+     },
+     "one_line_fixes": {
+      "wall": [
+       1.07,
+       1.017,
+       1.107,
+       1.077,
+       1.054
+      ],
+      "cpu": [
+       0.844,
+       0.875,
+       0.953,
+       1.0,
+       0.953
+      ]
+     }
+    }
+   }
+  }
+ ]
+}

@@ -1,0 +1,695 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DPO 最优解的推导｜从零构建大语言模型</title>
+<meta name="description" content="6.7 节说，带 KL 正则的 RLHF 目标有一个闭式的最优解，DPO 正是靠它绕开了奖励模型和强化学习。本附录从目标函数出发，逐行推导最优策略、隐式奖励和 DPO 损失，并在一个只有 4 个回答的小策略上把每一步都数值验证一遍。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Serif+SC:wght@400;600;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,800;1,8..60,400&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/pygments.css">
+<script>
+  try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+</head>
+<body data-slug="appendix-e" data-packages="[&quot;numpy&quot;]">
+<a class="skip" href="#main">跳到正文</a>
+<header class="topbar">
+  <button class="nav-toggle" type="button" aria-controls="nav" aria-expanded="false">目录</button>
+  <a class="book-title" href="index.html">从零构建大语言模型</a>
+  <div class="topbar-tools">
+    <span class="verify-counter" hidden></span>
+    <button class="run-all" type="button" hidden><span class="label-long">运行本页全部验证</span><span class="label-short">全部验证</span></button>
+    <button class="theme-toggle" type="button" aria-label="切换明暗主题"><span class="label-long">明 / 暗</span><span class="label-short">◐</span></button>
+  </div>
+</header>
+<div class="layout">
+  <nav id="nav" class="nav" aria-label="章节"><ol class="nav-chapters"><li class="kind-chapter"><a href="ch00.html"><span class="nav-num">0</span>LLM 是如何炼成的</a></li><li class="kind-part"><a href="part1.html">第 I 部 基础篇：制作 CodeBot</a></li><li class="kind-chapter"><a href="ch01.html"><span class="nav-num">1</span>分词器【基础篇】</a></li><li class="kind-chapter"><a href="ch02.html"><span class="nav-num">2</span>模型【基础篇】</a></li><li class="kind-chapter"><a href="ch03.html"><span class="nav-num">3</span>训练【基础篇】</a></li><li class="kind-part"><a href="part2.html">第 II 部 应用篇：制作 StoryBot</a></li><li class="kind-chapter"><a href="ch04.html"><span class="nav-num">4</span>分词器【应用篇】</a></li><li class="kind-chapter"><a href="ch05.html"><span class="nav-num">5</span>模型【应用篇】</a></li><li class="kind-chapter"><a href="ch06.html"><span class="nav-num">6</span>训练【应用篇】</a></li><li class="kind-part"><a href="part3.html">第 III 部 挑战篇：制作 WebBot</a></li><li class="kind-chapter"><a href="ch07.html"><span class="nav-num">7</span>分词器【挑战篇】</a></li><li class="kind-chapter"><a href="ch08.html"><span class="nav-num">8</span>模型【挑战篇】</a></li><li class="kind-chapter"><a href="ch09.html"><span class="nav-num">9</span>训练【挑战篇】</a></li><li class="nav-group"><span class="nav-group-label">附录</span></li><li class="kind-appendix"><a href="appendix-a.html"><span class="nav-num">A</span>UTF-8 编码的原理</a></li><li class="kind-appendix"><a href="appendix-b.html"><span class="nav-num">B</span>Attention 缩放效果的证明</a></li><li class="kind-appendix"><a href="appendix-c.html"><span class="nav-num">C</span>带基线策略梯度的无偏性证明</a></li><li class="kind-appendix"><a href="appendix-d.html"><span class="nav-num">D</span>Adam 的偏差校正</a></li><li class="kind-appendix current"><a href="appendix-e.html"><span class="nav-num">E</span>DPO 最优解的推导</a><ol><li><a href="#sE-1">E.1 问题设定：带 KL 正则的目标</a></li><li><a href="#sE-2">E.2 最优策略：π* ∝ π_ref · exp(r/β)</a></li><li><a href="#sE-3">E.3 隐式奖励：把奖励写成策略的函数</a></li><li><a href="#sE-4">E.4 Bradley-Terry 模型与 Z 的消去</a></li><li><a href="#sE-5">E.5 DPO 的损失</a></li><li><a href="#sE-6">E.6 偏好服从 BT 模型时，DPO 训练到最后就是 π*</a></li><li><a href="#h-5db9fd7c">小结</a></li></ol></li><li class="nav-group"><span class="nav-group-label">实践与参考</span></li><li class="kind-extra"><a href="playground.html"><span class="nav-num">P</span>CodeBot 工作台</a></li><li class="kind-extra"><a href="train-in-browser.html"><span class="nav-num">T</span>浏览器里训练迷你 GPT</a></li><li class="kind-extra"><a href="gpu.html"><span class="nav-num">G</span>GPU 实战手册</a></li><li class="kind-extra"><a href="cs336.html"><span class="nav-num">X</span>CS336 对照总表</a></li><li class="kind-extra"><a href="glossary.html"><span class="nav-num">Y</span>术语与命名对照</a></li><li class="kind-extra"><a href="errata.html"><span class="nav-num">Z</span>已知问题与修复</a></li></ol></nav>
+  <main id="main" class="page">
+    <article class="chapter"><header class="chapter-head"><div class="chapter-num">E</div><h1>DPO 最优解的推导</h1><p class="chapter-lede">6.7 节说，带 KL 正则的 RLHF 目标有一个闭式的最优解，DPO 正是靠它绕开了奖励模型和强化学习。本附录从目标函数出发，逐行推导最优策略、隐式奖励和 DPO 损失，并在一个只有 4 个回答的小策略上把每一步都数值验证一遍。</p></header><p><a href="ch06.html#s6-7">6.7 节</a>比较了两条对齐的路线。RLHF 先用偏好数据训练一个奖励模型，再用强化学习最大化奖励，同时用 KL 散度把策略拴在参考模型附近。DPO 则直接拿偏好数据训练策略，它的损失函数是这样写的：</p>
+<figure class="listing" data-start="98"><figcaption><a class="listing-path" href="https://github.com/oreilly-japan/deep-learning-from-scratch-6/blob/c9b6e2ed531b08dd9f451a091a34e9645148e2e2/ch06/08_dpo.py#L98-L113" target="_blank" rel="noopener">ch06/08_dpo.py</a><span class="listing-range">第 98–113 行</span></figcaption><pre class="code numbered" style="counter-reset: line 97; --ln-digits: 3"><code><span class="line"><span class="k">def</span><span class="w"> </span><span class="nf">compute_dpo_loss</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">ref_model</span><span class="p">,</span> <span class="n">chosen_ids</span><span class="p">,</span> <span class="n">chosen_mask</span><span class="p">,</span> <span class="n">rejected_ids</span><span class="p">,</span> <span class="n">rejected_mask</span><span class="p">,</span> <span class="n">beta</span><span class="p">):</span></span>
+<span class="line">    <span class="c1"># 現在のモデルのlog-prob</span></span>
+<span class="line">    <span class="n">chosen_logprobs</span> <span class="o">=</span> <span class="n">get_sequence_logprobs</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">chosen_ids</span><span class="p">,</span> <span class="n">chosen_mask</span><span class="p">)</span></span>
+<span class="line">    <span class="n">rejected_logprobs</span> <span class="o">=</span> <span class="n">get_sequence_logprobs</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">rejected_ids</span><span class="p">,</span> <span class="n">rejected_mask</span><span class="p">)</span></span>
+<span class="line"></span>
+<span class="line">    <span class="c1"># 参照モデルのlog-prob</span></span>
+<span class="line">    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span></span>
+<span class="line">        <span class="n">ref_chosen_logprobs</span> <span class="o">=</span> <span class="n">get_sequence_logprobs</span><span class="p">(</span><span class="n">ref_model</span><span class="p">,</span> <span class="n">chosen_ids</span><span class="p">,</span> <span class="n">chosen_mask</span><span class="p">)</span></span>
+<span class="line">        <span class="n">ref_rejected_logprobs</span> <span class="o">=</span> <span class="n">get_sequence_logprobs</span><span class="p">(</span><span class="n">ref_model</span><span class="p">,</span> <span class="n">rejected_ids</span><span class="p">,</span> <span class="n">rejected_mask</span><span class="p">)</span></span>
+<span class="line"></span>
+<span class="line">    <span class="c1"># DPO loss</span></span>
+<span class="line">    <span class="n">logits</span> <span class="o">=</span> <span class="n">beta</span> <span class="o">*</span> <span class="p">(</span></span>
+<span class="line">        <span class="p">(</span><span class="n">chosen_logprobs</span> <span class="o">-</span> <span class="n">rejected_logprobs</span><span class="p">)</span> <span class="o">-</span></span>
+<span class="line">        <span class="p">(</span><span class="n">ref_chosen_logprobs</span> <span class="o">-</span> <span class="n">ref_rejected_logprobs</span><span class="p">)</span></span>
+<span class="line">    <span class="p">)</span></span>
+<span class="line">    <span class="k">return</span> <span class="o">-</span><span class="n">F</span><span class="o">.</span><span class="n">logsigmoid</span><span class="p">(</span><span class="n">logits</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span></span>
+</code></pre></figure><p>真正的计算只有最后两步：算出 <code>logits</code>，再取 <code>-F.logsigmoid</code>。这短短几行里藏着几个问题：<span class="math inline"><span class="math-inline">\beta</span></span> 为什么出现在 sigmoid 里面？“当前模型减参考模型”的对数概率差是什么意思？RLHF 里那个需要对所有可能回答求和、根本算不出来的配分函数，又是怎么消失的？</p>
+<p>本附录一步一步回答这些问题。我们先写出带 KL 正则的目标，推导出它的最优策略 <span class="math inline"><span class="math-inline">\pi^*</span></span>；然后把最优策略反过来，把奖励写成策略的函数，这就是“隐式奖励”；接着代入 Bradley-Terry 偏好模型，看配分函数怎样抵消；最后得到 DPO 的损失，并在一个只有 4 个回答的小例子上确认：用 DPO 训练到最优，得到的正是 RLHF 的最优策略。推导沿用 DPO 原论文第 4 节与附录 A.1 的思路（<a href="https://arxiv.org/abs/2305.18290">Rafailov et al., 2023</a>，2026-10 查证）。</p>
+<h2 id="sE-1">E.1 问题设定：带 KL 正则的目标</h2>
+<p>先固定一个问题 <span class="math inline"><span class="math-inline">x</span></span>，它可能的回答 <span class="math inline"><span class="math-inline">y</span></span> 构成一个有限集合（回答长度有上限）。为了让记号简洁，下面省略 <span class="math inline"><span class="math-inline">x</span></span>。RLHF 想要的策略 <span class="math inline"><span class="math-inline">\pi</span></span> 要同时满足两件事：期望奖励高，并且离参考策略 <span class="math inline"><span class="math-inline">\pi_{\text{ref}}</span></span>（预训练或 SFT 之后的模型）不远。写成一个目标函数：</p>
+<div class="math block">
+<div class="math-block">\begin{gathered}
+\mathcal J(\pi) = \mathbb E_{y\sim\pi}\big[r(y)\big] - \beta\,\mathrm{KL}(\pi\,\|\,\pi_{\text{ref}})\\
+\mathrm{KL}(\pi\,\|\,\pi_{\text{ref}}) = \sum_y \pi(y)\log\frac{\pi(y)}{\pi_{\text{ref}}(y)}
+\end{gathered}</div>
+</div>
+<p>这里，<span class="math inline"><span class="math-inline">r(y)</span></span> 是回答 <span class="math inline"><span class="math-inline">y</span></span> 的奖励，<span class="math inline"><span class="math-inline">\beta &gt; 0</span></span> 控制“离参考策略多远”的代价：<span class="math inline"><span class="math-inline">\beta</span></span> 越大，越不愿意偏离。KL 散度有一条重要的性质：<span class="math inline"><span class="math-inline">\mathrm{KL}(p\,\|\,q) \ge 0</span></span>，当且仅当 <span class="math inline"><span class="math-inline">p = q</span></span> 时等于 0（吉布斯不等式）。证明很短。<span class="math inline"><span class="math-inline">\log</span></span> 是凹函数，由<strong>琴生不等式</strong>（Jensen's inequality），按概率加权的“对数的平均”不超过“平均的对数”：</p>
+<div class="math block">
+<div class="math-block">\begin{aligned}
+-\mathrm{KL}(p\,\|\,q) &amp;= \sum_{p(y)&gt;0} p(y)\log\frac{q(y)}{p(y)}\\
+&amp;\le \log\sum_{p(y)&gt;0} p(y)\,\frac{q(y)}{p(y)}\\
+&amp;= \log\sum_{p(y)&gt;0} q(y)\\
+&amp;\le \log 1 = 0
+\end{aligned}</div>
+</div>
+<p>求和只取 <span class="math inline"><span class="math-inline">p(y) &gt; 0</span></span> 的 <span class="math inline"><span class="math-inline">y</span></span>（<span class="math inline"><span class="math-inline">p(y) = 0</span></span> 的项按惯例记为 0）。<span class="math inline"><span class="math-inline">\log</span></span> 是严格凹的，第一个“<span class="math inline"><span class="math-inline">\le</span></span>”只在 <span class="math inline"><span class="math-inline">q(y)/p(y)</span></span> 处处相等时取等号；最后一个“<span class="math inline"><span class="math-inline">\le</span></span>”取等号，要求 <span class="math inline"><span class="math-inline">q</span></span> 在 <span class="math inline"><span class="math-inline">p</span></span> 为 0 的地方也为 0。两者合起来，就是 <span class="math inline"><span class="math-inline">p = q</span></span>。</p>
+<p>先手算一个 KL：<span class="math inline"><span class="math-inline">p = (0.5, 0.5)</span></span>、<span class="math inline"><span class="math-inline">q = (0.9, 0.1)</span></span> 时，<span class="math inline"><span class="math-inline">\mathrm{KL}(p\,\|\,q) = 0.5\ln\frac{0.5}{0.9} + 0.5\ln\frac{0.5}{0.1} = -0.2939 + 0.8047 = 0.5108</span></span>。这里用的是自然对数，单位叫 <strong>nats</strong>；换成以 2 为底就是 bits，<span class="math inline"><span class="math-inline">0.5108 / \ln 2 = 0.737</span></span> bits。</p>
+<p>接下来用一个小例子贯穿全附录：一共只有 4 个回答，参考策略是 <span class="math inline"><span class="math-inline">\pi_{\text{ref}} = (0.4, 0.3, 0.2, 0.1)</span></span>，奖励是 <span class="math inline"><span class="math-inline">r = (0, 1, 2, 0.5)</span></span>，<span class="math inline"><span class="math-inline">\beta = 0.5</span></span>。</p>
+<div class="verify" id="v-E-a" data-cell="{&quot;id&quot;: &quot;E-a&quot;, &quot;golden&quot;: &quot;KL = 0.5108 nats = 0.7370 bits\n2000 对随机分布：KL 的最小值 0.0012\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 E-a</span><span class="verify-title">KL 散度：手算、非负、nats 与 bits</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">kl</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">q</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""KL(p ‖ q)，自然对数，单位 nats。"""</span>
+    <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">p</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">p</span> <span class="o">/</span> <span class="n">q</span><span class="p">)))</span>
+
+<span class="n">hand</span> <span class="o">=</span> <span class="n">kl</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">]))</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"KL = </span><span class="si">{</span><span class="n">hand</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> nats = </span><span class="si">{</span><span class="n">hand</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> bits"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">hand</span> <span class="o">-</span> <span class="mf">0.5108</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-4</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="mi">1</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span> <span class="o">-</span> <span class="mf">1.4427</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-4</span>                <span class="c1"># 1 nat = 1.4427 bits</span>
+
+<span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">pairs</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">dirichlet</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mi">2000</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>      <span class="c1"># 2000 对随机分布</span>
+<span class="n">kls</span> <span class="o">=</span> <span class="p">[</span><span class="n">kl</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">q</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">q</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">]</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"2000 对随机分布：KL 的最小值 </span><span class="si">{</span><span class="nb">min</span><span class="p">(</span><span class="n">kls</span><span class="p">)</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">min</span><span class="p">(</span><span class="n">kls</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">kl</span><span class="p">(</span><span class="n">pairs</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">pairs</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span> <span class="o">==</span> <span class="mi">0</span>   <span class="c1"># 吉布斯不等式</span>
+
+<span class="n">pi_ref</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.4</span><span class="p">,</span> <span class="mf">0.3</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">])</span>                <span class="c1"># 贯穿全附录的小例子</span>
+<span class="n">r</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.0</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">])</span>
+<span class="n">beta</span> <span class="o">=</span> <span class="mf">0.5</span>
+</code></pre><textarea class="verify-src" hidden>import numpy as np
+
+def kl(p, q):
+    &quot;&quot;&quot;KL(p ‖ q)，自然对数，单位 nats。&quot;&quot;&quot;
+    return float(np.sum(p * np.log(p / q)))
+
+hand = kl(np.array([0.5, 0.5]), np.array([0.9, 0.1]))
+print(f&quot;KL = {hand:.4f} nats = {hand / np.log(2):.4f} bits&quot;)
+assert abs(hand - 0.5108) &lt; 1e-4
+assert abs(1 / np.log(2) - 1.4427) &lt; 1e-4                # 1 nat = 1.4427 bits
+
+rng = np.random.default_rng(0)
+pairs = rng.dirichlet(np.ones(4), size=(2000, 2))      # 2000 对随机分布
+kls = [kl(p, q) for p, q in pairs]
+print(f&quot;2000 对随机分布：KL 的最小值 {min(kls):.4f}&quot;)
+assert min(kls) &gt; 0 and kl(pairs[0, 0], pairs[0, 0]) == 0   # 吉布斯不等式
+
+pi_ref = np.array([0.4, 0.3, 0.2, 0.1])                # 贯穿全附录的小例子
+r = np.array([0.0, 1.0, 2.0, 0.5])
+beta = 0.5
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>KL = 0.5108 nats = 0.7370 bits
+2000 对随机分布：KL 的最小值 0.0012
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><aside class="callout callout-confusion"><div class="callout-title"><span class="callout-kind">你可能会困惑</span><span class="callout-text">每一步的 KL 加起来，是不是就是“策略总共移动了多少”？</span></div>
+<p>训练日志里常常每一步都记录一个 KL，把它们加起来，感觉就像“走过的路程”。但上面目标函数里的 KL 衡量的是<strong>最终的策略离参考策略有多远</strong>，与“每步 KL 之和”是两回事，而且谁大谁小都有可能。来回摆动时，和可以远大于它：A→B→A→B→A，每步 KL 之和是 1.76 nats，最后却回到了 A，相对起点的 KL 是 0。沿直线小步前进时，和又可以远小于它：从 A 到 B 分 100 等步走，每步 KL 之和只有 0.0044 nats，而 <span class="math inline"><span class="math-inline">\mathrm{KL}(B\,\|\,A) = 0.368</span></span>。严格地讲，KL 不是距离：它不对称，也不满足三角不等式；相邻的两个分布之间，它近似于距离的平方，所以同一段路切成 <span class="math inline"><span class="math-inline">n</span></span> 步，每步之和大约缩小为 <span class="math inline"><span class="math-inline">1/n</span></span>。可以带走的结论：<strong>想知道离参考策略多远，就直接算 <span class="math inline"><span class="math-inline">\mathrm{KL}(\pi\,\|\,\pi_{\text{ref}})</span></span>，不要把每步的 KL 加起来。</strong></p>
+</aside>
+<div class="verify" id="v-E-b" data-cell="{&quot;id&quot;: &quot;E-b&quot;, &quot;golden&quot;: &quot;来回摆动：每步 KL 之和 1.76 nats，相对起点的 KL 0.0\n直线分   2 步：每步 KL 之和 0.1986 nats，n × 和 = 0.397\n直线分  10 步：每步 KL 之和 0.0430 nats，n × 和 = 0.430\n直线分 100 步：每步 KL 之和 0.0044 nats，n × 和 = 0.438\n终点相对起点：KL(B‖A) = 0.368；反过来 KL(A‖B) = 0.511\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 E-b</span><span class="verify-title">每步 KL 之和与相对起点的 KL：来回摆动时和大得多，小步直走时和小得多</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">A</span><span class="p">,</span> <span class="n">B</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">]),</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mf">0.9</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">])</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">odometer</span><span class="p">(</span><span class="n">path</span><span class="p">):</span>                      <span class="c1"># 把每一步的 KL 加起来</span>
+    <span class="k">return</span> <span class="nb">sum</span><span class="p">(</span><span class="n">kl</span><span class="p">(</span><span class="n">path</span><span class="p">[</span><span class="n">k</span> <span class="o">+</span> <span class="mi">1</span><span class="p">],</span> <span class="n">path</span><span class="p">[</span><span class="n">k</span><span class="p">])</span> <span class="k">for</span> <span class="n">k</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">path</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">))</span>
+
+<span class="n">swing</span> <span class="o">=</span> <span class="p">[</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">,</span> <span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">,</span> <span class="n">A</span><span class="p">]</span>                  <span class="c1"># 来回摆动两次，回到起点</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"来回摆动：每步 KL 之和 </span><span class="si">{</span><span class="n">odometer</span><span class="p">(</span><span class="n">swing</span><span class="p">)</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> nats，"</span>
+      <span class="sa">f</span><span class="s2">"相对起点的 KL </span><span class="si">{</span><span class="n">kl</span><span class="p">(</span><span class="n">swing</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span><span class="w"> </span><span class="n">swing</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">odometer</span><span class="p">(</span><span class="n">swing</span><span class="p">)</span> <span class="o">-</span> <span class="mf">1.7578</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-4</span> <span class="ow">and</span> <span class="n">kl</span><span class="p">(</span><span class="n">swing</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">swing</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">==</span> <span class="mi">0</span>
+
+<span class="n">sums</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">100</span><span class="p">):</span>                   <span class="c1"># 从 A 沿直线走到 B，分 n 等步</span>
+    <span class="n">straight</span> <span class="o">=</span> <span class="p">[(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">t</span><span class="p">)</span> <span class="o">*</span> <span class="n">A</span> <span class="o">+</span> <span class="n">t</span> <span class="o">*</span> <span class="n">B</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)]</span>
+    <span class="n">sums</span><span class="p">[</span><span class="n">n</span><span class="p">]</span> <span class="o">=</span> <span class="n">odometer</span><span class="p">(</span><span class="n">straight</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"直线分 </span><span class="si">{</span><span class="n">n</span><span class="si">:</span><span class="s2">3d</span><span class="si">}</span><span class="s2"> 步：每步 KL 之和 </span><span class="si">{</span><span class="n">sums</span><span class="p">[</span><span class="n">n</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> nats，n × 和 = </span><span class="si">{</span><span class="n">n</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">sums</span><span class="p">[</span><span class="n">n</span><span class="p">]</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"终点相对起点：KL(B‖A) = </span><span class="si">{</span><span class="n">kl</span><span class="p">(</span><span class="n">B</span><span class="p">,</span><span class="w"> </span><span class="n">A</span><span class="p">)</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">；反过来 KL(A‖B) = </span><span class="si">{</span><span class="n">kl</span><span class="p">(</span><span class="n">A</span><span class="p">,</span><span class="w"> </span><span class="n">B</span><span class="p">)</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">sums</span><span class="p">[</span><span class="mi">100</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mf">0.01</span> <span class="o">&lt;</span> <span class="n">kl</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">A</span><span class="p">)</span>       <span class="c1"># 小步直走：和远小于终点的 KL（违反三角不等式）</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="mi">100</span> <span class="o">*</span> <span class="n">sums</span><span class="p">[</span><span class="mi">100</span><span class="p">]</span> <span class="o">/</span> <span class="p">(</span><span class="mi">10</span> <span class="o">*</span> <span class="n">sums</span><span class="p">[</span><span class="mi">10</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">0.05</span>   <span class="c1"># 和大约缩小为 1/n</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">kl</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">B</span><span class="p">)</span> <span class="o">-</span> <span class="n">kl</span><span class="p">(</span><span class="n">B</span><span class="p">,</span> <span class="n">A</span><span class="p">))</span> <span class="o">&gt;</span> <span class="mf">0.1</span>                   <span class="c1"># KL 不对称</span>
+</code></pre><textarea class="verify-src" hidden>A, B = np.array([0.5, 0.5]), np.array([0.9, 0.1])
+
+def odometer(path):                      # 把每一步的 KL 加起来
+    return sum(kl(path[k + 1], path[k]) for k in range(len(path) - 1))
+
+swing = [A, B, A, B, A]                  # 来回摆动两次，回到起点
+print(f&quot;来回摆动：每步 KL 之和 {odometer(swing):.2f} nats，&quot;
+      f&quot;相对起点的 KL {kl(swing[-1], swing[0]):.1f}&quot;)
+assert abs(odometer(swing) - 1.7578) &lt; 1e-4 and kl(swing[-1], swing[0]) == 0
+
+sums = {}
+for n in (2, 10, 100):                   # 从 A 沿直线走到 B，分 n 等步
+    straight = [(1 - t) * A + t * B for t in np.linspace(0, 1, n + 1)]
+    sums[n] = odometer(straight)
+    print(f&quot;直线分 {n:3d} 步：每步 KL 之和 {sums[n]:.4f} nats，n × 和 = {n * sums[n]:.3f}&quot;)
+print(f&quot;终点相对起点：KL(B‖A) = {kl(B, A):.3f}；反过来 KL(A‖B) = {kl(A, B):.3f}&quot;)
+assert sums[100] &lt; 0.01 &lt; kl(B, A)       # 小步直走：和远小于终点的 KL（违反三角不等式）
+assert abs(100 * sums[100] / (10 * sums[10]) - 1) &lt; 0.05   # 和大约缩小为 1/n
+assert abs(kl(A, B) - kl(B, A)) &gt; 0.1                   # KL 不对称
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>来回摆动：每步 KL 之和 1.76 nats，相对起点的 KL 0.0
+直线分   2 步：每步 KL 之和 0.1986 nats，n × 和 = 0.397
+直线分  10 步：每步 KL 之和 0.0430 nats，n × 和 = 0.430
+直线分 100 步：每步 KL 之和 0.0044 nats，n × 和 = 0.438
+终点相对起点：KL(B‖A) = 0.368；反过来 KL(A‖B) = 0.511
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><h2 id="sE-2">E.2 最优策略：π* ∝ π_ref · exp(r/β)</h2>
+<p>现在求使 <span class="math inline"><span class="math-inline">\mathcal J(\pi)</span></span> 最大的 <span class="math inline"><span class="math-inline">\pi</span></span>。思路是把 <span class="math inline"><span class="math-inline">\mathcal J</span></span> 改写成“一个 KL 加一个常数”，这样最大值一眼就能看出来。每一行下面用小字写着理由：</p>
+<div class="math block">
+<div class="math-block">\begin{aligned}
+\mathcal J(\pi) &amp;= \sum_y \pi(y)\,r(y)\\
+&amp;\qquad - \beta\sum_y \pi(y)\log\frac{\pi(y)}{\pi_{\text{ref}}(y)}\\[-3pt]
+&amp;\quad{\footnotesize\text{（写成求和）}}\\[2pt]
+&amp;= -\beta\sum_y \pi(y)\Big[\log\frac{\pi(y)}{\pi_{\text{ref}}(y)}\\
+&amp;\qquad\qquad - \frac{r(y)}{\beta}\Big]\\[-3pt]
+&amp;\quad{\footnotesize\text{（提出 }-\beta\text{）}}\\[2pt]
+&amp;= -\beta\sum_y \pi(y)\log\frac{\pi(y)}{\pi_{\text{ref}}(y)\,e^{r(y)/\beta}}\\[-3pt]
+&amp;\quad{\footnotesize\text{（合并对数）}}\\[2pt]
+&amp;= -\beta\sum_y \pi(y)\log\frac{\pi(y)}{Z\,\pi^*(y)}\\[-3pt]
+&amp;\quad{\footnotesize\text{（代入 }Z\text{ 与 }\pi^*\text{）}}\\[2pt]
+&amp;= -\beta\sum_y \pi(y)\log\frac{\pi(y)}{\pi^*(y)}\\
+&amp;\qquad + \beta\log Z\sum_y \pi(y)\\[-3pt]
+&amp;\quad{\footnotesize\text{（拆开对数）}}\\[2pt]
+&amp;= -\beta\,\mathrm{KL}(\pi\,\|\,\pi^*) + \beta\log Z\\[-3pt]
+&amp;\quad{\footnotesize\text{（}\textstyle\sum_y\pi(y) = 1\text{）}}
+\end{aligned}</div>
+</div>
+<p>“代入 <span class="math inline"><span class="math-inline">Z</span></span> 与 <span class="math inline"><span class="math-inline">\pi^*</span></span>”那一步用到的两个定义是：</p>
+<div class="math block">
+<div class="math-block">\begin{aligned}
+Z &amp;= \sum_y \pi_{\text{ref}}(y)\,e^{r(y)/\beta}\\
+\pi^*(y) &amp;= \frac{1}{Z}\,\pi_{\text{ref}}(y)\,e^{r(y)/\beta}
+\end{aligned}</div>
+</div>
+<p><span class="math inline"><span class="math-inline">Z</span></span> 叫作<strong>配分函数</strong>（partition function），它的作用是让 <span class="math inline"><span class="math-inline">\pi^*</span></span> 的总和为 1，所以 <span class="math inline"><span class="math-inline">\pi^*</span></span> 是一个合法的概率分布。最后一行里，<span class="math inline"><span class="math-inline">\beta\log Z</span></span> 与 <span class="math inline"><span class="math-inline">\pi</span></span> 无关；由吉布斯不等式，<span class="math inline"><span class="math-inline">\mathrm{KL}(\pi\,\|\,\pi^*) \ge 0</span></span>，当且仅当 <span class="math inline"><span class="math-inline">\pi = \pi^*</span></span> 时为 0。所以 <span class="math inline"><span class="math-inline">\mathcal J</span></span> 的最大值是 <span class="math inline"><span class="math-inline">\beta\log Z</span></span>，在 <span class="math inline"><span class="math-inline">\pi = \pi^*</span></span> 时取到。这就是 DPO 原论文的式 (4)。</p>
+<p><span class="math inline"><span class="math-inline">\pi^*</span></span> 的意思很直观：把参考策略的每个回答按 <span class="math inline"><span class="math-inline">e^{r/\beta}</span></span> 重新加权，奖励高的回答被放大。手算小例子：<span class="math inline"><span class="math-inline">r/\beta = (0, 2, 4, 1)</span></span>，所以 <span class="math inline"><span class="math-inline">\pi_{\text{ref}}\,e^{r/\beta} = (0.4,\ 0.3e^2,\ 0.2e^4,\ 0.1e) = (0.400, 2.217, 10.920, 0.272)</span></span>，求和得 <span class="math inline"><span class="math-inline">Z = 13.808</span></span>，于是 <span class="math inline"><span class="math-inline">\pi^* = (0.029, 0.161, 0.791, 0.020)</span></span>。奖励最高的回答在参考策略下只有 0.2 的概率，在 <span class="math inline"><span class="math-inline">\pi^*</span></span> 下涨到了 0.79。</p>
+<div class="verify" id="v-E-c" data-cell="{&quot;id&quot;: &quot;E-c&quot;, &quot;golden&quot;: &quot;π_ref·e^(r/β) = (0.400, 2.217, 10.920, 0.272)，Z = 13.808\nπ* = (0.029, 0.161, 0.791, 0.020)\nJ(π*) = 1.3126 = β·log Z = 1.3126，随机策略里最好的 J = 1.3102\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 E-c</span><span class="verify-title">π* 与 Z：逐行验证改写，π* 打败 2000 个随机策略</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="k">def</span><span class="w"> </span><span class="nf">objective</span><span class="p">(</span><span class="n">p</span><span class="p">):</span>
+    <span class="k">return</span> <span class="nb">float</span><span class="p">(</span><span class="n">p</span> <span class="o">@</span> <span class="n">r</span><span class="p">)</span> <span class="o">-</span> <span class="n">beta</span> <span class="o">*</span> <span class="n">kl</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">pi_ref</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">fmt</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="n">digits</span><span class="o">=</span><span class="mi">3</span><span class="p">):</span>
+    <span class="k">return</span> <span class="s2">"("</span> <span class="o">+</span> <span class="s2">", "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">x</span><span class="si">:</span><span class="s2">.</span><span class="si">{</span><span class="n">digits</span><span class="si">}</span><span class="s2">f</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="n">v</span><span class="p">)</span> <span class="o">+</span> <span class="s2">")"</span>
+
+<span class="n">w</span> <span class="o">=</span> <span class="n">pi_ref</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">r</span> <span class="o">/</span> <span class="n">beta</span><span class="p">)</span>
+<span class="n">Z</span> <span class="o">=</span> <span class="n">w</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+<span class="n">pi_star</span> <span class="o">=</span> <span class="n">w</span> <span class="o">/</span> <span class="n">Z</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"π_ref·e^(r/β) = </span><span class="si">{</span><span class="n">fmt</span><span class="p">(</span><span class="n">w</span><span class="p">)</span><span class="si">}</span><span class="s2">，Z = </span><span class="si">{</span><span class="n">Z</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"π* = </span><span class="si">{</span><span class="n">fmt</span><span class="p">(</span><span class="n">pi_star</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">Z</span> <span class="o">-</span> <span class="mf">13.808</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-3</span> <span class="ow">and</span> <span class="n">np</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">pi_star</span><span class="o">.</span><span class="n">sum</span><span class="p">(),</span> <span class="mi">1</span><span class="p">)</span>
+
+<span class="n">candidates</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">dirichlet</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">4</span><span class="p">),</span> <span class="n">size</span><span class="o">=</span><span class="mi">2000</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">candidates</span><span class="p">:</span>                <span class="c1"># 最后一行的恒等式对任何 π 都成立</span>
+    <span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">objective</span><span class="p">(</span><span class="n">p</span><span class="p">),</span> <span class="o">-</span><span class="n">beta</span> <span class="o">*</span> <span class="n">kl</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="n">pi_star</span><span class="p">)</span> <span class="o">+</span> <span class="n">beta</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">Z</span><span class="p">))</span>
+<span class="n">best_random</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">objective</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">candidates</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"J(π*) = </span><span class="si">{</span><span class="n">objective</span><span class="p">(</span><span class="n">pi_star</span><span class="p">)</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> = β·log Z = </span><span class="si">{</span><span class="n">beta</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">Z</span><span class="p">)</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">，"</span>
+      <span class="sa">f</span><span class="s2">"随机策略里最好的 J = </span><span class="si">{</span><span class="n">best_random</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">isclose</span><span class="p">(</span><span class="n">objective</span><span class="p">(</span><span class="n">pi_star</span><span class="p">),</span> <span class="n">beta</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">Z</span><span class="p">))</span>
+<span class="k">assert</span> <span class="n">best_random</span> <span class="o">&lt;</span> <span class="n">objective</span><span class="p">(</span><span class="n">pi_star</span><span class="p">)</span>
+</code></pre><textarea class="verify-src" hidden>def objective(p):
+    return float(p @ r) - beta * kl(p, pi_ref)
+
+def fmt(v, digits=3):
+    return &quot;(&quot; + &quot;, &quot;.join(f&quot;{x:.{digits}f}&quot; for x in v) + &quot;)&quot;
+
+w = pi_ref * np.exp(r / beta)
+Z = w.sum()
+pi_star = w / Z
+print(f&quot;π_ref·e^(r/β) = {fmt(w)}，Z = {Z:.3f}&quot;)
+print(f&quot;π* = {fmt(pi_star)}&quot;)
+assert abs(Z - 13.808) &lt; 1e-3 and np.isclose(pi_star.sum(), 1)
+
+candidates = rng.dirichlet(np.ones(4), size=2000)
+for p in candidates:                # 最后一行的恒等式对任何 π 都成立
+    assert np.isclose(objective(p), -beta * kl(p, pi_star) + beta * np.log(Z))
+best_random = max(objective(p) for p in candidates)
+print(f&quot;J(π*) = {objective(pi_star):.4f} = β·log Z = {beta * np.log(Z):.4f}，&quot;
+      f&quot;随机策略里最好的 J = {best_random:.4f}&quot;)
+assert np.isclose(objective(pi_star), beta * np.log(Z))
+assert best_random &lt; objective(pi_star)
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>π_ref·e^(r/β) = (0.400, 2.217, 10.920, 0.272)，Z = 13.808
+π* = (0.029, 0.161, 0.791, 0.020)
+J(π*) = 1.3126 = β·log Z = 1.3126，随机策略里最好的 J = 1.3102
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p><span class="math inline"><span class="math-inline">\beta</span></span> 是一个“旋钮”。<span class="math inline"><span class="math-inline">\beta</span></span> 很大时，<span class="math inline"><span class="math-inline">e^{r/\beta} \approx 1</span></span>，<span class="math inline"><span class="math-inline">\pi^*</span></span> 几乎等于 <span class="math inline"><span class="math-inline">\pi_{\text{ref}}</span></span>；<span class="math inline"><span class="math-inline">\beta</span></span> 很小时，<span class="math inline"><span class="math-inline">e^{r/\beta}</span></span> 把奖励最高的回答放大到压倒一切，<span class="math inline"><span class="math-inline">\pi^*</span></span> 趋向只选它。下面的验证扫一遍 <span class="math inline"><span class="math-inline">\beta</span></span>，同时看 <span class="math inline"><span class="math-inline">\pi^*</span></span> 离参考策略有多远、期望奖励有多高：</p>
+<div class="verify" id="v-E-d" data-cell="{&quot;id&quot;: &quot;E-d&quot;, &quot;golden&quot;: &quot;β =    100：π* = (0.397, 0.301, 0.203, 0.100)，KL(π*‖π_ref) = 0.000，E[r] = 0.756\nβ =     10：π* = (0.370, 0.307, 0.226, 0.097)，KL(π*‖π_ref) = 0.003，E[r] = 0.807\nβ =      1：π* = (0.140, 0.285, 0.517, 0.058)，KL(π*‖π_ref) = 0.298，E[r] = 1.348\nβ =    0.5：π* = (0.029, 0.161, 0.791, 0.020)，KL(π*‖π_ref) = 0.879，E[r] = 1.752\nβ =    0.1：π* = (0.000, 0.000, 1.000, 0.000)，KL(π*‖π_ref) = 1.609，E[r] = 2.000\nβ =   0.01：π* = (0.000, 0.000, 1.000, 0.000)，KL(π*‖π_ref) = 1.609，E[r] = 2.000\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 E-d</span><span class="verify-title">β 从大到小：π* 从 π_ref 走向只选奖励最高的回答</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="k">def</span><span class="w"> </span><span class="nf">optimal_policy</span><span class="p">(</span><span class="n">beta_</span><span class="p">):</span>
+    <span class="n">logits</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">pi_ref</span><span class="p">)</span> <span class="o">+</span> <span class="n">r</span> <span class="o">/</span> <span class="n">beta_</span>
+    <span class="n">e</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">logits</span> <span class="o">-</span> <span class="n">logits</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>                <span class="c1"># 减去最大值，避免 β 很小时溢出</span>
+    <span class="k">return</span> <span class="n">e</span> <span class="o">/</span> <span class="n">e</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+
+<span class="k">for</span> <span class="n">beta_</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">100</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.01</span><span class="p">):</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">optimal_policy</span><span class="p">(</span><span class="n">beta_</span><span class="p">)</span>
+    <span class="n">kl_p</span> <span class="o">=</span> <span class="n">kl</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">p</span><span class="p">,</span> <span class="mf">1e-300</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">pi_ref</span><span class="p">)</span>          <span class="c1"># 下溢的 0 不影响求和</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"β = </span><span class="si">{</span><span class="n">beta_</span><span class="si">:</span><span class="s2">6</span><span class="si">}</span><span class="s2">：π* = </span><span class="si">{</span><span class="n">fmt</span><span class="p">(</span><span class="n">p</span><span class="p">)</span><span class="si">}</span><span class="s2">，"</span>
+          <span class="sa">f</span><span class="s2">"KL(π*‖π_ref) = </span><span class="si">{</span><span class="n">kl_p</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">，E[r] = </span><span class="si">{</span><span class="n">p</span><span class="w"> </span><span class="o">@</span><span class="w"> </span><span class="n">r</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">optimal_policy</span><span class="p">(</span><span class="mi">100</span><span class="p">),</span> <span class="n">pi_ref</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="mf">0.01</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">optimal_policy</span><span class="p">(</span><span class="mf">0.01</span><span class="p">)[</span><span class="mi">2</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.999</span>                     <span class="c1"># 只选 r = 2 的回答</span>
+<span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">optimal_policy</span><span class="p">(</span><span class="n">beta</span><span class="p">),</span> <span class="n">pi_star</span><span class="p">)</span>
+</code></pre><textarea class="verify-src" hidden>def optimal_policy(beta_):
+    logits = np.log(pi_ref) + r / beta_
+    e = np.exp(logits - logits.max())                # 减去最大值，避免 β 很小时溢出
+    return e / e.sum()
+
+for beta_ in (100, 10, 1, 0.5, 0.1, 0.01):
+    p = optimal_policy(beta_)
+    kl_p = kl(np.clip(p, 1e-300, 1), pi_ref)          # 下溢的 0 不影响求和
+    print(f&quot;β = {beta_:6}：π* = {fmt(p)}，&quot;
+          f&quot;KL(π*‖π_ref) = {kl_p:.3f}，E[r] = {p @ r:.3f}&quot;)
+assert np.allclose(optimal_policy(100), pi_ref, atol=0.01)
+assert optimal_policy(0.01)[2] &gt; 0.999                     # 只选 r = 2 的回答
+assert np.allclose(optimal_policy(beta), pi_star)
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>β =    100：π* = (0.397, 0.301, 0.203, 0.100)，KL(π*‖π_ref) = 0.000，E[r] = 0.756
+β =     10：π* = (0.370, 0.307, 0.226, 0.097)，KL(π*‖π_ref) = 0.003，E[r] = 0.807
+β =      1：π* = (0.140, 0.285, 0.517, 0.058)，KL(π*‖π_ref) = 0.298，E[r] = 1.348
+β =    0.5：π* = (0.029, 0.161, 0.791, 0.020)，KL(π*‖π_ref) = 0.879，E[r] = 1.752
+β =    0.1：π* = (0.000, 0.000, 1.000, 0.000)，KL(π*‖π_ref) = 1.609，E[r] = 2.000
+β =   0.01：π* = (0.000, 0.000, 1.000, 0.000)，KL(π*‖π_ref) = 1.609，E[r] = 2.000
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><h2 id="sE-3">E.3 隐式奖励：把奖励写成策略的函数</h2>
+<p>E.2 节从奖励得到了策略。反过来，也可以从策略读出奖励。对 <span class="math inline"><span class="math-inline">\pi^*</span></span> 的定义取对数，再移项：</p>
+<div class="math block">
+<div class="math-block">\begin{aligned}
+\log\pi^*(y) &amp;= \log\pi_{\text{ref}}(y) + \frac{r(y)}{\beta} - \log Z\\[-3pt]
+&amp;\quad{\footnotesize\text{（对 }\pi^*\text{ 的定义取对数）}}\\[2pt]
+r(y) &amp;= \beta\log\frac{\pi^*(y)}{\pi_{\text{ref}}(y)} + \beta\log Z\\[-3pt]
+&amp;\quad{\footnotesize\text{（移项，两边乘以 }\beta\text{）}}
+\end{aligned}</div>
+</div>
+<p>这就是 DPO 原论文的式 (5)。它说：最优策略相对参考策略的对数概率比，乘以 <span class="math inline"><span class="math-inline">\beta</span></span>，就是奖励，只差一个与回答无关的常数 <span class="math inline"><span class="math-inline">\beta\log Z</span></span>。我们把 <span class="math inline"><span class="math-inline">\hat r(y) = \beta\log\frac{\pi(y)}{\pi_{\text{ref}}(y)}</span></span> 叫作策略 <span class="math inline"><span class="math-inline">\pi</span></span> 的<strong>隐式奖励</strong>（implicit reward）：任何一个策略，配上参考策略，都“隐含”着一个奖励模型。DPO 论文的副标题“你的语言模型其实是一个奖励模型”说的就是这件事。</p>
+<div class="verify" id="v-E-e" data-cell="{&quot;id&quot;: &quot;E-e&quot;, &quot;golden&quot;: &quot;隐式奖励 β·log(π*/π_ref) = (-1.3126, -0.3126, 0.6874, -0.8126)\n再加上 β·log Z 之后     = (0.0000, 1.0000, 2.0000, 0.5000)\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 E-e</span><span class="verify-title">隐式奖励加上 β·log Z，恰好还原 r</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">r_hat</span> <span class="o">=</span> <span class="n">beta</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">pi_star</span> <span class="o">/</span> <span class="n">pi_ref</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"隐式奖励 β·log(π*/π_ref) = </span><span class="si">{</span><span class="n">fmt</span><span class="p">(</span><span class="n">r_hat</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"再加上 β·log Z 之后     = </span><span class="si">{</span><span class="n">fmt</span><span class="p">(</span><span class="n">r_hat</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">beta</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">Z</span><span class="p">),</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">r_hat</span> <span class="o">+</span> <span class="n">beta</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">Z</span><span class="p">),</span> <span class="n">r</span><span class="p">)</span>
+<span class="c1"># 两两之差完全相同</span>
+<span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">r_hat</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">-</span> <span class="n">r_hat</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:],</span> <span class="n">r</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">-</span> <span class="n">r</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:])</span>
+</code></pre><textarea class="verify-src" hidden>r_hat = beta * np.log(pi_star / pi_ref)
+print(f&quot;隐式奖励 β·log(π*/π_ref) = {fmt(r_hat, 4)}&quot;)
+print(f&quot;再加上 β·log Z 之后     = {fmt(r_hat + beta * np.log(Z), 4)}&quot;)
+assert np.allclose(r_hat + beta * np.log(Z), r)
+# 两两之差完全相同
+assert np.allclose(r_hat[:, None] - r_hat[None, :], r[:, None] - r[None, :])
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>隐式奖励 β·log(π*/π_ref) = (-1.3126, -0.3126, 0.6874, -0.8126)
+再加上 β·log Z 之后     = (0.0000, 1.0000, 2.0000, 0.5000)
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><h2 id="sE-4">E.4 Bradley-Terry 模型与 Z 的消去</h2>
+<p><a href="ch06.html#s6-7-2">6.7.2 节</a>介绍了偏好数据的 <strong>Bradley-Terry 模型</strong>（下面简称 BT 模型）：给定同一个问题的两个回答 <span class="math inline"><span class="math-inline">y_w</span></span> 和 <span class="math inline"><span class="math-inline">y_l</span></span>，人们更喜欢 <span class="math inline"><span class="math-inline">y_w</span></span> 的概率是</p>
+<div class="math block">
+<div class="math-block">\begin{aligned}
+P(y_w \succ y_l) &amp;= \frac{e^{r(y_w)}}{e^{r(y_w)} + e^{r(y_l)}}\\
+&amp;= \sigma\big(r(y_w) - r(y_l)\big)
+\end{aligned}</div>
+</div>
+<p>其中 <span class="math inline"><span class="math-inline">\sigma(z) = 1/(1+e^{-z})</span></span> 是 sigmoid 函数。第二个等号只是分子分母同除以 <span class="math inline"><span class="math-inline">e^{r(y_w)}</span></span>。关键在于，偏好概率只取决于两个奖励的<strong>差</strong>。记 <span class="math inline"><span class="math-inline">\hat r^*(y) = \beta\log\frac{\pi^*(y)}{\pi_{\text{ref}}(y)}</span></span> 为最优策略的隐式奖励，由 E.3 节，<span class="math inline"><span class="math-inline">r(y) = \hat r^*(y) + \beta\log Z</span></span>。代进去：</p>
+<div class="math block">
+<div class="math-block">\begin{aligned}
+P(y_w \succ y_l) &amp;= \sigma\big(r(y_w) - r(y_l)\big)\\[-3pt]
+&amp;\quad{\footnotesize\text{（BT 模型）}}\\[2pt]
+&amp;= \sigma\Big(\hat r^*(y_w) + \beta\log Z\\
+&amp;\qquad\quad - \hat r^*(y_l) - \beta\log Z\Big)\\[-3pt]
+&amp;\quad{\footnotesize\text{（E.3 节）}}\\[2pt]
+&amp;= \sigma\big(\hat r^*(y_w) - \hat r^*(y_l)\big)\\[-3pt]
+&amp;\quad{\footnotesize\text{（}\beta\log Z\text{ 抵消）}}
+\end{aligned}</div>
+</div>
+<p>把 <span class="math inline"><span class="math-inline">\hat r^*</span></span> 展开写回来，就是</p>
+<div class="math block">
+<div class="math-block">\begin{aligned}
+P(y_w \succ y_l) = \sigma\Big(&amp;\beta\log\frac{\pi^*(y_w)}{\pi_{\text{ref}}(y_w)}\\
+&amp;- \beta\log\frac{\pi^*(y_l)}{\pi_{\text{ref}}(y_l)}\Big)
+\end{aligned}</div>
+</div>
+<p><span class="math inline"><span class="math-inline">Z</span></span> 要对所有可能的回答求和，对语言模型来说根本算不出来；而它恰好在差值里抵消了。于是偏好概率只用到四个可以计算的量：两个回答在当前策略和参考策略下的对数概率。这就是 DPO 原论文的式 (6)。同样的道理，给所有回答的奖励加上同一个常数，偏好概率不变，所以奖励本来就只能确定到“差一个常数”为止。</p>
+<div class="verify" id="v-E-f" data-cell="{&quot;id&quot;: &quot;E-f&quot;, &quot;golden&quot;: &quot;P(y2 ≻ y0) = σ(2 − 0) = 0.8808，用隐式奖励算也是 0.8808\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 E-f</span><span class="verify-title">偏好概率只看奖励差；用隐式奖励算，Z 消失</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="k">def</span><span class="w"> </span><span class="nf">sigmoid</span><span class="p">(</span><span class="n">z</span><span class="p">):</span>
+    <span class="k">return</span> <span class="mi">1</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">z</span><span class="p">))</span>
+
+<span class="n">pref</span> <span class="o">=</span> <span class="n">sigmoid</span><span class="p">(</span><span class="n">r</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">-</span> <span class="n">r</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:])</span>       <span class="c1"># pref[w, l] = P(y_w ≻ y_l)</span>
+<span class="n">er</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">r</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">pref</span><span class="p">,</span> <span class="n">er</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">/</span> <span class="p">(</span><span class="n">er</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">+</span> <span class="n">er</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:]))</span>
+<span class="n">via_policy</span> <span class="o">=</span> <span class="n">sigmoid</span><span class="p">(</span><span class="n">r_hat</span><span class="p">[:,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">-</span> <span class="n">r_hat</span><span class="p">[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:])</span>  <span class="c1"># 只用 π* 与 π_ref</span>
+<span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">pref</span><span class="p">,</span> <span class="n">via_policy</span><span class="p">)</span>
+<span class="c1"># 所有奖励加上同一个常数，偏好概率不变</span>
+<span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">pref</span><span class="p">,</span> <span class="n">sigmoid</span><span class="p">((</span><span class="n">r</span> <span class="o">+</span> <span class="mf">7.0</span><span class="p">)[:,</span> <span class="kc">None</span><span class="p">]</span> <span class="o">-</span> <span class="p">(</span><span class="n">r</span> <span class="o">+</span> <span class="mf">7.0</span><span class="p">)[</span><span class="kc">None</span><span class="p">,</span> <span class="p">:]))</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"P(y2 ≻ y0) = σ(2 − 0) = </span><span class="si">{</span><span class="n">pref</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">，"</span>
+      <span class="sa">f</span><span class="s2">"用隐式奖励算也是 </span><span class="si">{</span><span class="n">via_policy</span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+</code></pre><textarea class="verify-src" hidden>def sigmoid(z):
+    return 1 / (1 + np.exp(-z))
+
+pref = sigmoid(r[:, None] - r[None, :])       # pref[w, l] = P(y_w ≻ y_l)
+er = np.exp(r)
+assert np.allclose(pref, er[:, None] / (er[:, None] + er[None, :]))
+via_policy = sigmoid(r_hat[:, None] - r_hat[None, :])  # 只用 π* 与 π_ref
+assert np.allclose(pref, via_policy)
+# 所有奖励加上同一个常数，偏好概率不变
+assert np.allclose(pref, sigmoid((r + 7.0)[:, None] - (r + 7.0)[None, :]))
+print(f&quot;P(y2 ≻ y0) = σ(2 − 0) = {pref[2, 0]:.4f}，&quot;
+      f&quot;用隐式奖励算也是 {via_policy[2, 0]:.4f}&quot;)
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>P(y2 ≻ y0) = σ(2 − 0) = 0.8808，用隐式奖励算也是 0.8808
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><h2 id="sE-5">E.5 DPO 的损失</h2>
+<p>最后一步：我们手里没有 <span class="math inline"><span class="math-inline">\pi^*</span></span>，只有一个待训练的策略 <span class="math inline"><span class="math-inline">\pi_\theta</span></span> 和一堆偏好数据 <span class="math inline"><span class="math-inline">(y_w, y_l)</span></span>。把式 (6) 里的 <span class="math inline"><span class="math-inline">\pi^*</span></span> 换成 <span class="math inline"><span class="math-inline">\pi_\theta</span></span>，就得到了“<span class="math inline"><span class="math-inline">\pi_\theta</span></span> 认为人们更喜欢 <span class="math inline"><span class="math-inline">y_w</span></span> 的概率”。用最大似然估计来训练，也就是最小化这个概率的负对数：</p>
+<div class="math block">
+<div class="math-block">\begin{gathered}
+\mathcal L_{\text{DPO}}(\theta) = -\,\mathbb E_{(y_w, y_l)}\big[\log\sigma(z)\big]\\
+z = \beta\log\frac{\pi_\theta(y_w)}{\pi_{\text{ref}}(y_w)} - \beta\log\frac{\pi_\theta(y_l)}{\pi_{\text{ref}}(y_l)}
+\end{gathered}</div>
+</div>
+<p>这里，<span class="math inline"><span class="math-inline">z</span></span> 是 sigmoid 里面的量，也就是两个回答的隐式奖励之差。这正是本附录开头那段代码：<code>logits</code> 就是 <span class="math inline"><span class="math-inline">z</span></span>，只是把四个对数概率换了一种分组方式，写成 <span class="math inline"><span class="math-inline">\beta\big[(\log\pi_\theta(y_w) - \log\pi_\theta(y_l)) - (\log\pi_{\text{ref}}(y_w) - \log\pi_{\text{ref}}(y_l))\big]</span></span>，再用 <code>-F.logsigmoid(...).mean()</code> 取负对数并对 batch 求平均。</p>
+<p>开头的前两个问题也有了答案。“当前模型减参考模型”的对数概率差，乘以 <span class="math inline"><span class="math-inline">\beta</span></span> 就是隐式奖励（E.3 节）；sigmoid 里面装的是两个回答的隐式奖励之差，所以 <span class="math inline"><span class="math-inline">\beta</span></span> 出现在 sigmoid 里面。</p>
+<p>有三件事可以马上手算出来：</p>
+<ol>
+<li><strong>刚开始训练时，损失是 <span class="math inline"><span class="math-inline">\ln 2</span></span>。</strong> DLFS6 用同一个预训练模型初始化 <code>model</code> 和 <code>ref_model</code>（<a href="ch06.html#s6-8">6.8 节</a>），这时 <span class="math inline"><span class="math-inline">z = 0</span></span>，损失是 <span class="math inline"><span class="math-inline">-\log\sigma(0) = \log 2 \approx 0.6931</span></span>。真实的运行也是如此：在 H100 上原样运行 <code>08_dpo.py</code>，第 0 步记录的损失正是 0.6931（<a href="#v-E-j">验证 E-j</a>）。</li>
+<li><strong>一个具体的数。</strong> 设 <span class="math inline"><span class="math-inline">\beta = 0.1</span></span>，当前策略下两个回答的对数概率是 <span class="math inline"><span class="math-inline">-10</span></span> 和 <span class="math inline"><span class="math-inline">-12</span></span>，参考策略下都是 <span class="math inline"><span class="math-inline">-11</span></span>。于是 <span class="math inline"><span class="math-inline">z = 0.1\times\big((-10+12) - (-11+11)\big) = 0.2</span></span>，损失是 <span class="math inline"><span class="math-inline">\log(1+e^{-0.2}) = 0.5981</span></span>。</li>
+<li><strong>梯度的权重。</strong> 损失 <span class="math inline"><span class="math-inline">-\log\sigma(z)</span></span> 对 <span class="math inline"><span class="math-inline">\log\pi_\theta(y_w)</span></span> 求导得 <span class="math inline"><span class="math-inline">-\beta\,\sigma(-z)</span></span>，对 <span class="math inline"><span class="math-inline">\log\pi_\theta(y_l)</span></span> 求导得 <span class="math inline"><span class="math-inline">+\beta\,\sigma(-z)</span></span>。上面的例子里是 <span class="math inline"><span class="math-inline">\mp0.1\times\sigma(-0.2) = \mp0.0450</span></span>。<span class="math inline"><span class="math-inline">\sigma(-z)</span></span> 在隐式奖励排错了顺序（<span class="math inline"><span class="math-inline">z &lt; 0</span></span>）时接近 1，排对了时接近 0，所以模型越是“看错”的样本，得到的推力越大。DPO 原论文第 4 节对这个权重有同样的解释。</li>
+</ol>
+<div class="verify" id="v-E-g" data-cell="{&quot;id&quot;: &quot;E-g&quot;, &quot;golden&quot;: &quot;初始损失 0.693147（ln 2 = 0.693147）\n手算的例子 0.5981，∂L/∂log π(y_w) = -0.04502\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 E-g</span><span class="verify-title">DPO 损失：初始为 ln 2，手算 0.5981，梯度权重 β·σ(−z)</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="k">def</span><span class="w"> </span><span class="nf">log_sigmoid</span><span class="p">(</span><span class="n">z</span><span class="p">):</span>
+    <span class="k">return</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">logaddexp</span><span class="p">(</span><span class="mf">0.0</span><span class="p">,</span> <span class="o">-</span><span class="n">z</span><span class="p">)</span>          <span class="c1"># log σ(z) = −log(1 + e^(−z))</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">dpo_loss</span><span class="p">(</span><span class="n">lp_chosen</span><span class="p">,</span> <span class="n">lp_rejected</span><span class="p">,</span> <span class="n">ref_chosen</span><span class="p">,</span> <span class="n">ref_rejected</span><span class="p">,</span> <span class="n">beta</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""与 08_dpo.py 的 compute_dpo_loss 相同；输入是每条回答的对数概率之和。"""</span>
+    <span class="n">z</span> <span class="o">=</span> <span class="n">beta</span> <span class="o">*</span> <span class="p">((</span><span class="n">lp_chosen</span> <span class="o">-</span> <span class="n">lp_rejected</span><span class="p">)</span> <span class="o">-</span> <span class="p">(</span><span class="n">ref_chosen</span> <span class="o">-</span> <span class="n">ref_rejected</span><span class="p">))</span>
+    <span class="k">return</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">log_sigmoid</span><span class="p">(</span><span class="n">z</span><span class="p">))</span>
+
+<span class="n">same</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="o">-</span><span class="mi">50</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>                 <span class="c1"># 当前策略 = 参考策略</span>
+<span class="n">init</span> <span class="o">=</span> <span class="n">dpo_loss</span><span class="p">(</span><span class="n">same</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">same</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">],</span> <span class="n">same</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">same</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">],</span> <span class="mf">0.1</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">example</span><span class="p">(</span><span class="n">lp_w</span><span class="p">):</span>                     <span class="c1"># 手算的例子，只改 log π(y_w)</span>
+    <span class="n">one</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">v</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="n">v</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">dpo_loss</span><span class="p">(</span><span class="n">one</span><span class="p">(</span><span class="n">lp_w</span><span class="p">),</span> <span class="n">one</span><span class="p">(</span><span class="o">-</span><span class="mf">12.0</span><span class="p">),</span> <span class="n">one</span><span class="p">(</span><span class="o">-</span><span class="mf">11.0</span><span class="p">),</span> <span class="n">one</span><span class="p">(</span><span class="o">-</span><span class="mf">11.0</span><span class="p">),</span> <span class="mf">0.1</span><span class="p">)</span>
+
+<span class="n">hand</span> <span class="o">=</span> <span class="n">example</span><span class="p">(</span><span class="o">-</span><span class="mf">10.0</span><span class="p">)</span>
+<span class="n">h</span> <span class="o">=</span> <span class="mf">1e-6</span>                                                <span class="c1"># 中心差分求导</span>
+<span class="n">grad_w</span> <span class="o">=</span> <span class="p">(</span><span class="n">example</span><span class="p">(</span><span class="o">-</span><span class="mf">10.0</span> <span class="o">+</span> <span class="n">h</span><span class="p">)</span> <span class="o">-</span> <span class="n">example</span><span class="p">(</span><span class="o">-</span><span class="mf">10.0</span> <span class="o">-</span> <span class="n">h</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">h</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"初始损失 </span><span class="si">{</span><span class="n">init</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">（ln 2 = </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="si">:</span><span class="s2">.6f</span><span class="si">}</span><span class="s2">）"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"手算的例子 </span><span class="si">{</span><span class="n">hand</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">，∂L/∂log π(y_w) = </span><span class="si">{</span><span class="n">grad_w</span><span class="si">:</span><span class="s2">.5f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">init</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span> <span class="o">&lt;</span> <span class="mf">1e-12</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">hand</span> <span class="o">-</span> <span class="mf">0.5981</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-4</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">grad_w</span> <span class="o">-</span> <span class="p">(</span><span class="o">-</span><span class="mf">0.1</span> <span class="o">*</span> <span class="n">sigmoid</span><span class="p">(</span><span class="o">-</span><span class="mf">0.2</span><span class="p">)))</span> <span class="o">&lt;</span> <span class="mf">1e-8</span>
+</code></pre><textarea class="verify-src" hidden>def log_sigmoid(z):
+    return -np.logaddexp(0.0, -z)          # log σ(z) = −log(1 + e^(−z))
+
+def dpo_loss(lp_chosen, lp_rejected, ref_chosen, ref_rejected, beta):
+    &quot;&quot;&quot;与 08_dpo.py 的 compute_dpo_loss 相同；输入是每条回答的对数概率之和。&quot;&quot;&quot;
+    z = beta * ((lp_chosen - lp_rejected) - (ref_chosen - ref_rejected))
+    return -np.mean(log_sigmoid(z))
+
+same = rng.normal(-50, 10, size=(8, 2))                 # 当前策略 = 参考策略
+init = dpo_loss(same[:, 0], same[:, 1], same[:, 0], same[:, 1], 0.1)
+
+def example(lp_w):                     # 手算的例子，只改 log π(y_w)
+    one = lambda v: np.array([v])
+    return dpo_loss(one(lp_w), one(-12.0), one(-11.0), one(-11.0), 0.1)
+
+hand = example(-10.0)
+h = 1e-6                                                # 中心差分求导
+grad_w = (example(-10.0 + h) - example(-10.0 - h)) / (2 * h)
+print(f&quot;初始损失 {init:.6f}（ln 2 = {np.log(2):.6f}）&quot;)
+print(f&quot;手算的例子 {hand:.4f}，∂L/∂log π(y_w) = {grad_w:.5f}&quot;)
+assert abs(init - np.log(2)) &lt; 1e-12 and abs(hand - 0.5981) &lt; 1e-4
+assert abs(grad_w - (-0.1 * sigmoid(-0.2))) &lt; 1e-8
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>初始损失 0.693147（ln 2 = 0.693147）
+手算的例子 0.5981，∂L/∂log π(y_w) = -0.04502
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>真实的 StoryBot 上是不是也一样？下面的本地测试从 <code>ch06/08_dpo.py</code> 里取出 <code>DPODataset</code>、<code>get_sequence_logprobs</code> 和 <code>compute_dpo_loss</code> 这三个部件，用 Hugging Face 上发布的两个 StoryBot checkpoint 来算。策略和参考必须不同，否则损失恒为 <span class="math inline"><span class="math-inline">\ln 2</span></span>，所以我们拿预训练第 5000 步的中间 checkpoint 当策略，预训练完成的模型当参考。在前 4 对真实的偏好数据上，原书的 PyTorch 损失与本页的 NumPy <code>dpo_loss</code> 一致。测试还确认了三件事。第一，<code>08_dpo.py</code> 的 <code>model</code> 和 <code>ref_model</code> 都从预训练完成的同一个 checkpoint 加载，所以训练开始时策略等于参考。第二，策略等于参考时，损失恰为 <span class="math inline"><span class="math-inline">\ln 2</span></span>。第三，把问题部分也算进对数概率，损失不变：同一个问题在两条回答里贡献的对数概率完全相同，在差值里抵消了。</p>
+<div class="localcheck"><div class="localcheck-head"><span class="localcheck-label">本地验证（需要 PyTorch）</span><span class="localcheck-title">真实 StoryBot：原书的 compute_dpo_loss = 本页的 dpo_loss；初始为 ln 2</span></div><pre class="cmd"><code>uv run pytest verify/test_appendix.py::test_e_dpo_loss</code></pre><details><summary>查看测试代码 verify/test_appendix.py</summary><pre class="code"><code><span class="k">def</span><span class="w"> </span><span class="nf">test_e_dpo_loss</span><span class="p">(</span><span class="n">dlfs6_path</span><span class="p">):</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+
+    <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">storybot.tokenizer</span><span class="w"> </span><span class="kn">import</span> <span class="n">BPETokenizer</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">torch.utils.data</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dataset</span>
+
+    <span class="n">script</span> <span class="o">=</span> <span class="n">dlfs6_path</span> <span class="o">/</span> <span class="s2">"ch06"</span> <span class="o">/</span> <span class="s2">"08_dpo.py"</span>
+    <span class="n">ns</span> <span class="o">=</span> <span class="n">_load_defs</span><span class="p">(</span><span class="n">script</span><span class="p">,</span> <span class="p">[</span><span class="s2">"DPODataset"</span><span class="p">,</span> <span class="s2">"get_sequence_logprobs"</span><span class="p">,</span> <span class="s2">"compute_dpo_loss"</span><span class="p">],</span>
+                    <span class="p">{</span><span class="s2">"torch"</span><span class="p">:</span> <span class="n">torch</span><span class="p">,</span> <span class="s2">"F"</span><span class="p">:</span> <span class="n">F</span><span class="p">,</span> <span class="s2">"json"</span><span class="p">:</span> <span class="n">json</span><span class="p">,</span> <span class="s2">"Dataset"</span><span class="p">:</span> <span class="n">Dataset</span><span class="p">})</span>
+    <span class="n">dpo_loss</span> <span class="o">=</span> <span class="n">page_namespace</span><span class="p">(</span><span class="s2">"appendix-e"</span><span class="p">,</span> <span class="n">upto</span><span class="o">=</span><span class="s2">"E-g"</span><span class="p">)[</span><span class="s2">"dpo_loss"</span><span class="p">]</span>
+    <span class="n">beta</span> <span class="o">=</span> <span class="n">_script_constant</span><span class="p">(</span><span class="n">script</span><span class="p">,</span> <span class="s2">"beta"</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">beta</span> <span class="o">==</span> <span class="mf">0.1</span>
+
+    <span class="c1"># 正文引用的设置：AdamW、学习率 5e-6；model 与 ref_model 都从预训练完成的同一个 checkpoint 加载</span>
+    <span class="n">source</span> <span class="o">=</span> <span class="n">script</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">"utf-8"</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">_script_constant</span><span class="p">(</span><span class="n">script</span><span class="p">,</span> <span class="s2">"learning_rate"</span><span class="p">)</span> <span class="o">==</span> <span class="mf">5e-6</span>
+    <span class="k">assert</span> <span class="s2">"torch.optim.AdamW(model.parameters(), lr=learning_rate)"</span> <span class="ow">in</span> <span class="n">source</span>
+    <span class="k">assert</span> <span class="s2">"model = GPT.load_from(pretrain_model_path"</span> <span class="ow">in</span> <span class="n">source</span>
+    <span class="k">assert</span> <span class="s2">"ref_model = GPT.load_from(pretrain_model_path"</span> <span class="ow">in</span> <span class="n">source</span>
+    <span class="k">assert</span> <span class="n">_script_constant</span><span class="p">(</span><span class="n">script</span><span class="p">,</span> <span class="s2">"pretrain_model_path"</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"storybot/model_pretrain.pt"</span>
+
+    <span class="c1"># 偏好数据：144 对，每对共用一个故事开头；正文举的第一对，chosen 是快乐的结局，rejected 是悲伤的结局</span>
+    <span class="n">pairs</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">((</span><span class="n">dlfs6_path</span> <span class="o">/</span> <span class="s2">"storybot"</span> <span class="o">/</span> <span class="s2">"tiny_stories_dpo.json"</span><span class="p">)</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">"utf-8"</span><span class="p">))</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">pairs</span><span class="p">)</span> <span class="o">==</span> <span class="mi">144</span> <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="o">==</span> <span class="p">[</span><span class="s2">"chosen"</span><span class="p">,</span> <span class="s2">"prompt"</span><span class="p">,</span> <span class="s2">"rejected"</span><span class="p">]</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="s2">"Tim was so happy"</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">"chosen"</span><span class="p">]</span> <span class="ow">and</span> <span class="s2">"Tim was very sad"</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">"rejected"</span><span class="p">]</span>
+    <span class="c1"># 附录 E.6：每个故事开头只出现一次，标注也只有一种（chosen 赢），所以从数据看 P_wl = 1</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">({</span><span class="n">p</span><span class="p">[</span><span class="s2">"prompt"</span><span class="p">]</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">pairs</span><span class="p">})</span> <span class="o">==</span> <span class="mi">144</span>
+
+    <span class="n">tok</span> <span class="o">=</span> <span class="n">BPETokenizer</span><span class="o">.</span><span class="n">load_from</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">dlfs6_path</span> <span class="o">/</span> <span class="s2">"storybot"</span> <span class="o">/</span> <span class="s2">"merge_rules.pkl"</span><span class="p">))</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">ns</span><span class="p">[</span><span class="s2">"DPODataset"</span><span class="p">](</span><span class="nb">str</span><span class="p">(</span><span class="n">dlfs6_path</span> <span class="o">/</span> <span class="s2">"storybot"</span> <span class="o">/</span> <span class="s2">"tiny_stories_dpo.json"</span><span class="p">),</span> <span class="n">tok</span><span class="p">,</span> <span class="mi">256</span><span class="p">)</span>
+    <span class="n">batch_size</span><span class="p">,</span> <span class="n">max_iters</span> <span class="o">=</span> <span class="n">_script_constant</span><span class="p">(</span><span class="n">script</span><span class="p">,</span> <span class="s2">"batch_size"</span><span class="p">),</span> <span class="n">_script_constant</span><span class="p">(</span><span class="n">script</span><span class="p">,</span> <span class="s2">"max_iters"</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">),</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">max_iters</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="mi">144</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">1000</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">round</span><span class="p">(</span><span class="n">max_iters</span> <span class="o">*</span> <span class="n">batch_size</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">),</span> <span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="mf">55.6</span>        <span class="c1"># 附录 E.6：同一批数据看 55 遍以上</span>
+    <span class="n">chosen_ids</span><span class="p">,</span> <span class="n">chosen_mask</span><span class="p">,</span> <span class="n">rejected_ids</span><span class="p">,</span> <span class="n">rejected_mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">col</span><span class="p">)</span> <span class="k">for</span> <span class="n">col</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">4</span><span class="p">))))</span>
+
+    <span class="n">policy</span> <span class="o">=</span> <span class="n">_load_storybot</span><span class="p">(</span><span class="n">dlfs6_path</span> <span class="o">/</span> <span class="s2">"storybot"</span> <span class="o">/</span> <span class="s2">"model_iter_5000.pt"</span><span class="p">)</span>
+    <span class="n">ref</span> <span class="o">=</span> <span class="n">_load_storybot</span><span class="p">(</span><span class="n">dlfs6_path</span> <span class="o">/</span> <span class="s2">"storybot"</span> <span class="o">/</span> <span class="s2">"model_pretrain.pt"</span><span class="p">)</span>
+    <span class="n">lp_fn</span><span class="p">,</span> <span class="n">loss_fn</span> <span class="o">=</span> <span class="n">ns</span><span class="p">[</span><span class="s2">"get_sequence_logprobs"</span><span class="p">],</span> <span class="n">ns</span><span class="p">[</span><span class="s2">"compute_dpo_loss"</span><span class="p">]</span>
+    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+        <span class="n">book</span> <span class="o">=</span> <span class="n">loss_fn</span><span class="p">(</span><span class="n">policy</span><span class="p">,</span> <span class="n">ref</span><span class="p">,</span> <span class="n">chosen_ids</span><span class="p">,</span> <span class="n">chosen_mask</span><span class="p">,</span> <span class="n">rejected_ids</span><span class="p">,</span> <span class="n">rejected_mask</span><span class="p">,</span> <span class="n">beta</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="n">lp</span> <span class="o">=</span> <span class="p">[</span><span class="n">lp_fn</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">ids</span><span class="p">,</span> <span class="n">mask</span><span class="p">)</span><span class="o">.</span><span class="n">double</span><span class="p">()</span><span class="o">.</span><span class="n">numpy</span><span class="p">()</span>
+              <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="p">(</span><span class="n">policy</span><span class="p">,</span> <span class="n">ref</span><span class="p">)</span> <span class="k">for</span> <span class="n">ids</span><span class="p">,</span> <span class="n">mask</span> <span class="ow">in</span> <span class="p">((</span><span class="n">chosen_ids</span><span class="p">,</span> <span class="n">chosen_mask</span><span class="p">),</span> <span class="p">(</span><span class="n">rejected_ids</span><span class="p">,</span> <span class="n">rejected_mask</span><span class="p">))]</span>
+        <span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">book</span> <span class="o">-</span> <span class="n">dpo_loss</span><span class="p">(</span><span class="n">lp</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">lp</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">lp</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">lp</span><span class="p">[</span><span class="mi">3</span><span class="p">],</span> <span class="n">beta</span><span class="p">))</span> <span class="o">&lt;</span> <span class="mf">1e-5</span>   <span class="c1"># 原书 = 本页的 NumPy 版</span>
+
+        <span class="n">same</span> <span class="o">=</span> <span class="n">loss_fn</span><span class="p">(</span><span class="n">ref</span><span class="p">,</span> <span class="n">ref</span><span class="p">,</span> <span class="n">chosen_ids</span><span class="p">,</span> <span class="n">chosen_mask</span><span class="p">,</span> <span class="n">rejected_ids</span><span class="p">,</span> <span class="n">rejected_mask</span><span class="p">,</span> <span class="n">beta</span><span class="p">)</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+        <span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">same</span> <span class="o">-</span> <span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span> <span class="o">&lt;</span> <span class="mf">1e-6</span>                                   <span class="c1"># 策略 = 参考时恰为 ln 2</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">with_prompt</span><span class="p">(</span><span class="n">mask</span><span class="p">):</span>                                                  <span class="c1"># 把问题部分也算进去</span>
+            <span class="n">full</span> <span class="o">=</span> <span class="n">mask</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">full</span><span class="p">:</span>
+                <span class="n">row</span><span class="p">[:</span> <span class="nb">int</span><span class="p">(</span><span class="n">row</span><span class="o">.</span><span class="n">argmax</span><span class="p">())]</span> <span class="o">=</span> <span class="mi">1</span>
+            <span class="k">return</span> <span class="n">full</span>
+
+        <span class="n">full</span> <span class="o">=</span> <span class="n">loss_fn</span><span class="p">(</span><span class="n">policy</span><span class="p">,</span> <span class="n">ref</span><span class="p">,</span> <span class="n">chosen_ids</span><span class="p">,</span> <span class="n">with_prompt</span><span class="p">(</span><span class="n">chosen_mask</span><span class="p">),</span> <span class="n">rejected_ids</span><span class="p">,</span> <span class="n">with_prompt</span><span class="p">(</span><span class="n">rejected_mask</span><span class="p">),</span> <span class="n">beta</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">full</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="o">-</span> <span class="n">book</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-4</span>                                   <span class="c1"># 问题部分在差值里抵消</span>
+
+    <span class="c1"># DPO 训练时不生成回答；GRPO 要生成</span>
+    <span class="k">assert</span> <span class="s2">"generate"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">_called_names</span><span class="p">(</span><span class="n">script</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="s2">"generate"</span> <span class="ow">in</span> <span class="n">_called_names</span><span class="p">(</span><span class="n">dlfs6_path</span> <span class="o">/</span> <span class="s2">"ch03"</span> <span class="o">/</span> <span class="s2">"09_grpo.py"</span><span class="p">)</span>
+</code></pre></details></div><aside class="callout callout-confusion"><div class="callout-title"><span class="callout-kind">你可能会困惑</span><span class="callout-text">DPO 的损失里有 π_θ(y_w)，训练时是不是要让 π_θ 先生成回答？</span></div>
+<p>GRPO 训练时确实要让模型自己生成回答（3.9 节），所以很容易以为 DPO 也一样。其实不用：<span class="math inline"><span class="math-inline">y_w</span></span> 和 <span class="math inline"><span class="math-inline">y_l</span></span> 是事先准备好的文字。DLFS6 的 <code>tiny_stories_dpo.json</code> 里有 144 对，每对共用一个故事开头，<code>chosen</code>（<span class="math inline"><span class="math-inline">y_w</span></span>）是快乐的结局，<code>rejected</code>（<span class="math inline"><span class="math-inline">y_l</span></span>）是悲伤的结局。比如第一对里，找到玩具的 Tim “was so happy”，没找到的 Tim “was very sad”。<span class="math inline"><span class="math-inline">\pi_\theta</span></span> 和 <span class="math inline"><span class="math-inline">\pi_{\text{ref}}</span></span> 只负责给这两段固定的文字“打分”：把文字喂进去，算出每个 token 的对数概率再求和。这和 SFT 计算交叉熵一样，一次前向传播就够了，没有任何采样。上面的验证 E-g 只用了四个对数概率，也说明了这一点；本地测试还检查了 <code>08_dpo.py</code> 里确实没有调用生成函数，而 <code>09_grpo.py</code> 调用了。可以带走的对照：<strong>SFT 用数据里的回答、以交叉熵打分；GRPO 让策略自己生成、用奖励函数打分；DPO 用事先配好对的回答、以隐式奖励的差打分。</strong></p>
+</aside>
+<h2 id="sE-6">E.6 偏好服从 BT 模型时，DPO 训练到最后就是 π*</h2>
+<p>推导告诉我们，DPO 与 RLHF 瞄准的是同一个最优策略。用小例子来确认：假设偏好数据无穷多，每一对回答都按 Bradley-Terry 模型和真实奖励 <span class="math inline"><span class="math-inline">r</span></span> 给出偏好。4 个回答两两配对，一共 6 对；同一对的两种标注都会出现，<span class="math inline"><span class="math-inline">y_w</span></span> 赢的比例是 <span class="math inline"><span class="math-inline">P_{wl} = P(y_w \succ y_l)</span></span>。这时 DPO 的期望损失（对 6 对取平均）是</p>
+<div class="math block">
+<div class="math-block">\begin{aligned}
+\mathcal L(\theta) &amp;= -\frac16\sum_{w&lt;l}\Big[P_{wl}\log\sigma(z_{wl})\\
+&amp;\qquad + (1 - P_{wl})\log\sigma(-z_{wl})\Big]
+\end{aligned}</div>
+</div>
+<p>其中 <span class="math inline"><span class="math-inline">z_{wl}</span></span> 就是 E.5 节的 <span class="math inline"><span class="math-inline">z</span></span>：</p>
+<div class="math block">
+<div class="math-block">z_{wl} = \beta\log\frac{\pi_\theta(y_w)}{\pi_{\text{ref}}(y_w)} - \beta\log\frac{\pi_\theta(y_l)}{\pi_{\text{ref}}(y_l)}</div>
+</div>
+<p>策略用 softmax 参数化，<span class="math inline"><span class="math-inline">\pi_\theta = \operatorname{softmax}(\boldsymbol\theta)</span></span>。这里还有一个小小的巧合：<span class="math inline"><span class="math-inline">\log\pi_\theta(y_w) - \log\pi_\theta(y_l) = \theta_w - \theta_l</span></span>，softmax 的分母也在差值里抵消了，和 <span class="math inline"><span class="math-inline">Z</span></span> 一样。从 <span class="math inline"><span class="math-inline">\boldsymbol\theta = \log\pi_{\text{ref}}</span></span>（即 <span class="math inline"><span class="math-inline">\pi_\theta = \pi_{\text{ref}}</span></span>）出发做梯度下降：</p>
+<div class="verify" id="v-E-h" data-cell="{&quot;id&quot;: &quot;E-h&quot;, &quot;golden&quot;: &quot;初始损失 0.6931（每一对都是 ln 2）\nDPO 训练的结果 = (0.0290, 0.1605, 0.7908, 0.0197)\nRLHF 的最优 π* = (0.0290, 0.1605, 0.7908, 0.0197)\n收敛时的损失 0.5551，6 对偏好概率的二元熵的平均 0.5551\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 E-h</span><span class="verify-title">在小例子上用 DPO 训练到收敛：结果就是 RLHF 的最优策略 π*</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">w_idx</span><span class="p">,</span> <span class="n">l_idx</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">triu_indices</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>                  <span class="c1"># 全部 6 对回答</span>
+<span class="n">p_pref</span> <span class="o">=</span> <span class="n">sigmoid</span><span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="n">w_idx</span><span class="p">]</span> <span class="o">-</span> <span class="n">r</span><span class="p">[</span><span class="n">l_idx</span><span class="p">])</span>                   <span class="c1"># 真实的偏好概率</span>
+<span class="n">pair_sign</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="mi">4</span><span class="p">)[</span><span class="n">w_idx</span><span class="p">]</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="mi">4</span><span class="p">)[</span><span class="n">l_idx</span><span class="p">]</span>         <span class="c1"># 每一对：y_w 处 +1，y_l 处 −1</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">expected_dpo</span><span class="p">(</span><span class="n">theta</span><span class="p">,</span> <span class="n">p</span><span class="o">=</span><span class="n">p_pref</span><span class="p">,</span> <span class="n">beta_</span><span class="o">=</span><span class="n">beta</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""期望 DPO 损失及其梯度；log π_θ(w) − log π_θ(l) = θ_w − θ_l。p 是 y_w 赢的比例。"""</span>
+    <span class="n">ref_gap</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">pi_ref</span><span class="p">[</span><span class="n">w_idx</span><span class="p">]</span> <span class="o">/</span> <span class="n">pi_ref</span><span class="p">[</span><span class="n">l_idx</span><span class="p">])</span>
+    <span class="n">z</span> <span class="o">=</span> <span class="n">beta_</span> <span class="o">*</span> <span class="p">(</span><span class="n">pair_sign</span> <span class="o">@</span> <span class="n">theta</span> <span class="o">-</span> <span class="n">ref_gap</span><span class="p">)</span>           <span class="c1"># pair_sign @ θ 就是每一对的 θ_w − θ_l</span>
+    <span class="n">loss</span> <span class="o">=</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">p</span> <span class="o">*</span> <span class="n">log_sigmoid</span><span class="p">(</span><span class="n">z</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">p</span><span class="p">)</span> <span class="o">*</span> <span class="n">log_sigmoid</span><span class="p">(</span><span class="o">-</span><span class="n">z</span><span class="p">))</span>
+    <span class="n">dz</span> <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="n">p</span> <span class="o">*</span> <span class="n">sigmoid</span><span class="p">(</span><span class="o">-</span><span class="n">z</span><span class="p">)</span> <span class="o">-</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">p</span><span class="p">)</span> <span class="o">*</span> <span class="n">sigmoid</span><span class="p">(</span><span class="n">z</span><span class="p">))</span> <span class="o">/</span> <span class="nb">len</span><span class="p">(</span><span class="n">z</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">loss</span><span class="p">,</span> <span class="n">beta_</span> <span class="o">*</span> <span class="p">(</span><span class="n">dz</span> <span class="o">@</span> <span class="n">pair_sign</span><span class="p">)</span>
+
+<span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">pi_ref</span><span class="p">)</span>                                  <span class="c1"># 从 π_θ = π_ref 出发</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"初始损失 </span><span class="si">{</span><span class="n">expected_dpo</span><span class="p">(</span><span class="n">theta</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">（每一对都是 ln 2）"</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3000</span><span class="p">):</span>
+    <span class="n">loss</span><span class="p">,</span> <span class="n">grad</span> <span class="o">=</span> <span class="n">expected_dpo</span><span class="p">(</span><span class="n">theta</span><span class="p">)</span>
+    <span class="n">theta</span> <span class="o">-=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">grad</span>
+<span class="n">pi_dpo</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">theta</span> <span class="o">-</span> <span class="n">theta</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
+<span class="n">pi_dpo</span> <span class="o">/=</span> <span class="n">pi_dpo</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"DPO 训练的结果 = </span><span class="si">{</span><span class="n">fmt</span><span class="p">(</span><span class="n">pi_dpo</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"RLHF 的最优 π* = </span><span class="si">{</span><span class="n">fmt</span><span class="p">(</span><span class="n">pi_star</span><span class="p">,</span><span class="w"> </span><span class="mi">4</span><span class="p">)</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">abs</span><span class="p">(</span><span class="n">pi_dpo</span> <span class="o">-</span> <span class="n">pi_star</span><span class="p">)</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">&lt;</span> <span class="mf">1e-6</span>
+
+<span class="c1"># 收敛时的损失不是 0：每一对最低只能降到偏好概率的二元熵</span>
+<span class="n">entropy</span> <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="n">p_pref</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">p_pref</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">p_pref</span><span class="p">)</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">p_pref</span><span class="p">))</span>
+<span class="n">final</span> <span class="o">=</span> <span class="n">expected_dpo</span><span class="p">(</span><span class="n">theta</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"收敛时的损失 </span><span class="si">{</span><span class="n">final</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">，6 对偏好概率的二元熵的平均 </span><span class="si">{</span><span class="n">entropy</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">final</span> <span class="o">-</span> <span class="n">entropy</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span> <span class="o">&lt;</span> <span class="mf">1e-9</span>
+</code></pre><textarea class="verify-src" hidden>w_idx, l_idx = np.triu_indices(4, k=1)                  # 全部 6 对回答
+p_pref = sigmoid(r[w_idx] - r[l_idx])                   # 真实的偏好概率
+pair_sign = np.eye(4)[w_idx] - np.eye(4)[l_idx]         # 每一对：y_w 处 +1，y_l 处 −1
+
+def expected_dpo(theta, p=p_pref, beta_=beta):
+    &quot;&quot;&quot;期望 DPO 损失及其梯度；log π_θ(w) − log π_θ(l) = θ_w − θ_l。p 是 y_w 赢的比例。&quot;&quot;&quot;
+    ref_gap = np.log(pi_ref[w_idx] / pi_ref[l_idx])
+    z = beta_ * (pair_sign @ theta - ref_gap)           # pair_sign @ θ 就是每一对的 θ_w − θ_l
+    loss = -np.mean(p * log_sigmoid(z) + (1 - p) * log_sigmoid(-z))
+    dz = -(p * sigmoid(-z) - (1 - p) * sigmoid(z)) / len(z)
+    return loss, beta_ * (dz @ pair_sign)
+
+theta = np.log(pi_ref)                                  # 从 π_θ = π_ref 出发
+print(f&quot;初始损失 {expected_dpo(theta)[0]:.4f}（每一对都是 ln 2）&quot;)
+for step in range(3000):
+    loss, grad = expected_dpo(theta)
+    theta -= 2.0 * grad
+pi_dpo = np.exp(theta - theta.max())
+pi_dpo /= pi_dpo.sum()
+print(f&quot;DPO 训练的结果 = {fmt(pi_dpo, 4)}&quot;)
+print(f&quot;RLHF 的最优 π* = {fmt(pi_star, 4)}&quot;)
+assert np.abs(pi_dpo - pi_star).max() &lt; 1e-6
+
+# 收敛时的损失不是 0：每一对最低只能降到偏好概率的二元熵
+entropy = -(p_pref * np.log(p_pref) + (1 - p_pref) * np.log(1 - p_pref))
+final = expected_dpo(theta)[0]
+print(f&quot;收敛时的损失 {final:.4f}，6 对偏好概率的二元熵的平均 {entropy.mean():.4f}&quot;)
+assert abs(final - entropy.mean()) &lt; 1e-9
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>初始损失 0.6931（每一对都是 ln 2）
+DPO 训练的结果 = (0.0290, 0.1605, 0.7908, 0.0197)
+RLHF 的最优 π* = (0.0290, 0.1605, 0.7908, 0.0197)
+收敛时的损失 0.5551，6 对偏好概率的二元熵的平均 0.5551
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>DPO 只看了偏好数据，从来没有见过奖励 <span class="math inline"><span class="math-inline">r</span></span>，也没有估计过 <span class="math inline"><span class="math-inline">Z</span></span>，却收敛到了 RLHF 的最优策略。这就是“直接偏好优化”这个名字的含义。注意收敛时的损失是 0.5551，而不是 0。同一对回答的两种标注都会出现，所以每一对的损失最低只能降到 <span class="math inline"><span class="math-inline">-P\ln P - (1-P)\ln(1-P)</span></span>，也就是偏好概率 <span class="math inline"><span class="math-inline">P</span></span> 的<strong>二元熵</strong>（binary entropy），6 对的平均正是 0.5551。</p>
+<p>当然，这依赖几个理想化的条件：偏好服从 BT 模型，数据足够多，覆盖了需要比较的回答；策略的表达能力也足够。DLFS6 的偏好数据却不满足第一个条件。<code>tiny_stories_dpo.json</code> 的 144 对里，每个故事开头只出现一次，标注也只有一种：<code>chosen</code> 赢。从数据看，<span class="math inline"><span class="math-inline">P_{wl} = 1</span></span>。按 BT 模型，<span class="math inline"><span class="math-inline">\sigma(r_w - r_l) = 1</span></span> 意味着奖励差是无穷大，<span class="math inline"><span class="math-inline">\pi^*</span></span> 里 <span class="math inline"><span class="math-inline">y_l</span></span> 的概率是 0，而且不管 <span class="math inline"><span class="math-inline">\beta</span></span> 取多少都是如此。DPO 的损失也就没有有限的最小点：每一对只剩 <span class="math inline"><span class="math-inline">-\log\sigma(z)</span></span> 这一项，它随 <span class="math inline"><span class="math-inline">z</span></span> 单调下降，训练会一直把 <span class="math inline"><span class="math-inline">z</span></span> 往上推。在小例子上把标注换成这种确定性的试一试，奖励高的那个总是赢：</p>
+<div class="verify" id="v-E-i" data-cell="{&quot;id&quot;: &quot;E-i&quot;, &quot;golden&quot;: &quot;确定性的标注：P(y0 ≻ y1) = 0，P(y0 ≻ y2) = 0，P(y0 ≻ y3) = 0，P(y1 ≻ y2) = 0，P(y1 ≻ y3) = 1，P(y2 ≻ y3) = 1\nβ = 0.5：损失 0.6931 → 0.00326，π_θ = (0.000, 0.000, 1.000, 0.000)，π* = (0.029, 0.161, 0.791, 0.020)\nβ = 2.0：损失 0.6931 → 0.00021，π_θ = (0.000, 0.028, 0.972, 0.000)，π* = (0.255, 0.316, 0.347, 0.082)\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 E-i</span><span class="verify-title">标注是确定性的：损失没有最小点，π_θ 越过 π*，走向只选一个回答</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">p_hard</span> <span class="o">=</span> <span class="p">(</span><span class="n">r</span><span class="p">[</span><span class="n">w_idx</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">r</span><span class="p">[</span><span class="n">l_idx</span><span class="p">])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">float</span><span class="p">)</span>           <span class="c1"># 奖励高的那个总是赢：P 只取 0 或 1</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"确定性的标注："</span> <span class="o">+</span> <span class="s2">"，"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"P(y</span><span class="si">{</span><span class="n">w</span><span class="si">}</span><span class="s2"> ≻ y</span><span class="si">{</span><span class="n">l</span><span class="si">}</span><span class="s2">) = </span><span class="si">{</span><span class="n">p</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">w</span><span class="p">,</span> <span class="n">l</span><span class="p">,</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">w_idx</span><span class="p">,</span> <span class="n">l_idx</span><span class="p">,</span> <span class="n">p_hard</span><span class="p">)))</span>
+
+<span class="n">hard</span> <span class="o">=</span> <span class="p">{}</span>
+<span class="k">for</span> <span class="n">beta_</span> <span class="ow">in</span> <span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">2.0</span><span class="p">):</span>
+    <span class="n">theta</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">pi_ref</span><span class="p">)</span>
+    <span class="n">losses</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">3000</span><span class="p">):</span>                            <span class="c1"># 与验证 E-h 相同的梯度下降</span>
+        <span class="n">loss</span><span class="p">,</span> <span class="n">grad</span> <span class="o">=</span> <span class="n">expected_dpo</span><span class="p">(</span><span class="n">theta</span><span class="p">,</span> <span class="n">p_hard</span><span class="p">,</span> <span class="n">beta_</span><span class="p">)</span>
+        <span class="n">losses</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">loss</span><span class="p">)</span>
+        <span class="n">theta</span> <span class="o">-=</span> <span class="mf">2.0</span> <span class="o">*</span> <span class="n">grad</span>
+    <span class="n">pi_hard</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">theta</span> <span class="o">-</span> <span class="n">theta</span><span class="o">.</span><span class="n">max</span><span class="p">())</span>
+    <span class="n">hard</span><span class="p">[</span><span class="n">beta_</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">losses</span><span class="p">),</span> <span class="n">pi_hard</span> <span class="o">/</span> <span class="n">pi_hard</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"β = </span><span class="si">{</span><span class="n">beta_</span><span class="si">}</span><span class="s2">：损失 </span><span class="si">{</span><span class="n">losses</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2"> → </span><span class="si">{</span><span class="n">losses</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="si">:</span><span class="s2">.5f</span><span class="si">}</span><span class="s2">，π_θ = </span><span class="si">{</span><span class="n">fmt</span><span class="p">(</span><span class="n">hard</span><span class="p">[</span><span class="n">beta_</span><span class="p">][</span><span class="mi">1</span><span class="p">])</span><span class="si">}</span><span class="s2">，"</span>
+          <span class="sa">f</span><span class="s2">"π* = </span><span class="si">{</span><span class="n">fmt</span><span class="p">(</span><span class="n">optimal_policy</span><span class="p">(</span><span class="n">beta_</span><span class="p">))</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">beta_</span><span class="p">,</span> <span class="p">(</span><span class="n">losses</span><span class="p">,</span> <span class="n">pi_hard</span><span class="p">)</span> <span class="ow">in</span> <span class="n">hard</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+    <span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">diff</span><span class="p">(</span><span class="n">losses</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">)</span>                  <span class="c1"># 每一步都在下降：没有停下来的点</span>
+    <span class="k">assert</span> <span class="n">losses</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="mf">0.01</span> <span class="ow">and</span> <span class="n">pi_hard</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.97</span> <span class="o">&gt;</span> <span class="n">optimal_policy</span><span class="p">(</span><span class="n">beta_</span><span class="p">)[</span><span class="mi">2</span><span class="p">]</span>
+<span class="k">assert</span> <span class="n">hard</span><span class="p">[</span><span class="mf">0.5</span><span class="p">][</span><span class="mi">1</span><span class="p">][</span><span class="mi">2</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mf">0.999</span>
+</code></pre><textarea class="verify-src" hidden>p_hard = (r[w_idx] &gt; r[l_idx]).astype(float)           # 奖励高的那个总是赢：P 只取 0 或 1
+print(&quot;确定性的标注：&quot; + &quot;，&quot;.join(f&quot;P(y{w} ≻ y{l}) = {p:.0f}&quot; for w, l, p in zip(w_idx, l_idx, p_hard)))
+
+hard = {}
+for beta_ in (0.5, 2.0):
+    theta = np.log(pi_ref)
+    losses = []
+    for step in range(3000):                            # 与验证 E-h 相同的梯度下降
+        loss, grad = expected_dpo(theta, p_hard, beta_)
+        losses.append(loss)
+        theta -= 2.0 * grad
+    pi_hard = np.exp(theta - theta.max())
+    hard[beta_] = (np.array(losses), pi_hard / pi_hard.sum())
+    print(f&quot;β = {beta_}：损失 {losses[0]:.4f} → {losses[-1]:.5f}，π_θ = {fmt(hard[beta_][1])}，&quot;
+          f&quot;π* = {fmt(optimal_policy(beta_))}&quot;)
+
+for beta_, (losses, pi_hard) in hard.items():
+    assert np.all(np.diff(losses) &lt; 0)                  # 每一步都在下降：没有停下来的点
+    assert losses[-1] &lt; 0.01 and pi_hard[2] &gt; 0.97 &gt; optimal_policy(beta_)[2]
+assert hard[0.5][1][2] &gt; 0.999
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>确定性的标注：P(y0 ≻ y1) = 0，P(y0 ≻ y2) = 0，P(y0 ≻ y3) = 0，P(y1 ≻ y2) = 0，P(y1 ≻ y3) = 1，P(y2 ≻ y3) = 1
+β = 0.5：损失 0.6931 → 0.00326，π_θ = (0.000, 0.000, 1.000, 0.000)，π* = (0.029, 0.161, 0.791, 0.020)
+β = 2.0：损失 0.6931 → 0.00021，π_θ = (0.000, 0.028, 0.972, 0.000)，π* = (0.255, 0.316, 0.347, 0.082)
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>两个 <span class="math inline"><span class="math-inline">\beta</span></span> 下，损失每一步都在下降，<span class="math inline"><span class="math-inline">\pi_\theta</span></span> 都越过了各自的 <span class="math inline"><span class="math-inline">\pi^*</span></span>，一路走向只选 <span class="math inline"><span class="math-inline">y_2</span></span>；<span class="math inline"><span class="math-inline">\beta = 2</span></span> 的 <span class="math inline"><span class="math-inline">\pi^*</span></span> 本来相当分散。KL 正则在这里拴不住策略。</p>
+<p>真实的运行也是这样。我们在 H100 上原样运行了 <code>08_dpo.py</code>（运行 storybot-h100）。第 0 步的损失是 0.6931，恰好是 <span class="math inline"><span class="math-inline">\ln 2</span></span>；之后每 100 步的平均损失都比前 100 步低，最后一步（第 1000 步）降到了 0.0045：</p>
+<div class="verify" id="v-E-j" data-cell="{&quot;id&quot;: &quot;E-j&quot;, &quot;golden&quot;: &quot;第 0 步 0.6931（ln 2 = 0.6931），第 1000 步 0.0045\n每 100 步的平均损失：0.4195，0.1490，0.0748，0.0436，0.0275，0.0195，0.0141，0.0107，0.0082，0.0063\n−log σ(z) = 0.0045 时 z = 5.40；β = 0.1，z/β = 54 nats\n&quot;, &quot;files&quot;: [&quot;data/runs/storybot-h100/08_dpo.metrics.jsonl&quot;]}"><div class="verify-head"><span class="verify-id">验证 E-j</span><span class="verify-title">H100 上原样运行 08_dpo.py：损失从 ln 2 一路降到 0.0045，没有停下来</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+
+<span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="s2">"data/runs/storybot-h100/08_dpo.metrics.jsonl"</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">"utf-8"</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+    <span class="n">dpo_log</span> <span class="o">=</span> <span class="p">{</span><span class="n">row</span><span class="p">[</span><span class="s2">"it"</span><span class="p">]:</span> <span class="n">row</span><span class="p">[</span><span class="s2">"loss"</span><span class="p">]</span> <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="nb">map</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">,</span> <span class="n">f</span><span class="p">)}</span>
+<span class="n">by_100</span> <span class="o">=</span> <span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">([</span><span class="n">v</span> <span class="k">for</span> <span class="n">it</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">dpo_log</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">a</span> <span class="o">&lt;=</span> <span class="n">it</span> <span class="o">&lt;</span> <span class="n">a</span> <span class="o">+</span> <span class="mi">100</span><span class="p">])</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1000</span><span class="p">,</span> <span class="mi">100</span><span class="p">)]</span>
+<span class="n">first</span><span class="p">,</span> <span class="n">last</span> <span class="o">=</span> <span class="n">dpo_log</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">dpo_log</span><span class="p">[</span><span class="mi">1000</span><span class="p">]</span>
+<span class="n">z_min</span> <span class="o">=</span> <span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">expm1</span><span class="p">(</span><span class="n">last</span><span class="p">))</span>          <span class="c1"># 解 −log σ(z) = log(1 + e^(−z)) = last</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"第 0 步 </span><span class="si">{</span><span class="n">first</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">（ln 2 = </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">），第 1000 步 </span><span class="si">{</span><span class="n">last</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"每 100 步的平均损失："</span> <span class="o">+</span> <span class="s2">"，"</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">v</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">"</span> <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">by_100</span><span class="p">))</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"−log σ(z) = </span><span class="si">{</span><span class="n">last</span><span class="si">}</span><span class="s2"> 时 z = </span><span class="si">{</span><span class="n">z_min</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2">；β = 0.1，z/β = </span><span class="si">{</span><span class="n">z_min</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mf">0.1</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2"> nats"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">first</span> <span class="o">-</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span> <span class="o">&lt;</span> <span class="mf">1e-4</span> <span class="ow">and</span> <span class="n">last</span> <span class="o">&lt;</span> <span class="mf">0.01</span>
+<span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="n">a</span> <span class="o">&gt;</span> <span class="n">b</span> <span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">by_100</span><span class="p">,</span> <span class="n">by_100</span><span class="p">[</span><span class="mi">1</span><span class="p">:]))</span>  <span class="c1"># 每 100 步都比前 100 步低</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="o">-</span><span class="n">log_sigmoid</span><span class="p">(</span><span class="n">z_min</span><span class="p">)</span> <span class="o">-</span> <span class="n">last</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-12</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">z_min</span> <span class="o">-</span> <span class="mf">5.40</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">0.01</span>
+</code></pre><textarea class="verify-src" hidden>import json
+
+with open(&quot;data/runs/storybot-h100/08_dpo.metrics.jsonl&quot;, encoding=&quot;utf-8&quot;) as f:
+    dpo_log = {row[&quot;it&quot;]: row[&quot;loss&quot;] for row in map(json.loads, f)}
+by_100 = [np.mean([v for it, v in dpo_log.items() if a &lt;= it &lt; a + 100]) for a in range(0, 1000, 100)]
+first, last = dpo_log[0], dpo_log[1000]
+z_min = -np.log(np.expm1(last))          # 解 −log σ(z) = log(1 + e^(−z)) = last
+print(f&quot;第 0 步 {first:.4f}（ln 2 = {np.log(2):.4f}），第 1000 步 {last:.4f}&quot;)
+print(&quot;每 100 步的平均损失：&quot; + &quot;，&quot;.join(f&quot;{v:.4f}&quot; for v in by_100))
+print(f&quot;−log σ(z) = {last} 时 z = {z_min:.2f}；β = 0.1，z/β = {z_min / 0.1:.0f} nats&quot;)
+assert abs(first - np.log(2)) &lt; 1e-4 and last &lt; 0.01
+assert all(a &gt; b for a, b in zip(by_100, by_100[1:]))  # 每 100 步都比前 100 步低
+assert abs(-log_sigmoid(z_min) - last) &lt; 1e-12 and abs(z_min - 5.40) &lt; 0.01
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>第 0 步 0.6931（ln 2 = 0.6931），第 1000 步 0.0045
+每 100 步的平均损失：0.4195，0.1490，0.0748，0.0436，0.0275，0.0195，0.0141，0.0107，0.0082，0.0063
+−log σ(z) = 0.0045 时 z = 5.40；β = 0.1，z/β = 54 nats
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>日志里的损失是一个 batch 里 8 对的平均。<span class="math inline"><span class="math-inline">-\log\sigma(z)</span></span> 是单调递减的凸函数，由琴生不等式（E.1 节），8 对的平均损失不小于“平均 <span class="math inline"><span class="math-inline">z</span></span> 处的损失”，所以这 8 对的平均 <span class="math inline"><span class="math-inline">z</span></span> 至少是 5.4。<code>08_dpo.py</code> 的 <span class="math inline"><span class="math-inline">\beta = 0.1</span></span>，所以与参考模型相比，两段回答的对数概率之差平均被拉开了 54 nats 以上。<a href="ch06.html#s6-8">6.8 节</a>在 CPU 上也跑了这 1000 步：chosen 的对数概率平均上升 13.1 nats，rejected 平均下降 39.4 nats（<a href="ch06.html#v-6.8-c">验证 6.8-c</a>），拉开的距离主要来自把 <span class="math inline"><span class="math-inline">y_l</span></span> 压下去。1000 步、batch 8，相当于把同一批数据看了 55 遍以上（<span class="math inline"><span class="math-inline">1000\times8/144 \approx 55.6</span></span>），每看一遍，<span class="math inline"><span class="math-inline">z</span></span> 就再被推高一些。</p>
+<p>这个问题有专门的研究。IPO 的论文第 4.2 节指出：偏好越接近确定，KL 正则就越弱，作者称之为过拟合；数据少时，即使真实的偏好概率是 0.8，样本里也很可能每次都是同一个结果。论文也提到，提前停止（early stopping）这类常见做法可以充当额外的正则；第 5 节则为此提出了新的损失 IPO（<a href="https://arxiv.org/abs/2310.12036">Azar et al., 2023</a>，2026-10 查证）。</p>
+<p>下面的交互图可以调 <span class="math inline"><span class="math-inline">\beta</span></span> 和每个回答的奖励，看最优策略、隐式奖励和偏好概率怎样随之变化。</p>
+<figure class="widget" id="fig-E-1" data-widget="appendix-dpo" data-config="{&quot;pi_ref&quot;: [0.4, 0.3, 0.2, 0.1], &quot;r&quot;: [0, 1, 2, 0.5], &quot;beta&quot;: 0.5}"><div class="widget-mount"><noscript>此交互图需要 JavaScript。</noscript></div><figcaption><span class="fignum">图 E-1</span>π* 把参考策略按 e^(r/β) 重新加权：β 越小，越集中在奖励最高的回答上；隐式奖励加上 β·log Z 总是等于 r。π_θ = π* 时，一对回答的期望损失降到最小，正是偏好概率的二元熵。</figcaption></figure><aside class="callout callout-cs336"><div class="callout-title"><span class="callout-kind">CS336 对照</span><span class="callout-text">A5 补充作业：DPO</span></div>
+<p>CS336 作业 5 的补充部分（安全与 RLHF）要求实现逐样本的 DPO 损失。两边用的是同一个损失，设置对比如下：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>CS336 A5 补充</th>
+<th>DLFS6 的 6.8 节</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>模型</td>
+<td>Llama 3.1 8B</td>
+<td>StoryBot（22.7M 参数）</td>
+</tr>
+<tr>
+<td>数据</td>
+<td>Anthropic HH</td>
+<td>自制的“快乐结局 / 悲伤结局”，144 对</td>
+</tr>
+<tr>
+<td>参考模型</td>
+<td>SFT 之后的模型</td>
+<td>预训练模型</td>
+</tr>
+<tr>
+<td>优化器</td>
+<td>RMSprop，学习率 <span class="math inline"><span class="math-inline">10^{-6}</span></span></td>
+<td>AdamW，学习率 <span class="math inline"><span class="math-inline">5\times10^{-6}</span></span></td>
+</tr>
+<tr>
+<td>batch</td>
+<td>等效 64</td>
+<td>8</td>
+</tr>
+<tr>
+<td><span class="math inline"><span class="math-inline">\beta</span></span></td>
+<td>0.1</td>
+<td>0.1</td>
+</tr>
+<tr>
+<td>监控</td>
+<td>验证集上的隐式奖励准确率</td>
+<td>训练损失</td>
+</tr>
+</tbody>
+</table>
+<p>隐式奖励准确率是 <span class="math inline"><span class="math-inline">\hat r(y_w) &gt; \hat r(y_l)</span></span> 的比例。理论部分对应第 15 讲（SFT、RLHF 与 DPO）（<a href="https://github.com/stanford-cs336/assignment5-alignment">A5 仓库</a>，2026-10 查证）。</p>
+</aside>
+<h2 id="h-5db9fd7c">小结</h2>
+<p>本附录从带 KL 正则的目标 <span class="math inline"><span class="math-inline">\mathbb E[r] - \beta\,\mathrm{KL}(\pi\,\|\,\pi_{\text{ref}})</span></span> 出发，把它改写成 <span class="math inline"><span class="math-inline">-\beta\,\mathrm{KL}(\pi\,\|\,\pi^*) + \beta\log Z</span></span>，于是最优策略一眼可见：<span class="math inline"><span class="math-inline">\pi^* \propto \pi_{\text{ref}}\,e^{r/\beta}</span></span>。对它取对数，奖励就可以写成策略的函数 <span class="math inline"><span class="math-inline">\beta\log(\pi^*/\pi_{\text{ref}}) + \beta\log Z</span></span>；代入只看奖励差的 Bradley-Terry 模型，算不出来的 <span class="math inline"><span class="math-inline">\beta\log Z</span></span> 正好抵消。把 <span class="math inline"><span class="math-inline">\pi^*</span></span> 换成待训练的 <span class="math inline"><span class="math-inline">\pi_\theta</span></span>，做最大似然，就是 DPO 的损失。</p>
+<p>DPO 训练不需要采样，只需要给固定的回答对算对数概率；初始损失是 <span class="math inline"><span class="math-inline">\ln 2</span></span>；梯度对“看错”的样本加权更大。在偏好服从 BT 模型、数据足够的理想情况下，它收敛到的正是 RLHF 的最优策略。DLFS6 的标注却是确定性的，这时损失没有有限的最小点，训练只会把隐式奖励之差越推越大，<span class="math inline"><span class="math-inline">\beta</span></span> 也拴不住策略。</p>
+<h3 id="h-e021fa97">本附录所学的内容</h3>
+<ul>
+<li>KL 散度非负，单位是 nats（乘以 1.4427 得 bits）；正则项约束的是最终离参考策略多远，不是每步 KL 之和（<a href="#v-E-a">验证 E-a</a>、<a href="#v-E-b">验证 E-b</a>）。</li>
+<li>带 KL 正则的目标等于 <span class="math inline"><span class="math-inline">-\beta\,\mathrm{KL}(\pi\,\|\,\pi^*) + \beta\log Z</span></span>，最优策略是 <span class="math inline"><span class="math-inline">\pi^* \propto \pi_{\text{ref}}\,e^{r/\beta}</span></span>，最大值是 <span class="math inline"><span class="math-inline">\beta\log Z</span></span>（<a href="#v-E-c">验证 E-c</a>）。</li>
+<li><span class="math inline"><span class="math-inline">\beta</span></span> 越大 <span class="math inline"><span class="math-inline">\pi^*</span></span> 越接近 <span class="math inline"><span class="math-inline">\pi_{\text{ref}}</span></span>，越小越集中在奖励最高的回答上（<a href="#v-E-d">验证 E-d</a>）。</li>
+<li>隐式奖励 <span class="math inline"><span class="math-inline">\beta\log(\pi^*/\pi_{\text{ref}})</span></span> 与真实奖励只差常数 <span class="math inline"><span class="math-inline">\beta\log Z</span></span>（<a href="#v-E-e">验证 E-e</a>）。</li>
+<li>Bradley-Terry 偏好概率只看奖励差，所以 <span class="math inline"><span class="math-inline">Z</span></span> 在 DPO 里抵消（<a href="#v-E-f">验证 E-f</a>）。</li>
+<li>DPO 损失初始为 <span class="math inline"><span class="math-inline">\ln 2</span></span>；梯度权重是 <span class="math inline"><span class="math-inline">\beta\,\sigma(-z)</span></span>（<a href="#v-E-g">验证 E-g</a>）。</li>
+<li>偏好服从 BT 模型时，DPO 训练的结果就是 RLHF 的最优策略；标注是确定性的（DLFS6 正是这样）时，损失没有有限的最小点，真实运行的损失从 <span class="math inline"><span class="math-inline">\ln 2</span></span> 一路降到 0.0045（<a href="#v-E-h">验证 E-h</a>、<a href="#v-E-i">验证 E-i</a>、<a href="#v-E-j">验证 E-j</a>）。</li>
+</ul>
+<p>五个附录到此结束。它们各自把正文里一句“可以证明”变成了能一步步核对的推导：UTF-8 的位模式、<span class="math inline"><span class="math-inline">\sqrt d</span></span> 的来历、基线的无偏性、Adam 的偏差校正，以及 DPO 的最优解。回到正文时，如果某个公式又让你停下来，不妨像这样，把每一步都交给一个验证单元。接下来的 <a href="playground.html">CodeBot 工作台</a>则反过来，把全书的零件重新装回一台能在浏览器里运行的机器人。</p>
+<nav class="pager"><a class="prev" href="appendix-d.html"><span>上一章</span>Adam 的偏差校正</a><a class="next" href="playground.html"><span>下一章</span>CodeBot 工作台：一个 prompt 的一生</a></nav></article>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" defer></script>
+<script type="module" src="js/runtime.js"></script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+ "about": "三台机器人的结构与训练超参数，逐项抄自原书脚本（verify/test_gpu.py 用 ast 读脚本、实例化模型来核对）。params 是全部参数，n_mm 是每个 token 都要乘一遍的矩阵权重（所有 Linear 层，含 unembed）。",
+ "dlfs6_commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
+ "bots": {
+  "codebot": {"label": "CodeBot", "script": "ch03/01_pretrain.py", "model": "codebot/model.py",
+   "vocab": 1000, "ctx": 256, "d": 384, "layers": 6, "heads": 6, "kv_heads": 6, "ff": 1536,
+   "ffn": "gelu", "tied": true, "learned_pos": true,
+   "batch": 32, "accum": 1, "max_iters": 20000, "precision": "fp32",
+   "eval_every": 0, "valid_tokens": 0,
+   "params": 11121640, "n_mm": 11000832},
+  "storybot": {"label": "StoryBot", "script": "ch06/05_pretrain.py", "model": "storybot/model.py",
+   "vocab": 10000, "ctx": 256, "d": 512, "layers": 4, "heads": 16, "kv_heads": 16, "ff": 1344,
+   "ffn": "swiglu", "tied": false, "learned_pos": false,
+   "batch": 32, "accum": 1, "max_iters": 40000, "precision": "bf16",
+   "eval_every": 500, "valid_tokens": 5465873,
+   "params": 22696448, "n_mm": 17571840},
+  "webbot": {"label": "WebBot", "script": "ch09/01_pretrain.py", "model": "webbot/model.py",
+   "vocab": 50000, "ctx": 1024, "d": 768, "layers": 12, "heads": 12, "kv_heads": 4, "ff": 2048,
+   "ffn": "swiglu", "tied": false, "learned_pos": false,
+   "batch": 32, "accum": 4, "max_iters": 100000, "precision": "bf16",
+   "eval_every": 1000, "valid_tokens": 64496066,
+   "params": 152316672, "n_mm": 113897472}
+ },
+ "scenarios": [
+  {"id": "codebot", "label": "CodeBot 预训练（ch03/01）", "bot": "codebot", "world": 1, "mfu": 0.30, "offer": "local:rtx3060ti"},
+  {"id": "storybot", "label": "StoryBot 预训练（ch06/05）", "bot": "storybot", "world": 1, "mfu": 0.25, "offer": "local:rtx3060ti"},
+  {"id": "webbot", "label": "WebBot 预训练，单卡（ch09/01 原样）", "bot": "webbot", "world": 1, "mfu": 0.35, "offer": "modal:h100"},
+  {"id": "webbot-x8-trap", "label": "WebBot × 8 卡，脚本原样（陷阱）", "bot": "webbot", "world": 8, "mfu": 0.35, "offer": "modal:h100"},
+  {"id": "webbot-x8-iters", "label": "WebBot × 8 卡，max_iters ÷ 8", "bot": "webbot", "world": 8, "max_iters": 12500, "mfu": 0.35, "offer": "modal:h100"},
+  {"id": "webbot-x8-batch", "label": "WebBot × 8 卡，每卡 batch ÷ 8", "bot": "webbot", "world": 8, "batch": 16, "accum": 1, "mfu": 0.35, "offer": "modal:h100"},
+  {"id": "webbot-lite", "label": "WebBot 精简版（23,000 步，约 20 token/参数）", "bot": "webbot", "world": 1, "max_iters": 23000, "mfu": 0.35, "offer": "runpod-community:h100"}
+ ]
+}

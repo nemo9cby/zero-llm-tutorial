@@ -1,0 +1,230 @@
+{
+ "input": "tiny_stories_valid.txt first 499,577 bytes",
+ "bytes": 499577,
+ "vocab": 1000,
+ "rounds": [
+  {
+   "naive": {
+    "wall": 353.351,
+    "cpu": 198.438,
+    "load": {
+     "mean": 100.0,
+     "min": 99.4,
+     "max": 100.0
+    },
+    "phases": {
+     "Training BPE": {
+      "wall": 352.855,
+      "cpu": 198.219
+     }
+    }
+   },
+   "dedup": {
+    "wall": 24.234,
+    "cpu": 14.969,
+    "load": {
+     "mean": 100.0,
+     "min": 99.8,
+     "max": 100.0
+    },
+    "phases": {
+     "Pretokenizing": {
+      "wall": 0.305,
+      "cpu": 0.188
+     },
+     "Training BPE": {
+      "wall": 23.919,
+      "cpu": 14.781
+     }
+    }
+   },
+   "cache": {
+    "wall": 2.353,
+    "cpu": 1.766,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    },
+    "phases": {
+     "Pretokenizing": {
+      "wall": 0.348,
+      "cpu": 0.188
+     },
+     "Training BPE": {
+      "wall": 1.961,
+      "cpu": 1.516
+     }
+    }
+   },
+   "heap": {
+    "wall": 0.913,
+    "cpu": 0.719,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    }
+   }
+  },
+  {
+   "naive": {
+    "wall": 401.271,
+    "cpu": 206.578,
+    "load": {
+     "mean": 100.0,
+     "min": 96.7,
+     "max": 100.0
+    },
+    "phases": {
+     "Training BPE": {
+      "wall": 400.798,
+      "cpu": 206.297
+     }
+    }
+   },
+   "dedup": {
+    "wall": 27.525,
+    "cpu": 14.703,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    },
+    "phases": {
+     "Pretokenizing": {
+      "wall": 0.247,
+      "cpu": 0.125
+     },
+     "Training BPE": {
+      "wall": 27.27,
+      "cpu": 14.578
+     }
+    }
+   },
+   "cache": {
+    "wall": 3.39,
+    "cpu": 1.656,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    },
+    "phases": {
+     "Pretokenizing": {
+      "wall": 0.731,
+      "cpu": 0.188
+     },
+     "Training BPE": {
+      "wall": 2.597,
+      "cpu": 1.438
+     }
+    }
+   },
+   "heap": {
+    "wall": 1.246,
+    "cpu": 0.672,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    }
+   }
+  },
+  {
+   "naive": {
+    "wall": 389.079,
+    "cpu": 208.328,
+    "load": {
+     "mean": 100.0,
+     "min": 99.8,
+     "max": 100.0
+    },
+    "phases": {
+     "Training BPE": {
+      "wall": 388.582,
+      "cpu": 208.062
+     }
+    }
+   },
+   "dedup": {
+    "wall": 35.483,
+    "cpu": 15.188,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    },
+    "phases": {
+     "Pretokenizing": {
+      "wall": 0.273,
+      "cpu": 0.188
+     },
+     "Training BPE": {
+      "wall": 35.204,
+      "cpu": 14.984
+     }
+    }
+   },
+   "cache": {
+    "wall": 2.102,
+    "cpu": 1.625,
+    "load": {
+     "mean": 100.0,
+     "min": 100.0,
+     "max": 100.0
+    },
+    "phases": {
+     "Pretokenizing": {
+      "wall": 0.313,
+      "cpu": 0.203
+     },
+     "Training BPE": {
+      "wall": 1.754,
+      "cpu": 1.375
+     }
+    }
+   },
+   "heap": {
+    "wall": 1.539,
+    "cpu": 0.812,
+    "load": {
+     "mean": 100.0,
+     "min": 99.8,
+     "max": 100.0
+    }
+   }
+  }
+ ],
+ "rules_sha256": {
+  "naive": "8b820f90146f1256d5f55fac0c419203d057f2fb96229df5bd33cb7d3b230993",
+  "dedup": "8b820f90146f1256d5f55fac0c419203d057f2fb96229df5bd33cb7d3b230993",
+  "cache": "8b820f90146f1256d5f55fac0c419203d057f2fb96229df5bd33cb7d3b230993",
+  "heap": "8b820f90146f1256d5f55fac0c419203d057f2fb96229df5bd33cb7d3b230993"
+ },
+ "identical": true,
+ "env": {
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "logical_cpus": 16,
+  "physical_cores": 8,
+  "ram_gb": 47.7,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "numpy": "2.5.4",
+  "regex": "2026.9.29",
+  "date": "2026-10-12 13:55",
+  "utc_offset": "-0400"
+ },
+ "provenance": {
+  "script": "verify/_ch04_bench.py",
+  "command": "python verify/_ch04_bench.py run pool_startup pretok_repeat shrink repeat_small",
+  "tutorial": {
+   "commit": "dda64b3d6eaa9e4a6e68de6b1b0a83fbedbab7b4",
+   "dirty": true
+  },
+  "dlfs6": {
+   "commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
+   "dirty": false
+  }
+ }
+}

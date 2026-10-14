@@ -1,0 +1,411 @@
+{
+ "fetched": "2026-10-11",
+ "dlfs6": {
+  "commit": "c9b6e2e",
+  "signatures": {
+   "codebot/model.py GPT.__init__": [
+    "vocab_size",
+    "max_context_len",
+    "embed_dim",
+    "n_head",
+    "n_layer",
+    "ff_dim",
+    "dropout_rate"
+   ],
+   "storybot/model.py GPT.__init__": [
+    "vocab_size",
+    "max_context_len",
+    "embed_dim",
+    "n_head",
+    "n_layer",
+    "ff_dim",
+    "theta"
+   ],
+   "webbot/model.py GPT.__init__": [
+    "vocab_size",
+    "max_context_len",
+    "embed_dim",
+    "n_head",
+    "n_kv_head",
+    "n_layer",
+    "ff_dim",
+    "theta"
+   ]
+  }
+ },
+ "cs336_a1": {
+  "url": "https://github.com/stanford-cs336/assignment1-basics/blob/a158843b20107949f1a8d7df1b05cd33b9166712/tests/adapters.py",
+  "signatures": {
+   "run_transformer_lm": [
+    "vocab_size",
+    "context_length",
+    "d_model",
+    "num_layers",
+    "num_heads",
+    "d_ff",
+    "rope_theta",
+    "weights",
+    "in_indices"
+   ],
+   "run_transformer_block": [
+    "d_model",
+    "num_heads",
+    "d_ff",
+    "max_seq_len",
+    "theta",
+    "weights",
+    "in_features"
+   ],
+   "run_multihead_self_attention_with_rope": [
+    "d_model",
+    "num_heads",
+    "max_seq_len",
+    "theta",
+    "q_proj_weight",
+    "k_proj_weight",
+    "v_proj_weight",
+    "o_proj_weight",
+    "in_features",
+    "token_positions"
+   ],
+   "run_rope": [
+    "d_k",
+    "theta",
+    "max_seq_len",
+    "in_query_or_key",
+    "token_positions"
+   ],
+   "run_get_batch": [
+    "dataset",
+    "batch_size",
+    "context_length",
+    "device"
+   ],
+   "run_rmsnorm": [
+    "d_model",
+    "eps",
+    "weights",
+    "in_features"
+   ],
+   "run_swiglu": [
+    "d_model",
+    "d_ff",
+    "w1_weight",
+    "w2_weight",
+    "w3_weight",
+    "in_features"
+   ]
+  }
+ },
+ "cs336_a5_2026": {
+  "url": "https://github.com/stanford-cs336/assignment5-alignment/tree/c2734a26308710949fe13226960a1e8cece94b7e",
+  "handout": "cs336_spring2026_assignment5_alignment.pdf",
+  "required_metrics_excerpt": [
+   "the training loss on the batch, along with metadata, both for logging. Please log at least the following",
+   "metrics in your train step:",
+   "• The loss.",
+   "• Gradient norm.",
+   "• Token entropy.",
+   "• Train rewards (total, format).",
+   "",
+   "You're welcome to log other metrics as well: for example, it might be useful to log pass@k for k between 1",
+   "and group_size (i.e. the fraction of prompts for which there is at least one correct answer within the first"
+  ],
+  "plotted_metrics_excerpt": [
+   "Log the following metrics, and produce plots of them over time, while noting the variance",
+   "between runs (e.g. by plotting mean/std or min/max over runs).",
+   "• The loss.",
+   "• Gradient norm.",
+   "• Token entropy.",
+   "• Train rewards (total, format).",
+   "• Val rewards (total, format).",
+   "• Val average response length.",
+   "• Anything else you think could be useful for debugging."
+  ],
+  "batch_excerpt": [
+   "rollout_batch_size = n_prompts_per_rollout_batch * group_size.",
+   "rollout_batch_size = train_batch_size = 256",
+   "group_size = 8",
+   "gradient_accumulation_steps = 32",
+   "Note that rollout_batch_size and train_batch_size count responses, not prompts. So",
+   "rollout_batch_size = train_batch_size = 256 means 32 prompts with 8 rollouts each.",
+   "32x off policy (so we take 32 training steps for each inference batch):",
+   "train_batch_size = 8"
+  ],
+  "clip_fraction_excerpt": [
+   "In addition to the metrics you're already logging, make sure to also log the clip fraction."
+  ]
+ },
+ "hf": {
+  "gpt2": {
+   "url": "https://huggingface.co/openai-community/gpt2/blob/main/config.json",
+   "config": {
+    "activation_function": "gelu_new",
+    "architectures": [
+     "GPT2LMHeadModel"
+    ],
+    "attn_pdrop": 0.1,
+    "bos_token_id": 50256,
+    "embd_pdrop": 0.1,
+    "eos_token_id": 50256,
+    "initializer_range": 0.02,
+    "layer_norm_epsilon": 1e-05,
+    "model_type": "gpt2",
+    "n_ctx": 1024,
+    "n_embd": 768,
+    "n_head": 12,
+    "n_layer": 12,
+    "n_positions": 1024,
+    "resid_pdrop": 0.1,
+    "summary_activation": null,
+    "summary_first_dropout": 0.1,
+    "summary_proj_to_labels": true,
+    "summary_type": "cls_index",
+    "summary_use_proj": true,
+    "task_specific_params": {
+     "text-generation": {
+      "do_sample": true,
+      "max_length": 50
+     }
+    },
+    "vocab_size": 50257
+   }
+  },
+  "olmo2_0425_1b": {
+   "url": "https://huggingface.co/allenai/OLMo-2-0425-1B/blob/main/config.json",
+   "config": {
+    "architectures": [
+     "Olmo2ForCausalLM"
+    ],
+    "attention_bias": false,
+    "attention_dropout": 0.0,
+    "eos_token_id": 100257,
+    "hidden_act": "silu",
+    "hidden_size": 2048,
+    "initializer_range": 0.02,
+    "intermediate_size": 8192,
+    "max_position_embeddings": 4096,
+    "model_type": "olmo2",
+    "num_attention_heads": 16,
+    "num_hidden_layers": 16,
+    "num_key_value_heads": 16,
+    "pad_token_id": 100277,
+    "rms_norm_eps": 1e-06,
+    "rope_scaling": null,
+    "rope_theta": 500000,
+    "tie_word_embeddings": false,
+    "torch_dtype": "float32",
+    "transformers_version": "4.50.3",
+    "use_cache": true,
+    "vocab_size": 100352
+   }
+  },
+  "qwen25_math_1p5b": {
+   "url": "https://huggingface.co/Qwen/Qwen2.5-Math-1.5B/blob/main/config.json",
+   "config": {
+    "architectures": [
+     "Qwen2ForCausalLM"
+    ],
+    "attention_dropout": 0.0,
+    "bos_token_id": 151643,
+    "eos_token_id": 151643,
+    "hidden_act": "silu",
+    "hidden_size": 1536,
+    "initializer_range": 0.02,
+    "intermediate_size": 8960,
+    "max_position_embeddings": 4096,
+    "max_window_layers": 21,
+    "model_type": "qwen2",
+    "num_attention_heads": 12,
+    "num_hidden_layers": 28,
+    "num_key_value_heads": 2,
+    "rms_norm_eps": 1e-06,
+    "rope_theta": 10000,
+    "sliding_window": 4096,
+    "tie_word_embeddings": true,
+    "torch_dtype": "bfloat16",
+    "transformers_version": "4.44.0",
+    "use_cache": true,
+    "use_mrope": false,
+    "use_sliding_window": false,
+    "vocab_size": 151936
+   }
+  },
+  "qwen3_0p6b": {
+   "url": "https://huggingface.co/Qwen/Qwen3-0.6B/blob/c1899de289a04d12100db370d81485cdf75e47ca/config.json",
+   "fetched": "2026-10-12",
+   "config": {
+    "architectures": [
+     "Qwen3ForCausalLM"
+    ],
+    "attention_bias": false,
+    "attention_dropout": 0.0,
+    "bos_token_id": 151643,
+    "eos_token_id": 151645,
+    "head_dim": 128,
+    "hidden_act": "silu",
+    "hidden_size": 1024,
+    "initializer_range": 0.02,
+    "intermediate_size": 3072,
+    "max_position_embeddings": 40960,
+    "max_window_layers": 28,
+    "model_type": "qwen3",
+    "num_attention_heads": 16,
+    "num_hidden_layers": 28,
+    "num_key_value_heads": 8,
+    "rms_norm_eps": 1e-06,
+    "rope_scaling": null,
+    "rope_theta": 1000000,
+    "sliding_window": null,
+    "tie_word_embeddings": true,
+    "torch_dtype": "bfloat16",
+    "transformers_version": "4.51.0",
+    "use_cache": true,
+    "use_sliding_window": false,
+    "vocab_size": 151936
+   }
+  },
+  "gpt2_attribute_map": {
+   "url": "https://github.com/huggingface/transformers/blob/55c3cc9f03cd4fbf2d27d382dcc8fcc544631f8e/src/transformers/models/gpt2/configuration_gpt2.py",
+   "lines": [
+    "72: \"hidden_size\": \"n_embd\",",
+    "73: \"max_position_embeddings\": \"n_positions\",",
+    "74: \"num_attention_heads\": \"n_head\",",
+    "75: \"num_hidden_layers\": \"n_layer\",",
+    "83: n_inner: int | None = None"
+   ],
+   "inner_dim_line": [
+    "250: inner_dim = config.n_inner if config.n_inner is not None else 4 * hidden_size"
+   ],
+   "tying_lines": [
+    "103: tie_word_embeddings: bool = True",
+    "637: _tied_weights_keys = {\"lm_head.weight\": \"transformer.wte.weight\"}"
+   ]
+  }
+ },
+ "nanogpt": {
+  "url": "https://github.com/karpathy/nanoGPT/blob/f08abb45bd2285627d17da16daea14dda7e7253e/model.py",
+  "gptconfig_lines": [
+   "110: block_size: int = 1024",
+   "111: vocab_size: int = 50304 # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency",
+   "112: n_layer: int = 12",
+   "113: n_head: int = 12",
+   "114: n_embd: int = 768",
+   "115: dropout: float = 0.0",
+   "116: bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster"
+  ],
+  "head_size_lines": [
+   "33: assert config.n_embd % config.n_head == 0",
+   "57: k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)"
+  ],
+  "other_lines": [
+   "27: return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)",
+   "82: self.c_fc    = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)",
+   "138: self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying"
+  ]
+ },
+ "verl": {
+  "repo": "https://github.com/verl-project/verl",
+  "commit": "1d367a4f459a43768f76312c0d3430a99ec46b8c",
+  "lines": {
+   "verl/trainer/ppo/metric_utils.py": [
+    "454: sequence_reward = batch.batch[\"token_level_rewards\"].sum(-1)",
+    "483: reward_mean = torch.mean(non_aborted_sequence_reward).detach().item()",
+    "490: valid_adv = torch.masked_select(advantages, response_mask)",
+    "494: adv_mean = torch.mean(valid_adv).detach().item()",
+    "498: logger.warning(\"Response mask is all False, returning default advantage metrics\")",
+    "506: logger.warning(\"Response mask is all False, returning default return metrics\")",
+    "528: if use_critic:",
+    "536: \"critic/values/mean\": torch.mean(valid_values).detach().item(),",
+    "537: \"critic/values/max\": torch.max(valid_values).detach().item(),",
+    "538: \"critic/values/min\": torch.min(valid_values).detach().item(),",
+    "540: \"critic/vf_explained_var\": (1.0 - return_diff_var / (return_var + 1e-5)).detach().item(),",
+    "543: logger.warning(\"Response mask is all False, returning default value metrics\")",
+    "545: \"critic/values/mean\": float(\"nan\"),",
+    "546: \"critic/values/max\": float(\"nan\"),",
+    "547: \"critic/values/min\": float(\"nan\"),",
+    "549: \"critic/vf_explained_var\": float(\"nan\"),",
+    "552: critic_value_metrics = {}",
+    "556: \"critic/score/mean\": score_mean,",
+    "557: \"critic/score/max\": score_max,",
+    "558: \"critic/score/min\": score_min,",
+    "560: \"critic/rewards/mean\": reward_mean,",
+    "561: \"critic/rewards/max\": reward_max,",
+    "562: \"critic/rewards/min\": reward_min,",
+    "564: \"critic/advantages/mean\": adv_mean,",
+    "565: \"critic/advantages/max\": adv_max,",
+    "566: \"critic/advantages/min\": adv_min,",
+    "568: \"critic/returns/mean\": returns_mean,",
+    "569: \"critic/returns/max\": returns_max,",
+    "570: \"critic/returns/min\": returns_min,",
+    "573: \"response_length/mean\": torch.mean(response_length).detach().item(),",
+    "574: \"response_length/max\": torch.max(response_length).detach().item(),",
+    "575: \"response_length/min\": torch.min(response_length).detach().item(),",
+    "576: \"response_length/clip_ratio\": torch.mean(torch.eq(response_length, max_response_length).float())"
+   ],
+   "verl/workers/utils/losses.py": [
+    "126: metrics[\"actor/pg_loss\"] = Metric(value=pg_loss, aggregation=metric_aggregation)"
+   ],
+   "verl/trainer/ppo/core_algos.py": [
+    "1372: \"actor/pg_clipfrac\": pg_clipfrac.detach().item(),",
+    "1373: \"actor/ppo_kl\": ppo_kl.detach().item(),",
+    "328: scores[i] = scores[i] - id2mean[index[i]]",
+    "329: scores = scores.unsqueeze(-1) * response_mask"
+   ],
+   "verl/trainer/ppo/ray_trainer.py": [
+    "407: batch_size=self.config.data.get(\"gen_batch_size\", None) or self.config.data.train_batch_size,",
+    "725: core_var = \"acc\" if \"acc\" in var2metric2val else \"reward\"",
+    "734: metric_sec = \"val-core\"",
+    "736: metric_sec = \"val-aux\"",
+    "737: pfx = f\"{metric_sec}/{data_source}/{var_name}/{metric_name}\"",
+    "1353: ppo_mini_batch_size = ppo_mini_batch_size * self.config.actor_rollout_ref.rollout.n",
+    "1371: actor_output = rename_dict(actor_output, \"actor/\")",
+    "1383: ppo_mini_batch_size = ppo_mini_batch_size * self.config.actor_rollout_ref.rollout.n",
+    "1540: batch = batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n, interleave=True)",
+    "1597: \"actor/entropy\": entropy_agg.detach().item(),",
+    "1788: gradient_norm = metrics.get(\"actor/grad_norm\", None)"
+   ],
+   "verl/workers/engine_workers.py": [
+    "206: lr = metrics.pop(\"lr\", None)",
+    "217: final_metrics[\"lr\"] = lr",
+    "385: output[\"metrics\"][\"lr\"] = lr"
+   ]
+  },
+  "blobs": {
+   "verl/trainer/ppo/metric_utils.py": "3de61d360c644a8e982633b6832262fd7ea8df2f",
+   "verl/workers/utils/losses.py": "94684c0552c167f3603469b767afc671713f17d3",
+   "verl/trainer/ppo/core_algos.py": "afa86c25ba370c45dbf84b2597876ab817485fca",
+   "verl/trainer/ppo/ray_trainer.py": "9352bcfa4d56bda8e70fc7df183e588a65afb43d",
+   "verl/workers/engine_workers.py": "5a80004d7d233b8e65f8c4cae452465fa5b62526"
+  }
+ },
+ "tinker_cookbook": {
+  "repo": "https://github.com/thinking-machines-lab/tinker-cookbook",
+  "commit": "70767c738ba5f523b66210a70e50b0dc14c9fc1a",
+  "lines": {
+   "tinker_cookbook/rl/metric_util.py": [
+    "54: \"by_group/frac_mixed\": n_mixed / n_groups,",
+    "55: \"by_group/frac_all_good\": n_good / n_groups,",
+    "56: \"by_group/frac_all_bad\": n_bad / n_groups,",
+    "94: {f\"env/all/{k}\": v for k, v in _compute_trajectory_metrics(trajectory_groups_P).items()}",
+    "115: \"ac_tokens_per_turn\": total_ac_tokens / total_turns if total_turns > 0 else 0.0,",
+    "124: metrics[\"reward/total\"] = np.mean(all_rewards).item() if all_rewards else 0.0"
+   ],
+   "tinker_cookbook/rl/metrics.py": [
+    "23: Compares the logprobs from when trajectories were sampled against the current",
+    "52: logprob_diff = sampling_logprobs_actions - training_logprobs_actions",
+    "58: kl_sample_train_v1 = flat_diffs.mean().item()",
+    "64: \"optim/kl_sample_train_v1\": kl_sample_train_v1,",
+    "66: \"optim/entropy\": entropy_sample,"
+   ],
+   "tinker_cookbook/rl/train.py": [
+    "733: \"optim/lr\": config.learning_rate,"
+   ]
+  },
+  "blobs": {
+   "tinker_cookbook/rl/metric_util.py": "ddb130f142160520a2508494dd934efd15b14d2d",
+   "tinker_cookbook/rl/metrics.py": "69ec235cd7eb99c11ce245e986137a50bb97fc65",
+   "tinker_cookbook/rl/train.py": "41b99718a5b4098212ebcda276d48fb75b101354"
+  }
+ }
+}

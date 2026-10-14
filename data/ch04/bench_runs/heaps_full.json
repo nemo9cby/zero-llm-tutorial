@@ -1,0 +1,38 @@
+{
+ "input": "storybot/tiny_stories_train.txt (2,227,753,162 bytes)",
+ "bytes": 2227753162,
+ "occurrences": 536592168,
+ "unique": 59933,
+ "top10_share": 0.3192,
+ "top1000_share": 0.925,
+ "wall": 134.944,
+ "load": {
+  "mean": 96.7,
+  "min": 50.0,
+  "max": 100.0
+ },
+ "env": {
+  "cpu": "11th Gen Intel(R) Core(TM) i7-11700F @ 2.50GHz",
+  "logical_cpus": 16,
+  "physical_cores": 8,
+  "ram_gb": 47.7,
+  "os": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "numpy": "2.5.4",
+  "regex": "2026.9.29",
+  "date": "2026-10-12 15:31",
+  "utc_offset": "-0400"
+ },
+ "provenance": {
+  "script": "verify/_ch04_bench.py",
+  "command": "python verify/_ch04_bench.py run heaps_full --train-full <train_full>",
+  "tutorial": {
+   "commit": "65925e94fe7bf5210f51371f1135e0a55982ef45",
+   "dirty": true
+  },
+  "dlfs6": {
+   "commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
+   "dirty": false
+  }
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "presets": [
+  {
+   "name": "网页（OWT）",
+   "text": "LOUISVILLE, Ky. — A few unflattering reviews are to be expected with any hotel, particularly one whose rates start at $49 per night."
+  },
+  {
+   "name": "故事",
+   "text": "Once upon a time, there was a little girl named Lily. She loved to play outside."
+  },
+  {
+   "name": "代码",
+   "text": "def greet(name):\n    print(f\"Hello, {name}!\")\n\nfor i in range(3):\n    greet('world')\n"
+  },
+  {
+   "name": "中文",
+   "text": "语言模型只认识整数，分词器负责把文字变成整数。"
+  },
+  {
+   "name": "网址与数字",
+   "text": "https://example.com/api/v2/items?id=1234567890&sort=desc"
+  },
+  {
+   "name": "emoji",
+   "text": "I love 🍕 and 🍣! 😁"
+  },
+  {
+   "name": "特殊 token",
+   "text": "print('<|endoftext|>')"
+  }
+ ]
+}

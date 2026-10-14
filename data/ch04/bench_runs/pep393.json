@@ -1,0 +1,16 @@
+{
+ "valid": {
+  "pieces": 27631,
+  "wide_pieces": 722,
+  "whole_str_bytes": 44986832,
+  "pieces_str_bytes": 23883449,
+  "max_codepoint": 8230
+ },
+ "train_prefix": {
+  "pieces": 127993,
+  "wide_pieces": 3428,
+  "whole_str_bytes": 419254676,
+  "pieces_str_bytes": 111344313,
+  "max_codepoint": 127820
+ }
+}

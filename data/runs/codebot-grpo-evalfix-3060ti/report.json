@@ -1,0 +1,62 @@
+{
+ "run": "codebot-grpo-evalfix-3060ti",
+ "tutorial_commit": "4cf7333568acbbeea1d92c83a681815643a54554",
+ "dlfs6_commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
+ "host": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "torch": "2.14.1+cu130",
+  "cuda": "13.0",
+  "gpu": "NVIDIA GeForce RTX 3060 Ti",
+  "gpu_count": 1,
+  "gpu_capability": "8.6",
+  "bf16": true,
+  "nvidia_smi": "NVIDIA GeForce RTX 3060 Ti, 610.60, 8192 MiB"
+ },
+ "cost_usd": 0.0,
+ "steps": [
+  {
+   "script": "ch03/09_grpo.py",
+   "started": "2026-10-12T02:34:57+00:00",
+   "seconds": 4590.0,
+   "exit_code": 0,
+   "points": 501,
+   "final": {
+    "it": 500,
+    "loss": -0.0,
+    "acc": 100.0
+   },
+   "produced": [
+    "codebot/__pycache__/model.cpython-312.pyc",
+    "codebot/__pycache__/tokenizer.cpython-312.pyc",
+    "codebot/__pycache__/utils.cpython-312.pyc",
+    "codebot/model_grpo.pt",
+    "loss_grpo.png"
+   ],
+   "log_tail": [
+    "100%|█████████▉| 498/500 [1:15:47<00:38, 19.36s/it, loss=-0.0000, acc=100.0%]",
+    "100%|█████████▉| 499/500 [1:15:47<00:21, 21.12s/it, loss=-0.0000, acc=100.0%]",
+    "100%|█████████▉| 499/500 [1:16:17<00:21, 21.12s/it, loss=-0.0000, acc=100.0%]",
+    "100%|██████████| 500/500 [1:16:17<00:00, 23.82s/it, loss=-0.0000, acc=100.0%]",
+    "100%|██████████| 500/500 [1:16:17<00:00,  9.16s/it, loss=-0.0000, acc=100.0%]"
+   ],
+   "rate": "9.16s/it",
+   "s_per_it": 8.868,
+   "patches": [
+    {
+     "old": "    for _ in range(n_update_per_generation):",
+     "new": "    model.eval()  # zero-llm fix: no dropout during the update (old_model is in eval mode too)\n    for _ in range(n_update_per_generation):",
+     "why": "勘误实验：更新前把 model 切到 eval 模式，与 old_model 一致（原书在 train 模式下算比率，dropout 让比率带噪声）"
+    }
+   ],
+   "job": "codebot-grpo-evalfix"
+  }
+ ],
+ "seeded": [
+  {
+   "path": "codebot/model_sft.pt",
+   "from": "tutorial run codebot-3060ti",
+   "sha256": "286e127951d3818c224f56afb5228bdad3bce4a4e04376c127474f80a16706e9"
+  }
+ ]
+}

@@ -1,0 +1,1478 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>术语与命名对照｜从零构建大语言模型</title>
+<meta name="description" content="同一个量，在不同的代码库里有不同的名字；同一个词，在不同的场合又指不同的东西。这一页把本书的术语、各家代码的参数名、强化学习训练的指标名对齐在一起，并拆开几个最容易混淆的词。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Serif+SC:wght@400;600;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,800;1,8..60,400&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/pygments.css">
+<script>
+  try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+</head>
+<body data-slug="glossary" data-packages="[&quot;numpy&quot;]">
+<a class="skip" href="#main">跳到正文</a>
+<header class="topbar">
+  <button class="nav-toggle" type="button" aria-controls="nav" aria-expanded="false">目录</button>
+  <a class="book-title" href="index.html">从零构建大语言模型</a>
+  <div class="topbar-tools">
+    <span class="verify-counter" hidden></span>
+    <button class="run-all" type="button" hidden><span class="label-long">运行本页全部验证</span><span class="label-short">全部验证</span></button>
+    <button class="theme-toggle" type="button" aria-label="切换明暗主题"><span class="label-long">明 / 暗</span><span class="label-short">◐</span></button>
+  </div>
+</header>
+<div class="layout">
+  <nav id="nav" class="nav" aria-label="章节"><ol class="nav-chapters"><li class="kind-chapter"><a href="ch00.html"><span class="nav-num">0</span>LLM 是如何炼成的</a></li><li class="kind-part"><a href="part1.html">第 I 部 基础篇：制作 CodeBot</a></li><li class="kind-chapter"><a href="ch01.html"><span class="nav-num">1</span>分词器【基础篇】</a></li><li class="kind-chapter"><a href="ch02.html"><span class="nav-num">2</span>模型【基础篇】</a></li><li class="kind-chapter"><a href="ch03.html"><span class="nav-num">3</span>训练【基础篇】</a></li><li class="kind-part"><a href="part2.html">第 II 部 应用篇：制作 StoryBot</a></li><li class="kind-chapter"><a href="ch04.html"><span class="nav-num">4</span>分词器【应用篇】</a></li><li class="kind-chapter"><a href="ch05.html"><span class="nav-num">5</span>模型【应用篇】</a></li><li class="kind-chapter"><a href="ch06.html"><span class="nav-num">6</span>训练【应用篇】</a></li><li class="kind-part"><a href="part3.html">第 III 部 挑战篇：制作 WebBot</a></li><li class="kind-chapter"><a href="ch07.html"><span class="nav-num">7</span>分词器【挑战篇】</a></li><li class="kind-chapter"><a href="ch08.html"><span class="nav-num">8</span>模型【挑战篇】</a></li><li class="kind-chapter"><a href="ch09.html"><span class="nav-num">9</span>训练【挑战篇】</a></li><li class="nav-group"><span class="nav-group-label">附录</span></li><li class="kind-appendix"><a href="appendix-a.html"><span class="nav-num">A</span>UTF-8 编码的原理</a></li><li class="kind-appendix"><a href="appendix-b.html"><span class="nav-num">B</span>Attention 缩放效果的证明</a></li><li class="kind-appendix"><a href="appendix-c.html"><span class="nav-num">C</span>带基线策略梯度的无偏性证明</a></li><li class="kind-appendix"><a href="appendix-d.html"><span class="nav-num">D</span>Adam 的偏差校正</a></li><li class="kind-appendix"><a href="appendix-e.html"><span class="nav-num">E</span>DPO 最优解的推导</a></li><li class="nav-group"><span class="nav-group-label">实践与参考</span></li><li class="kind-extra"><a href="playground.html"><span class="nav-num">P</span>CodeBot 工作台</a></li><li class="kind-extra"><a href="train-in-browser.html"><span class="nav-num">T</span>浏览器里训练迷你 GPT</a></li><li class="kind-extra"><a href="gpu.html"><span class="nav-num">G</span>GPU 实战手册</a></li><li class="kind-extra"><a href="cs336.html"><span class="nav-num">X</span>CS336 对照总表</a></li><li class="kind-extra current"><a href="glossary.html"><span class="nav-num">Y</span>术语与命名对照</a><ol><li><a href="#sY-1">Y.1 术语表</a></li><li><a href="#sY-2">Y.2 命名对照：同一个量的五个名字</a></li><li><a href="#sY-3">Y.3 强化学习训练指标对照</a></li><li><a href="#sY-4">Y.4 一词多义</a></li><li><a href="#h-5db9fd7c">小结</a></li></ol></li><li class="kind-extra"><a href="errata.html"><span class="nav-num">Z</span>已知问题与修复</a></li></ol></nav>
+  <main id="main" class="page">
+    <article class="chapter"><header class="chapter-head"><div class="chapter-num">Y</div><h1>术语与命名对照</h1><p class="chapter-lede">同一个量，在不同的代码库里有不同的名字；同一个词，在不同的场合又指不同的东西。这一页把本书的术语、各家代码的参数名、强化学习训练的指标名对齐在一起，并拆开几个最容易混淆的词。</p></header><p>读论文、读代码、看训练日志的时候，最耽误时间的往往不是概念本身，而是名字。DLFS6 叫 <code>embed_dim</code> 的那个数，Hugging Face 叫 <code>hidden_size</code>，CS336 叫 <code>d_model</code>，GPT-2 的代码叫 <code>n_embd</code>；概念完全相同，第一次见到时却很容易以为是四样东西。反过来，“epoch”“step”“batch”这些词，在不同的场合又各有所指。</p>
+<p>这一页分四部分。Y.1 是本书的术语表，每个术语都指向它第一次出现的小节。Y.2 是参数名的对照，Y.3 是强化学习训练指标的对照。Y.4 拆开几个一词多义的词。正文里也有两张小一些的对照表：<a href="ch02.html#s2-10-1">2.10.1 节</a>的方框对齐了 CodeBot 的参数名，<a href="ch03.html#s3-9-3">3.9.3 节</a>的专栏对齐了最常用的几个强化学习指标。这一页把它们扩展到更多的代码库，并逐项核对出处。</p>
+<p>表格很多，可以先用下面的搜索框：输入中文或英文都行，大小写、空格和下划线都不计较。</p>
+<figure class="widget" id="fig-Y-1" data-widget="glossary-search" data-config="{&quot;scope&quot;: &quot;article.chapter&quot;}"><div class="widget-mount"><noscript>此交互图需要 JavaScript。</noscript></div><figcaption><span class="fignum">图 Y-1</span>在本页的表格里查找，同时列出标题里含这个词的小节和方框。试试 hidden_size、critic、probe、gbs 或“上下文”。</figcaption></figure><h2 id="sY-1">Y.1 术语表</h2>
+<p>术语按主题分组。“首次出现”指向本书里第一次正式讲解它的小节；中文一列沿用正文的写法：正文里直接用英文的术语，写成“英文（中文译名）”，如 Attention（注意力）、KV cache（KV 缓存）；token、logits 这样正文从不翻译、也没有统一译名的词，只写英文。最后一组是一词多义的词，它们在 Y.4 里逐个拆开。</p>
+<h3 id="h-11284237">分词</h3>
+<table>
+<thead>
+<tr>
+<th>中文</th>
+<th>English</th>
+<th>一句话</th>
+<th>首次出现</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>分词器</td>
+<td>tokenizer</td>
+<td>把文字变成整数序列、再变回文字的组件</td>
+<td><a href="ch01.html#s1-1">1.1</a></td>
+</tr>
+<tr>
+<td>token</td>
+<td>token</td>
+<td>分词器切出的单位，模型的输入和输出都以它计</td>
+<td><a href="ch01.html#s1-1">1.1</a></td>
+</tr>
+<tr>
+<td>词表、词表大小</td>
+<td>vocabulary, vocabulary size (V)</td>
+<td>全部 token 的集合与个数：CodeBot 1,000、StoryBot 10,000、WebBot 50,000</td>
+<td><a href="ch01.html#s1-1">1.1</a></td>
+</tr>
+<tr>
+<td>码位</td>
+<td>code point</td>
+<td>Unicode 给每个字符的编号，从 0 到 0x10FFFF</td>
+<td><a href="ch01.html#s1-1">1.1</a></td>
+</tr>
+<tr>
+<td>UTF-8</td>
+<td>UTF-8</td>
+<td>把一个码位写成 1–4 个字节的变长编码</td>
+<td><a href="ch01.html#s1-2">1.2</a>、<a href="appendix-a.html">附录 A</a></td>
+</tr>
+<tr>
+<td>BPE（字节对编码）</td>
+<td>byte pair encoding (BPE)</td>
+<td>反复把最常见的相邻两个 token 合并成一个新 token</td>
+<td><a href="ch01.html#s1-3">1.3</a></td>
+</tr>
+<tr>
+<td>合并规则</td>
+<td>merge rules</td>
+<td>BPE 学到的合并表；DLFS6 存成 <code>{(id1, id2): new_<wbr>id}</code></td>
+<td><a href="ch01.html#s1-3">1.3</a></td>
+</tr>
+<tr>
+<td>平票规则</td>
+<td>tie-break</td>
+<td>两对出现次数相同时选哪一对</td>
+<td><a href="ch01.html#s1-3">1.3</a>（专栏）</td>
+</tr>
+<tr>
+<td>特殊 token</td>
+<td>special token</td>
+<td>不由 BPE 学出、表示文档边界等含义的 token，如 <code>&lt;|endoftext|&gt;</code></td>
+<td><a href="ch01.html#s1-5">1.5</a></td>
+</tr>
+<tr>
+<td>预分词</td>
+<td>pre-tokenization</td>
+<td>先用正则把文本切成“词”，再在每个词内部做 BPE</td>
+<td><a href="ch01.html#s1-6">1.6</a></td>
+</tr>
+<tr>
+<td>压缩率</td>
+<td>compression ratio</td>
+<td>字节数 ÷ token 数，越大说明一个 token 装的文字越多</td>
+<td><a href="ch01.html#s1-8">1.8</a></td>
+</tr>
+<tr>
+<td>去重、增量更新、分块、并行</td>
+<td>deduplication, incremental update, chunking, parallelism</td>
+<td>第 4 章让 BPE 训练提速的四步</td>
+<td><a href="ch04.html#s4-1">4.1</a>–<a href="ch04.html#s4-4">4.4</a></td>
+</tr>
+<tr>
+<td>内存映射</td>
+<td>memory-mapped file (<code>np.<wbr>memmap</code>)</td>
+<td>把磁盘上的文件当作数组来读写，用到哪一段才读入哪一段</td>
+<td><a href="ch04.html#s4-7">4.7</a>、<a href="ch06.html#s6-5">6.5</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="h-8000f187">模型</h3>
+<table>
+<thead>
+<tr>
+<th>中文</th>
+<th>English</th>
+<th>一句话</th>
+<th>首次出现</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Attention（注意力）</td>
+<td>Attention</td>
+<td>按相似度给各个位置加权，混合它们的值</td>
+<td><a href="ch02.html#s2-1">2.1</a></td>
+</tr>
+<tr>
+<td>查询、键、值</td>
+<td>query, key, value (Q, K, V)</td>
+<td>“拿什么去查”“和什么比”“取回什么”</td>
+<td><a href="ch02.html#s2-1">2.1</a>–<a href="ch02.html#s2-2">2.2</a></td>
+</tr>
+<tr>
+<td>缩放</td>
+<td>scaling (1/√d)</td>
+<td>点积除以 √d，让 softmax 的尖锐程度不随维数变化</td>
+<td><a href="ch02.html#s2-3">2.3</a>、<a href="appendix-b.html">附录 B</a></td>
+</tr>
+<tr>
+<td>logits</td>
+<td>logits</td>
+<td>softmax 之前的分数，每个 token 一个</td>
+<td><a href="ch02.html#s2-4">2.4</a></td>
+</tr>
+<tr>
+<td>位置编码</td>
+<td>positional encoding</td>
+<td>把 token 的先后顺序告诉模型</td>
+<td><a href="ch02.html#s2-5">2.5</a></td>
+</tr>
+<tr>
+<td>因果掩码</td>
+<td>causal mask</td>
+<td>让每个位置只能看见它自己和它前面的位置</td>
+<td><a href="ch02.html#s2-6">2.6</a></td>
+</tr>
+<tr>
+<td>多头 Attention（多头注意力）</td>
+<td>multi-head attention</td>
+<td>把 Attention 拆成 H 个头并行计算，再拼接起来</td>
+<td><a href="ch02.html#s2-8">2.8</a></td>
+</tr>
+<tr>
+<td>残差流</td>
+<td>residual stream</td>
+<td>每一层都往上“加”自己的结果的那条主干；它的宽度就是 <code>embed_<wbr>dim</code></td>
+<td><a href="ch02.html#s2-9">2.9</a></td>
+</tr>
+<tr>
+<td>LayerNorm（层归一化）</td>
+<td>LayerNorm</td>
+<td>对每个 token 的向量减去均值、除以标准差</td>
+<td><a href="ch02.html#s2-9">2.9</a></td>
+</tr>
+<tr>
+<td>FFN（前馈网络）</td>
+<td>feed-forward network (FFN)</td>
+<td>每个位置各自通过的全连接层；它中间那层的宽度是 <code>ff_<wbr>dim</code></td>
+<td><a href="ch02.html#s2-9">2.9</a></td>
+</tr>
+<tr>
+<td>GELU</td>
+<td>GELU</td>
+<td>CodeBot 的 FFN 用的激活函数，平滑版的 ReLU</td>
+<td><a href="ch02.html#s2-9">2.9</a></td>
+</tr>
+<tr>
+<td>dropout</td>
+<td>dropout</td>
+<td>训练时随机把一部分值置 0、其余按比例放大；eval 模式下关闭</td>
+<td><a href="ch02.html#s2-10">2.10</a>、<a href="ch05.html#s5-3">5.3</a></td>
+</tr>
+<tr>
+<td>权重共享</td>
+<td>weight tying</td>
+<td>输入 embedding 与输出层共用一个矩阵（CodeBot）</td>
+<td><a href="ch02.html#s2-10">2.10</a></td>
+</tr>
+<tr>
+<td>RoPE（旋转位置编码）</td>
+<td>rotary position embedding (RoPE)</td>
+<td>按位置旋转 Q 与 K，让点积只与相对位置有关</td>
+<td><a href="ch05.html#s5-1">5.1</a></td>
+</tr>
+<tr>
+<td>Swish、SiLU</td>
+<td>Swish, SiLU</td>
+<td><span class="math inline"><span class="math-inline">x\,\sigma(x)</span></span>：SwiGLU 的门控用它</td>
+<td><a href="ch05.html#s5-2">5.2</a></td>
+</tr>
+<tr>
+<td>SwiGLU</td>
+<td>SwiGLU</td>
+<td>用 SiLU 作门控的 FFN，有三个权重矩阵</td>
+<td><a href="ch05.html#s5-2">5.2</a></td>
+</tr>
+<tr>
+<td>RMSNorm</td>
+<td>RMSNorm</td>
+<td>只除以均方根、不减均值的归一化</td>
+<td><a href="ch05.html#s5-3">5.3</a></td>
+</tr>
+<tr>
+<td>KV cache（KV 缓存）</td>
+<td>KV cache</td>
+<td>生成时把算过的 K、V 存起来，每步只算新 token</td>
+<td><a href="ch05.html#s5-5">5.5</a></td>
+</tr>
+<tr>
+<td>Prefill、Decode</td>
+<td>prefill, decode</td>
+<td>生成的两个阶段：先把整段提示一次算完，之后每步只送进一个新 token</td>
+<td><a href="ch05.html#s5-5">5.5</a></td>
+</tr>
+<tr>
+<td>scaling law</td>
+<td>scaling law</td>
+<td>loss 随参数量、数据量变化的经验规律</td>
+<td><a href="ch08.html#s8-1">8.1</a></td>
+</tr>
+<tr>
+<td>Flash Attention</td>
+<td>FlashAttention</td>
+<td>分块计算 Attention，不显式存下 C×C 的分数矩阵</td>
+<td><a href="ch08.html#s8-2">8.2</a></td>
+</tr>
+<tr>
+<td>GQA（分组查询注意力）</td>
+<td>grouped-query attention (GQA)</td>
+<td>几个查询头共用一组 K、V，KV cache 因此变小</td>
+<td><a href="ch08.html#s8-3">8.3</a></td>
+</tr>
+<tr>
+<td>MoE（混合专家）</td>
+<td>mixture of experts (MoE)</td>
+<td>每个 token 只经过少数几个“专家”FFN</td>
+<td><a href="ch08.html#s8-4">8.4</a></td>
+</tr>
+<tr>
+<td>torch.compile</td>
+<td>torch.compile</td>
+<td>把模型捕获成计算图再编译，相邻的运算融合成一个 kernel，少读写显存</td>
+<td><a href="ch08.html#s8-5">8.5</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="h-d8b16075">训练</h3>
+<table>
+<thead>
+<tr>
+<th>中文</th>
+<th>English</th>
+<th>一句话</th>
+<th>首次出现</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>预训练</td>
+<td>pretraining</td>
+<td>在大量文本上学习“预测下一个 token”</td>
+<td><a href="ch03.html#s3-1">3.1</a></td>
+</tr>
+<tr>
+<td>交叉熵</td>
+<td>cross-entropy</td>
+<td>正确 token 的负对数概率的平均；取自然对数时单位是 nats</td>
+<td><a href="ch00.html#s0-2">0.2</a>、<a href="ch02.html#s2-4">2.4</a>（专栏）、<a href="ch03.html#s3-1">3.1</a></td>
+</tr>
+<tr>
+<td>nats、bits</td>
+<td>nat, bit</td>
+<td>交叉熵、熵与 KL 的单位：用 ln 算是 nats，用 log₂ 算是 bits，1 nat ≈ 1.4427 bits</td>
+<td><a href="ch00.html#s0-2">0.2</a>、<a href="ch03.html#s3-1">3.1</a></td>
+</tr>
+<tr>
+<td>困惑度</td>
+<td>perplexity</td>
+<td>交叉熵取指数，可以理解为“模型平均在几个候选之间犹豫”</td>
+<td><a href="ch02.html#s2-4">2.4</a></td>
+</tr>
+<tr>
+<td>batch</td>
+<td>batch</td>
+<td>一次参数更新用到的样本。多卡时是 micro-batch × 累积次数 × 卡数；强化学习里还要分清题数和回答条数</td>
+<td><a href="ch03.html#s3-1">3.1</a>、<a href="ch09.html#s9-3">9.3</a>、<a href="#y4-batch">Y.4</a></td>
+</tr>
+<tr>
+<td>epoch、iteration</td>
+<td>epoch, iteration</td>
+<td>把数据过一遍；一次参数更新。“一遍”有不同的数法</td>
+<td><a href="ch03.html#s3-1">3.1</a>、<a href="#y4-epoch">Y.4</a></td>
+</tr>
+<tr>
+<td>padding、−100 标签</td>
+<td>padding, ignore index (−100)</td>
+<td>把一个 batch 的序列补到同样长；标签为 −100 的位置不计入 loss</td>
+<td><a href="ch03.html#s3-3">3.3</a></td>
+</tr>
+<tr>
+<td>AdamW</td>
+<td>AdamW</td>
+<td>把权重衰减与梯度更新分开的 Adam</td>
+<td><a href="ch06.html#s6-1">6.1</a>–<a href="ch06.html#s6-2">6.2</a>、<a href="appendix-d.html">附录 D</a></td>
+</tr>
+<tr>
+<td>学习率调度</td>
+<td>learning-rate schedule</td>
+<td>学习率随步数的变化。第 3 章的三个训练脚本和第 6 章的 DPO 用恒定的学习率；StoryBot、WebBot 的预训练先 warmup，再线性衰减到 0</td>
+<td><a href="ch06.html#s6-3">6.3</a></td>
+</tr>
+<tr>
+<td>warmup（预热）、D2Z</td>
+<td>warmup, decay to zero (D2Z)</td>
+<td>学习率先从 0 线性升到峰值，再线性降到 0</td>
+<td><a href="ch06.html#s6-3">6.3</a></td>
+</tr>
+<tr>
+<td>混合精度</td>
+<td>mixed precision</td>
+<td>用 bf16 或 fp16 计算，用 fp32 保存参数</td>
+<td><a href="ch06.html#s6-4">6.4</a></td>
+</tr>
+<tr>
+<td>bf16、fp16</td>
+<td>bfloat16, float16</td>
+<td>两种 16 位浮点：bf16 保留 fp32 的 8 位指数，范围大、精度低；fp16 精度较高，范围只到 65,504</td>
+<td><a href="ch06.html#s6-4">6.4</a></td>
+</tr>
+<tr>
+<td>梯度裁剪</td>
+<td>gradient clipping</td>
+<td>梯度的总范数超过阈值时整体缩小</td>
+<td><a href="ch03.html#s3-9">3.9</a>、<a href="ch06.html#s6-5">6.5</a></td>
+</tr>
+<tr>
+<td>梯度累积</td>
+<td>gradient accumulation</td>
+<td>累积几个 micro-batch 的梯度后再更新一次</td>
+<td><a href="ch09.html#s9-1">9.1</a></td>
+</tr>
+<tr>
+<td>梯度检查点</td>
+<td>gradient checkpointing</td>
+<td>前向时少存激活，反向时重新计算</td>
+<td><a href="ch09.html#s9-2">9.2</a></td>
+</tr>
+<tr>
+<td>DDP（分布式数据并行）</td>
+<td>distributed data parallel (DDP)</td>
+<td>每张卡一份模型，各算一部分数据，再平均梯度</td>
+<td><a href="ch09.html#s9-3">9.3</a></td>
+</tr>
+<tr>
+<td>全局 batch</td>
+<td>global batch size (gbs)</td>
+<td>一次参数更新在所有卡上用到的样本数：micro-batch × 累积次数 × 卡数</td>
+<td><a href="ch09.html#s9-3">9.3</a>、<a href="#y4-batch">Y.4</a></td>
+</tr>
+<tr>
+<td>进程编号</td>
+<td><code>RANK</code>、<code>LOCAL_<wbr>RANK</code>、<code>WORLD_<wbr>SIZE</code></td>
+<td><code>torchrun</code> 给每个进程设的环境变量：全局编号、本机内的编号、进程总数</td>
+<td><a href="ch09.html#s9-3">9.3</a></td>
+</tr>
+<tr>
+<td>ZeRO</td>
+<td>ZeRO</td>
+<td>把优化器状态（以及梯度、参数）分片存到各张卡上</td>
+<td><a href="ch09.html#s9-4">9.4</a></td>
+</tr>
+<tr>
+<td>Muon</td>
+<td>Muon</td>
+<td>先把更新量正交化再应用的优化器</td>
+<td><a href="ch09.html#s9-5">9.5</a></td>
+</tr>
+<tr>
+<td>Weights &amp; Biases</td>
+<td>Weights &amp; Biases (wandb)</td>
+<td>把训练曲线记到网上的服务；第 9 章的脚本用它记录</td>
+<td><a href="ch09.html#s9-6">9.6</a></td>
+</tr>
+<tr>
+<td>对拍</td>
+<td>parity check</td>
+<td>把同一个输入交给两份实现（比如本书的 NumPy 版与原书的 PyTorch 版），逐项比较输出，差别应当只在浮点舍入的范围内</td>
+<td><a href="train-in-browser.html#sT-5">T.5</a></td>
+</tr>
+</tbody>
+</table>
+<div class="localcheck"><div class="localcheck-head"><span class="localcheck-label">本地验证</span><span class="localcheck-title">“学习率调度”一行：从原书的 6 个训练脚本读出，只有 StoryBot、WebBot 的预训练按步调整学习率</span></div><pre class="cmd"><code>uv run pytest verify/test_reference.py::test_cs336_clipping_and_lr_schedules</code></pre><details><summary>查看测试代码 verify/test_reference.py</summary><pre class="code"><code><span class="k">def</span><span class="w"> </span><span class="nf">test_cs336_clipping_and_lr_schedules</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">"""X.3 梯度裁剪 / 学习率调度 rows (and the glossary's 学习率调度 row): which training scripts clip the gradient</span>
+<span class="sd">    and which change the learning rate step by step; the others keep the constant set when the optimizer is made."""</span>
+    <span class="n">scripts</span> <span class="o">=</span> <span class="p">(</span><span class="s2">"ch03/01_pretrain.py"</span><span class="p">,</span> <span class="s2">"ch03/03_sft.py"</span><span class="p">,</span> <span class="s2">"ch03/09_grpo.py"</span><span class="p">,</span> <span class="s2">"ch06/05_pretrain.py"</span><span class="p">,</span> <span class="s2">"ch06/08_dpo.py"</span><span class="p">,</span>
+               <span class="s2">"ch09/01_pretrain.py"</span><span class="p">)</span>
+    <span class="n">clips</span> <span class="o">=</span> <span class="p">{</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">scripts</span> <span class="k">if</span> <span class="s2">"clip_grad_norm_"</span> <span class="ow">in</span> <span class="n">src</span><span class="p">(</span><span class="n">s</span><span class="p">)}</span>
+    <span class="n">scheduled</span> <span class="o">=</span> <span class="p">{</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">scripts</span> <span class="k">if</span> <span class="s2">"param_group['lr'] = lr"</span> <span class="ow">in</span> <span class="n">src</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="ow">and</span> <span class="s2">"def get_lr("</span> <span class="ow">in</span> <span class="n">src</span><span class="p">(</span><span class="n">s</span><span class="p">)}</span>
+    <span class="k">assert</span> <span class="n">clips</span> <span class="o">==</span> <span class="p">{</span><span class="s2">"ch03/09_grpo.py"</span><span class="p">,</span> <span class="s2">"ch06/05_pretrain.py"</span><span class="p">,</span> <span class="s2">"ch09/01_pretrain.py"</span><span class="p">}</span>
+    <span class="k">assert</span> <span class="n">scheduled</span> <span class="o">==</span> <span class="p">{</span><span class="s2">"ch06/05_pretrain.py"</span><span class="p">,</span> <span class="s2">"ch09/01_pretrain.py"</span><span class="p">}</span>
+    <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">set</span><span class="p">(</span><span class="n">scripts</span><span class="p">)</span> <span class="o">-</span> <span class="n">scheduled</span><span class="p">:</span>                                  <span class="c1"># one constant learning rate, no scheduler</span>
+        <span class="k">assert</span> <span class="s2">"lr_scheduler"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">src</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="ow">and</span> <span class="s2">"param_group"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">src</span><span class="p">(</span><span class="n">s</span><span class="p">),</span> <span class="n">s</span>
+    <span class="k">assert</span> <span class="p">{</span><span class="n">s</span><span class="p">:</span> <span class="n">consts</span><span class="p">(</span><span class="n">s</span><span class="p">)[</span><span class="s2">"learning_rate"</span><span class="p">]</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="nb">set</span><span class="p">(</span><span class="n">scripts</span><span class="p">)</span> <span class="o">-</span> <span class="n">scheduled</span><span class="p">)}</span> <span class="o">==</span> <span class="p">{</span>
+        <span class="s2">"ch03/01_pretrain.py"</span><span class="p">:</span> <span class="mf">3e-4</span><span class="p">,</span> <span class="s2">"ch03/03_sft.py"</span><span class="p">:</span> <span class="mf">3e-4</span><span class="p">,</span> <span class="s2">"ch03/09_grpo.py"</span><span class="p">:</span> <span class="mf">7e-6</span><span class="p">,</span> <span class="s2">"ch06/08_dpo.py"</span><span class="p">:</span> <span class="mf">5e-6</span><span class="p">}</span>
+    <span class="k">assert</span> <span class="s2">"torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)"</span> <span class="ow">in</span> <span class="n">src</span><span class="p">(</span><span class="s2">"ch03/09_grpo.py"</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">consts</span><span class="p">(</span><span class="s2">"ch06/05_pretrain.py"</span><span class="p">)[</span><span class="s2">"grad_clip"</span><span class="p">]</span> <span class="o">==</span> <span class="n">consts</span><span class="p">(</span><span class="s2">"ch09/01_pretrain.py"</span><span class="p">)[</span><span class="s2">"grad_clip"</span><span class="p">]</span> <span class="o">==</span> <span class="mf">1.0</span>
+</code></pre></details></div><h3 id="h-1eb89496">生成、评估与后训练</h3>
+<table>
+<thead>
+<tr>
+<th>中文</th>
+<th>English</th>
+<th>一句话</th>
+<th>首次出现</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>温度</td>
+<td>temperature</td>
+<td>logits 除以 T 再做 softmax；T = 0 就是贪心解码</td>
+<td><a href="ch03.html#s3-2">3.2</a></td>
+</tr>
+<tr>
+<td>Top-k、Top-p</td>
+<td>top-k, top-p sampling</td>
+<td>只在概率最高的 k 个、或累计概率 p 以内的 token 里采样</td>
+<td><a href="ch03.html#s3-2">3.2</a></td>
+</tr>
+<tr>
+<td>SFT（监督微调）</td>
+<td>supervised fine-tuning (SFT)</td>
+<td>在“指令 → 回答”的数据上继续训练</td>
+<td><a href="ch03.html#s3-3">3.3</a></td>
+</tr>
+<tr>
+<td>策略</td>
+<td>policy</td>
+<td>给定上下文、输出下一个 token 的分布，也就是语言模型本身</td>
+<td><a href="ch03.html#s3-5">3.5</a></td>
+</tr>
+<tr>
+<td>轨迹</td>
+<td>trajectory</td>
+<td>状态与动作交替组成的序列；对语言模型来说，就是一个完整的回答</td>
+<td><a href="ch03.html#s3-5">3.5</a></td>
+</tr>
+<tr>
+<td>奖励</td>
+<td>reward</td>
+<td>给一次完整回答的分数</td>
+<td><a href="ch03.html#s3-5">3.5</a></td>
+</tr>
+<tr>
+<td>回报</td>
+<td>return</td>
+<td>从某一步开始往后累计的奖励</td>
+<td><a href="ch03.html#s3-5">3.5</a></td>
+</tr>
+<tr>
+<td>策略梯度</td>
+<td>policy gradient</td>
+<td>用奖励给 log π 的梯度加权</td>
+<td><a href="ch03.html#s3-6">3.6</a>、<a href="appendix-c.html">附录 C</a></td>
+</tr>
+<tr>
+<td>基线、优势</td>
+<td>baseline, advantage</td>
+<td>从奖励里减去的参考值；减完剩下的就是优势</td>
+<td><a href="ch03.html#s3-7">3.7</a></td>
+</tr>
+<tr>
+<td>价值网络、critic</td>
+<td>value network, critic</td>
+<td>另外训练一个网络来估计“从这里往后还能拿多少奖励”，用作基线；GRPO 没有它</td>
+<td><a href="ch03.html#s3-7">3.7</a></td>
+</tr>
+<tr>
+<td>rollout</td>
+<td>rollout</td>
+<td>用当前策略为一道题采出的一条完整回答，连同它的奖励；GRPO 每道题采 G 条</td>
+<td><a href="ch03.html#s3-7">3.7</a>、<a href="ch03.html#s3-9">3.9</a></td>
+</tr>
+<tr>
+<td>同策略、离策略</td>
+<td>on-policy, off-policy</td>
+<td>用当前策略采的样本更新它自己；或者用旧策略采的样本去更新新策略</td>
+<td><a href="ch03.html#s3-8">3.8</a></td>
+</tr>
+<tr>
+<td>重要性采样、裁剪</td>
+<td>importance sampling, clipping</td>
+<td>离策略时给每个样本乘上概率比 π_new / π_old；再把这个比限制在 [1−ε, 1+ε] 之内</td>
+<td><a href="ch03.html#s3-8">3.8</a></td>
+</tr>
+<tr>
+<td>GRPO（组相对策略优化）</td>
+<td>group relative policy optimization</td>
+<td>以同一道题的一组回答的平均奖励作基线</td>
+<td><a href="ch03.html#s3-7">3.7</a>、<a href="ch03.html#s3-9">3.9</a></td>
+</tr>
+<tr>
+<td>Dr. GRPO</td>
+<td>Dr. GRPO</td>
+<td>不除以标准差、不按长度归一化的 GRPO</td>
+<td><a href="ch03.html#s3-7">3.7</a>（专栏）</td>
+</tr>
+<tr>
+<td>LLM-as-a-Judge（LLM 评审）</td>
+<td>LLM-as-a-Judge</td>
+<td>用另一个 LLM 给生成结果打分</td>
+<td><a href="ch06.html#s6-6">6.6</a></td>
+</tr>
+<tr>
+<td>RLHF（基于人类反馈的强化学习）</td>
+<td>reinforcement learning from human feedback</td>
+<td>先用人类偏好训练奖励模型，再做强化学习</td>
+<td><a href="ch06.html#s6-7">6.7</a></td>
+</tr>
+<tr>
+<td>KL 散度</td>
+<td>KL divergence</td>
+<td>两个分布相差多少：非负，只在两者相同时为 0，而且不对称</td>
+<td><a href="ch06.html#s6-7">6.7</a>、<a href="appendix-e.html">附录 E</a></td>
+</tr>
+<tr>
+<td>Bradley-Terry 模型</td>
+<td>Bradley-Terry model</td>
+<td>把“A 比 B 好”的概率写成两者奖励之差的 sigmoid</td>
+<td><a href="ch06.html#s6-7">6.7</a>、<a href="appendix-e.html">附录 E</a></td>
+</tr>
+<tr>
+<td>DPO（直接偏好优化）</td>
+<td>direct preference optimization</td>
+<td>直接用偏好对优化策略，不需要显式的奖励模型</td>
+<td><a href="ch06.html#s6-7">6.7</a>、<a href="appendix-e.html">附录 E</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="h-bf7dd8e9">一词多义</h3>
+<table>
+<thead>
+<tr>
+<th>词</th>
+<th>English</th>
+<th>常见的几种意思</th>
+<th>详见</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>探针</td>
+<td>probe</td>
+<td>可解释性研究里的线性探针；训练前先跑一遍的“第 0 步”评估</td>
+<td><a href="#y4-probe">Y.4</a></td>
+</tr>
+<tr>
+<td>epoch</td>
+<td>epoch</td>
+<td>按 token 数、或按 <code>DataLoader</code> 的样本数过一遍；强化学习里还指同一批 rollout 拿来更新几遍</td>
+<td><a href="#y4-epoch">Y.4</a></td>
+</tr>
+<tr>
+<td>step</td>
+<td>step</td>
+<td>一次参数更新、梯度累积里的一个 micro-step、GRPO 的一轮、生成时的一个 decode step</td>
+<td><a href="#y4-step">Y.4</a></td>
+</tr>
+<tr>
+<td>上下文</td>
+<td>context</td>
+<td>一次前向计算能看见的 token 数；也常指整段对话历史和累计消耗的 token</td>
+<td><a href="#y4-context">Y.4</a></td>
+</tr>
+<tr>
+<td>batch</td>
+<td>batch</td>
+<td>micro-batch、全局 batch；强化学习里的题数与回答条数</td>
+<td><a href="#y4-batch">Y.4</a></td>
+</tr>
+<tr>
+<td>critic</td>
+<td>critic</td>
+<td>PPO 里的价值网络；也是 veRL 指标名的一个分组前缀，与有没有价值网络无关</td>
+<td><a href="#sY-3">Y.3</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="sY-2">Y.2 命名对照：同一个量的五个名字</h2>
+<p>先看一张总表。每一行是同一个量，每一列是一个代码库里的写法：</p>
+<table>
+<thead>
+<tr>
+<th>含义</th>
+<th>DLFS6</th>
+<th>Hugging Face</th>
+<th>CS336 A1</th>
+<th>GPT-2（HF 的 <code>GPT2Config</code>）</th>
+<th>nanoGPT</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>词表大小</td>
+<td><code>vocab_<wbr>size</code></td>
+<td><code>vocab_<wbr>size</code></td>
+<td><code>vocab_<wbr>size</code></td>
+<td><code>vocab_<wbr>size</code></td>
+<td><code>vocab_<wbr>size</code></td>
+</tr>
+<tr>
+<td>上下文长度</td>
+<td><code>max_<wbr>context_<wbr>len</code></td>
+<td><code>max_<wbr>position_<wbr>embeddings</code></td>
+<td><code>context_<wbr>length</code>（RoPE 里叫 <code>max_<wbr>seq_<wbr>len</code>）</td>
+<td><code>n_<wbr>positions</code></td>
+<td><code>block_<wbr>size</code></td>
+</tr>
+<tr>
+<td>残差流宽度</td>
+<td><code>embed_<wbr>dim</code></td>
+<td><code>hidden_<wbr>size</code></td>
+<td><code>d_<wbr>model</code></td>
+<td><code>n_<wbr>embd</code></td>
+<td><code>n_<wbr>embd</code></td>
+</tr>
+<tr>
+<td>注意力头数</td>
+<td><code>n_<wbr>head</code></td>
+<td><code>num_<wbr>attention_<wbr>heads</code></td>
+<td><code>num_<wbr>heads</code></td>
+<td><code>n_<wbr>head</code></td>
+<td><code>n_<wbr>head</code></td>
+</tr>
+<tr>
+<td>KV 头数</td>
+<td><code>n_<wbr>kv_<wbr>head</code>（WebBot）</td>
+<td><code>num_<wbr>key_<wbr>value_<wbr>heads</code></td>
+<td>A1 没有</td>
+<td>没有</td>
+<td>没有</td>
+</tr>
+<tr>
+<td>层数</td>
+<td><code>n_<wbr>layer</code></td>
+<td><code>num_<wbr>hidden_<wbr>layers</code></td>
+<td><code>num_<wbr>layers</code></td>
+<td><code>n_<wbr>layer</code></td>
+<td><code>n_<wbr>layer</code></td>
+</tr>
+<tr>
+<td>FFN 中间层宽度</td>
+<td><code>ff_<wbr>dim</code></td>
+<td><code>intermediate_<wbr>size</code></td>
+<td><code>d_<wbr>ff</code></td>
+<td><code>n_<wbr>inner</code>（缺省为 4 × <code>n_<wbr>embd</code>）</td>
+<td>固定为 4 × <code>n_<wbr>embd</code></td>
+</tr>
+<tr>
+<td>每头维数</td>
+<td><code>head_<wbr>dim</code>（= <code>embed_<wbr>dim // n_<wbr>head</code>）</td>
+<td>OLMo-2、Qwen2.5 的配置里没有单列，由 <code>hidden_<wbr>size ÷ num_<wbr>attention_<wbr>heads</code> 算出；Qwen3 等较新的配置单列 <code>head_<wbr>dim</code>，而且可以不等于这个商（Qwen3-0.6B：128 ≠ 1024 ÷ 16）</td>
+<td><code>d_<wbr>k</code>（RoPE 的参数）</td>
+<td><code>n_<wbr>embd // n_<wbr>head</code></td>
+<td><code>C // n_<wbr>head</code>，注释里叫 <code>hs</code></td>
+</tr>
+<tr>
+<td>RoPE θ</td>
+<td><code>theta</code></td>
+<td><code>rope_<wbr>theta</code></td>
+<td><code>rope_<wbr>theta</code>（RoPE 里叫 <code>theta</code>）</td>
+<td>没有 RoPE</td>
+<td>没有 RoPE</td>
+</tr>
+<tr>
+<td>归一化的 eps</td>
+<td>CodeBot：<code>nn.<wbr>LayerNorm</code> 的默认值 1e-5；StoryBot、WebBot：<code>nn.<wbr>RMSNorm</code> 不传 eps，float32 下约 1.19e-7</td>
+<td><code>rms_<wbr>norm_<wbr>eps</code> 或 <code>layer_<wbr>norm_<wbr>epsilon</code></td>
+<td><code>eps</code></td>
+<td><code>layer_<wbr>norm_<wbr>epsilon</code></td>
+<td>写死为 <span class="nowrap"><code>1e-5</code></span></td>
+</tr>
+<tr>
+<td>权重共享</td>
+<td>CodeBot 共享，其余不共享</td>
+<td><code>tie_<wbr>word_<wbr>embeddings</code></td>
+<td>不共享</td>
+<td>共享</td>
+<td>共享</td>
+</tr>
+</tbody>
+</table>
+<p>这些名字都来自源码本身。DLFS6 一列取自三个 <code>GPT.__init__</code> 的参数，CS336 一列取自 A1 的 <code>tests/adapters.py</code>，Hugging Face 一列取自真实模型的 <code>config.json</code> 与 <code>GPT2Config</code> 的源码，nanoGPT 一列取自 <code>model.py</code> 的 <code>GPTConfig</code>。<a href="ch02.html#s2-10-1">2.10.1 节</a>的方框里有一张只含 CodeBot 的同类表，这里多了 Hugging Face 上较新的模型和归一化、权重共享等几行。我们把这些来源的原文、链接与 commit 存成了一个数据文件，下面的验证单元逐项核对：</p>
+<div class="verify" id="v-Y.2-a" data-cell="{&quot;id&quot;: &quot;Y.2-a&quot;, &quot;golden&quot;: &quot;GPT2Config.attribute_map： {&#x27;hidden_size&#x27;: &#x27;n_embd&#x27;, &#x27;max_position_embeddings&#x27;: &#x27;n_positions&#x27;, &#x27;num_attention_heads&#x27;: &#x27;n_head&#x27;, &#x27;num_hidden_layers&#x27;: &#x27;n_layer&#x27;}\nDLFS6 StoryBot GPT(...)： [&#x27;vocab_size&#x27;, &#x27;max_context_len&#x27;, &#x27;embed_dim&#x27;, &#x27;n_head&#x27;, &#x27;n_layer&#x27;, &#x27;ff_dim&#x27;, &#x27;theta&#x27;]\nDLFS6 WebBot   GPT(...)： [&#x27;vocab_size&#x27;, &#x27;max_context_len&#x27;, &#x27;embed_dim&#x27;, &#x27;n_head&#x27;, &#x27;n_kv_head&#x27;, &#x27;n_layer&#x27;, &#x27;ff_dim&#x27;, &#x27;theta&#x27;]\nCS336 run_transformer_lm(...)： [&#x27;vocab_size&#x27;, &#x27;context_length&#x27;, &#x27;d_model&#x27;, &#x27;num_layers&#x27;, &#x27;num_heads&#x27;, &#x27;d_ff&#x27;, &#x27;rope_theta&#x27;]\nnanoGPT GPTConfig： [&#x27;block_size&#x27;, &#x27;vocab_size&#x27;, &#x27;n_layer&#x27;, &#x27;n_head&#x27;, &#x27;n_embd&#x27;, &#x27;dropout&#x27;, &#x27;bias&#x27;]\nQwen3-0.6B：head_dim = 128，hidden_size ÷ 头数 = 64\n&quot;, &quot;files&quot;: [&quot;data/glossary/sources.json&quot;]}"><div class="verify-head"><span class="verify-id">验证 Y.2-a</span><span class="verify-title">名字取自源码：GPT2Config 把 hidden_size 直接映射到 n_embd；Qwen3-0.6B 单列的 head_dim 不等于 hidden_size ÷ 头数</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="kn">import</span><span class="w"> </span><span class="nn">json</span><span class="o">,</span><span class="w"> </span><span class="nn">re</span>
+
+<span class="n">src</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="nb">open</span><span class="p">(</span><span class="s2">"data/glossary/sources.json"</span><span class="p">,</span> <span class="n">encoding</span><span class="o">=</span><span class="s2">"utf-8"</span><span class="p">))</span>
+<span class="n">amap</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="sa">r</span><span class="s1">'"(\w+)": "(\w+)"'</span><span class="p">,</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">src</span><span class="p">[</span><span class="s2">"hf"</span><span class="p">][</span><span class="s2">"gpt2_attribute_map"</span><span class="p">][</span><span class="s2">"lines"</span><span class="p">])))</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"GPT2Config.attribute_map："</span><span class="p">,</span> <span class="n">amap</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">amap</span> <span class="o">==</span> <span class="p">{</span><span class="s2">"hidden_size"</span><span class="p">:</span> <span class="s2">"n_embd"</span><span class="p">,</span> <span class="s2">"max_position_embeddings"</span><span class="p">:</span> <span class="s2">"n_positions"</span><span class="p">,</span>
+                <span class="s2">"num_attention_heads"</span><span class="p">:</span> <span class="s2">"n_head"</span><span class="p">,</span> <span class="s2">"num_hidden_layers"</span><span class="p">:</span> <span class="s2">"n_layer"</span><span class="p">}</span>
+
+<span class="n">dl</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="s2">"dlfs6"</span><span class="p">][</span><span class="s2">"signatures"</span><span class="p">]</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"DLFS6 StoryBot GPT(...)："</span><span class="p">,</span> <span class="n">dl</span><span class="p">[</span><span class="s2">"storybot/model.py GPT.__init__"</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"DLFS6 WebBot   GPT(...)："</span><span class="p">,</span> <span class="n">dl</span><span class="p">[</span><span class="s2">"webbot/model.py GPT.__init__"</span><span class="p">])</span>
+<span class="n">a1</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="s2">"cs336_a1"</span><span class="p">][</span><span class="s2">"signatures"</span><span class="p">]</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"CS336 run_transformer_lm(...)："</span><span class="p">,</span> <span class="n">a1</span><span class="p">[</span><span class="s2">"run_transformer_lm"</span><span class="p">][:</span><span class="mi">7</span><span class="p">])</span>
+<span class="n">nano</span> <span class="o">=</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">src</span><span class="p">[</span><span class="s2">"nanogpt"</span><span class="p">][</span><span class="s2">"gptconfig_lines"</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"nanoGPT GPTConfig："</span><span class="p">,</span> <span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="sa">r</span><span class="s2">"(\w+): \w+ ="</span><span class="p">,</span> <span class="n">nano</span><span class="p">))</span>
+<span class="k">assert</span> <span class="n">dl</span><span class="p">[</span><span class="s2">"storybot/model.py GPT.__init__"</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="s2">"vocab_size"</span><span class="p">,</span> <span class="s2">"max_context_len"</span><span class="p">,</span> <span class="s2">"embed_dim"</span><span class="p">,</span> <span class="s2">"n_head"</span><span class="p">,</span> <span class="s2">"n_layer"</span><span class="p">,</span> <span class="s2">"ff_dim"</span><span class="p">,</span> <span class="s2">"theta"</span><span class="p">]</span>
+<span class="k">assert</span> <span class="s2">"n_kv_head"</span> <span class="ow">in</span> <span class="n">dl</span><span class="p">[</span><span class="s2">"webbot/model.py GPT.__init__"</span><span class="p">]</span>
+<span class="k">assert</span> <span class="n">a1</span><span class="p">[</span><span class="s2">"run_transformer_lm"</span><span class="p">][:</span><span class="mi">7</span><span class="p">]</span> <span class="o">==</span> <span class="p">[</span><span class="s2">"vocab_size"</span><span class="p">,</span> <span class="s2">"context_length"</span><span class="p">,</span> <span class="s2">"d_model"</span><span class="p">,</span> <span class="s2">"num_layers"</span><span class="p">,</span> <span class="s2">"num_heads"</span><span class="p">,</span> <span class="s2">"d_ff"</span><span class="p">,</span> <span class="s2">"rope_theta"</span><span class="p">]</span>
+<span class="k">assert</span> <span class="nb">set</span><span class="p">(</span><span class="n">re</span><span class="o">.</span><span class="n">findall</span><span class="p">(</span><span class="sa">r</span><span class="s2">"(\w+): \w+ ="</span><span class="p">,</span> <span class="n">nano</span><span class="p">))</span> <span class="o">==</span> <span class="p">{</span><span class="s2">"block_size"</span><span class="p">,</span> <span class="s2">"vocab_size"</span><span class="p">,</span> <span class="s2">"n_layer"</span><span class="p">,</span> <span class="s2">"n_head"</span><span class="p">,</span> <span class="s2">"n_embd"</span><span class="p">,</span> <span class="s2">"dropout"</span><span class="p">,</span> <span class="s2">"bias"</span><span class="p">}</span>
+<span class="n">olmo</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="s2">"hf"</span><span class="p">][</span><span class="s2">"olmo2_0425_1b"</span><span class="p">][</span><span class="s2">"config"</span><span class="p">]</span>
+<span class="k">assert</span> <span class="p">{</span><span class="s2">"hidden_size"</span><span class="p">,</span> <span class="s2">"intermediate_size"</span><span class="p">,</span> <span class="s2">"num_key_value_heads"</span><span class="p">,</span> <span class="s2">"rope_theta"</span><span class="p">,</span> <span class="s2">"rms_norm_eps"</span><span class="p">,</span> <span class="s2">"tie_word_embeddings"</span><span class="p">}</span> <span class="o">&lt;=</span> <span class="nb">set</span><span class="p">(</span><span class="n">olmo</span><span class="p">)</span>
+<span class="k">assert</span> <span class="s2">"head_dim"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">olmo</span> <span class="ow">and</span> <span class="s2">"head_dim"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">src</span><span class="p">[</span><span class="s2">"hf"</span><span class="p">][</span><span class="s2">"qwen25_math_1p5b"</span><span class="p">][</span><span class="s2">"config"</span><span class="p">]</span>
+<span class="n">q3</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="s2">"hf"</span><span class="p">][</span><span class="s2">"qwen3_0p6b"</span><span class="p">][</span><span class="s2">"config"</span><span class="p">]</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Qwen3-0.6B：head_dim = </span><span class="si">{</span><span class="n">q3</span><span class="p">[</span><span class="s1">'head_dim'</span><span class="p">]</span><span class="si">}</span><span class="s2">，hidden_size ÷ 头数 = </span><span class="si">{</span><span class="n">q3</span><span class="p">[</span><span class="s1">'hidden_size'</span><span class="p">]</span><span class="w"> </span><span class="o">//</span><span class="w"> </span><span class="n">q3</span><span class="p">[</span><span class="s1">'num_attention_heads'</span><span class="p">]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">q3</span><span class="p">[</span><span class="s2">"head_dim"</span><span class="p">]</span> <span class="o">==</span> <span class="mi">128</span> <span class="o">!=</span> <span class="n">q3</span><span class="p">[</span><span class="s2">"hidden_size"</span><span class="p">]</span> <span class="o">//</span> <span class="n">q3</span><span class="p">[</span><span class="s2">"num_attention_heads"</span><span class="p">]</span> <span class="o">==</span> <span class="mi">64</span>
+</code></pre><textarea class="verify-src" hidden>import json, re
+
+src = json.load(open(&quot;data/glossary/sources.json&quot;, encoding=&quot;utf-8&quot;))
+amap = dict(re.findall(r&#x27;&quot;(\w+)&quot;: &quot;(\w+)&quot;&#x27;, &quot; &quot;.join(src[&quot;hf&quot;][&quot;gpt2_attribute_map&quot;][&quot;lines&quot;])))
+print(&quot;GPT2Config.attribute_map：&quot;, amap)
+assert amap == {&quot;hidden_size&quot;: &quot;n_embd&quot;, &quot;max_position_embeddings&quot;: &quot;n_positions&quot;,
+                &quot;num_attention_heads&quot;: &quot;n_head&quot;, &quot;num_hidden_layers&quot;: &quot;n_layer&quot;}
+
+dl = src[&quot;dlfs6&quot;][&quot;signatures&quot;]
+print(&quot;DLFS6 StoryBot GPT(...)：&quot;, dl[&quot;storybot/model.py GPT.__init__&quot;])
+print(&quot;DLFS6 WebBot   GPT(...)：&quot;, dl[&quot;webbot/model.py GPT.__init__&quot;])
+a1 = src[&quot;cs336_a1&quot;][&quot;signatures&quot;]
+print(&quot;CS336 run_transformer_lm(...)：&quot;, a1[&quot;run_transformer_lm&quot;][:7])
+nano = &quot; &quot;.join(src[&quot;nanogpt&quot;][&quot;gptconfig_lines&quot;])
+print(&quot;nanoGPT GPTConfig：&quot;, re.findall(r&quot;(\w+): \w+ =&quot;, nano))
+assert dl[&quot;storybot/model.py GPT.__init__&quot;] == [&quot;vocab_size&quot;, &quot;max_context_len&quot;, &quot;embed_dim&quot;, &quot;n_head&quot;, &quot;n_layer&quot;, &quot;ff_dim&quot;, &quot;theta&quot;]
+assert &quot;n_kv_head&quot; in dl[&quot;webbot/model.py GPT.__init__&quot;]
+assert a1[&quot;run_transformer_lm&quot;][:7] == [&quot;vocab_size&quot;, &quot;context_length&quot;, &quot;d_model&quot;, &quot;num_layers&quot;, &quot;num_heads&quot;, &quot;d_ff&quot;, &quot;rope_theta&quot;]
+assert set(re.findall(r&quot;(\w+): \w+ =&quot;, nano)) == {&quot;block_size&quot;, &quot;vocab_size&quot;, &quot;n_layer&quot;, &quot;n_head&quot;, &quot;n_embd&quot;, &quot;dropout&quot;, &quot;bias&quot;}
+olmo = src[&quot;hf&quot;][&quot;olmo2_0425_1b&quot;][&quot;config&quot;]
+assert {&quot;hidden_size&quot;, &quot;intermediate_size&quot;, &quot;num_key_value_heads&quot;, &quot;rope_theta&quot;, &quot;rms_norm_eps&quot;, &quot;tie_word_embeddings&quot;} &lt;= set(olmo)
+assert &quot;head_dim&quot; not in olmo and &quot;head_dim&quot; not in src[&quot;hf&quot;][&quot;qwen25_math_1p5b&quot;][&quot;config&quot;]
+q3 = src[&quot;hf&quot;][&quot;qwen3_0p6b&quot;][&quot;config&quot;]
+print(f&quot;Qwen3-0.6B：head_dim = {q3[&#x27;head_dim&#x27;]}，hidden_size ÷ 头数 = {q3[&#x27;hidden_size&#x27;] // q3[&#x27;num_attention_heads&#x27;]}&quot;)
+assert q3[&quot;head_dim&quot;] == 128 != q3[&quot;hidden_size&quot;] // q3[&quot;num_attention_heads&quot;] == 64
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>GPT2Config.attribute_map： {&#x27;hidden_size&#x27;: &#x27;n_embd&#x27;, &#x27;max_position_embeddings&#x27;: &#x27;n_positions&#x27;, &#x27;num_attention_heads&#x27;: &#x27;n_head&#x27;, &#x27;num_hidden_layers&#x27;: &#x27;n_layer&#x27;}
+DLFS6 StoryBot GPT(...)： [&#x27;vocab_size&#x27;, &#x27;max_context_len&#x27;, &#x27;embed_dim&#x27;, &#x27;n_head&#x27;, &#x27;n_layer&#x27;, &#x27;ff_dim&#x27;, &#x27;theta&#x27;]
+DLFS6 WebBot   GPT(...)： [&#x27;vocab_size&#x27;, &#x27;max_context_len&#x27;, &#x27;embed_dim&#x27;, &#x27;n_head&#x27;, &#x27;n_kv_head&#x27;, &#x27;n_layer&#x27;, &#x27;ff_dim&#x27;, &#x27;theta&#x27;]
+CS336 run_transformer_lm(...)： [&#x27;vocab_size&#x27;, &#x27;context_length&#x27;, &#x27;d_model&#x27;, &#x27;num_layers&#x27;, &#x27;num_heads&#x27;, &#x27;d_ff&#x27;, &#x27;rope_theta&#x27;]
+nanoGPT GPTConfig： [&#x27;block_size&#x27;, &#x27;vocab_size&#x27;, &#x27;n_layer&#x27;, &#x27;n_head&#x27;, &#x27;n_embd&#x27;, &#x27;dropout&#x27;, &#x27;bias&#x27;]
+Qwen3-0.6B：head_dim = 128，hidden_size ÷ 头数 = 64
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><div class="localcheck"><div class="localcheck-head"><span class="localcheck-label">本地验证（需要 PyTorch）</span><span class="localcheck-title">CodeBot 的 nn.LayerNorm 用默认的 eps = 1e-5；StoryBot、WebBot 的 nn.RMSNorm 不传 eps，等于 float32 的机器精度 1.19e-7</span></div><pre class="cmd"><code>uv run pytest verify/test_reference.py::test_glossary_norm_eps_defaults</code></pre><details><summary>查看测试代码 verify/test_reference.py</summary><pre class="code"><code><span class="k">def</span><span class="w"> </span><span class="nf">test_glossary_norm_eps_defaults</span><span class="p">(</span><span class="n">dlfs6_path</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Y.2 归一化的 eps: CodeBot's nn.LayerNorm keeps the default 1e-5; StoryBot's and WebBot's nn.RMSNorm get no</span>
+<span class="sd">    eps, which PyTorch takes as the machine epsilon of the input dtype (float32: 1.19e-7)."""</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">codebot.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">GPT</span> <span class="k">as</span> <span class="n">CodeGPT</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">storybot.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">GPT</span> <span class="k">as</span> <span class="n">StoryGPT</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">webbot.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">GPT</span> <span class="k">as</span> <span class="n">WebGPT</span>
+
+    <span class="n">layer_norms</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">CodeGPT</span><span class="p">(</span><span class="mi">50</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">)</span><span class="o">.</span><span class="n">modules</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">LayerNorm</span><span class="p">)]</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">layer_norms</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span> <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">eps</span> <span class="o">==</span> <span class="mf">1e-5</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">layer_norms</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">model</span> <span class="ow">in</span> <span class="p">(</span><span class="n">StoryGPT</span><span class="p">(</span><span class="mi">50</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">32</span><span class="p">),</span> <span class="n">WebGPT</span><span class="p">(</span><span class="mi">50</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">32</span><span class="p">)):</span>
+        <span class="n">norms</span> <span class="o">=</span> <span class="p">[</span><span class="n">m</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">modules</span><span class="p">()</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">m</span><span class="p">,</span> <span class="n">nn</span><span class="o">.</span><span class="n">RMSNorm</span><span class="p">)]</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">norms</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span> <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="n">m</span><span class="o">.</span><span class="n">eps</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">m</span> <span class="ow">in</span> <span class="n">norms</span><span class="p">)</span>
+    <span class="n">eps32</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">finfo</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">eps</span>
+    <span class="k">assert</span> <span class="nb">round</span><span class="p">(</span><span class="n">eps32</span><span class="p">,</span> <span class="mi">9</span><span class="p">)</span> <span class="o">==</span> <span class="mf">1.19e-7</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">full</span><span class="p">((</span><span class="mi">1</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="mf">1e-3</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">torch</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">RMSNorm</span><span class="p">(</span><span class="mi">8</span><span class="p">)(</span><span class="n">x</span><span class="p">),</span> <span class="n">nn</span><span class="o">.</span><span class="n">RMSNorm</span><span class="p">(</span><span class="mi">8</span><span class="p">,</span> <span class="n">eps</span><span class="o">=</span><span class="n">eps32</span><span class="p">)(</span><span class="n">x</span><span class="p">),</span> <span class="n">rtol</span><span class="o">=</span><span class="mf">1e-6</span><span class="p">,</span> <span class="n">atol</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</code></pre></details></div><aside class="callout callout-confusion"><div class="callout-title"><span class="callout-kind">你可能会困惑</span><span class="callout-text">hidden_size 到底是哪个数？</span></div>
+<p>这个困惑很自然。在经典的多层感知机里，“hidden size”说的是隐藏层的宽度；Transformer 的 FFN 正好也有一个隐藏层，StoryBot 里它有 1,344 个神经元。于是看到 Hugging Face 配置里的 <code>hidden_size</code>，很容易以为它指的是 FFN 中间那一层。</p>
+<p>其实不是。Hugging Face 的 <code>hidden_size</code> 是<strong>残差流的宽度</strong>，也就是每个 token 的向量在层与层之间传递时的维数：DLFS6 的 <code>embed_dim</code>、CS336 的 <code>d_model</code>、GPT-2 的 <code>n_embd</code>。FFN 中间那一层另有名字：<code>intermediate_size</code>，对应 DLFS6 的 <code>ff_dim</code>、CS336 的 <code>d_ff</code>。上面验证单元里的 <code>GPT2Config.attribute_map</code> 写得最直白：<code>hidden_size</code> 就是 <code>n_embd</code> 的别名。</p>
+<p>还可以用参数量来判断。残差流的宽度 d 会出现在几乎每一个权重矩阵里，所以一层的参数量大约是 <span class="math inline"><span class="math-inline">12d^2</span></span>（Attention 4 个 <span class="math inline"><span class="math-inline">d\times d</span></span>，FFN 约 <span class="math inline"><span class="math-inline">8d^2</span></span>）。拿 StoryBot 手算一下：</p>
+<div class="verify" id="v-Y.2-b" data-cell="{&quot;id&quot;: &quot;Y.2-b&quot;, &quot;golden&quot;: &quot;真实的块参数量 L × (4d² + 3·d·ff + 2d) = 12,455,936\n把 512 当作 d：12·L·d² = 12,582,912，是真实值的 1.01 倍\n把 1344 当作 d：12·L·d² = 86,704,128，是真实值的 6.96 倍\nSwiGLU 的 3 个矩阵 3·d·ff = 2,064,384，粗估里 FFN 的 8d² = 2,097,152\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 Y.2-b</span><span class="verify-title">按 d = 512 算，12·L·d² 与真实的块参数量只差 1%；按 1344 算差了 7 倍</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">L</span><span class="p">,</span> <span class="n">d</span><span class="p">,</span> <span class="n">ff</span> <span class="o">=</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">1344</span>                       <span class="c1"># StoryBot：embed_dim = 512，ff_dim = 1344</span>
+<span class="n">per_layer</span> <span class="o">=</span> <span class="mi">4</span> <span class="o">*</span> <span class="n">d</span> <span class="o">*</span> <span class="n">d</span> <span class="o">+</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">d</span> <span class="o">*</span> <span class="n">ff</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">d</span>    <span class="c1"># Attention 4 个 d×d，SwiGLU 3 个 d×ff，两个 RMSNorm</span>
+<span class="n">actual</span> <span class="o">=</span> <span class="n">L</span> <span class="o">*</span> <span class="n">per_layer</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"真实的块参数量 L × (4d² + 3·d·ff + 2d) = </span><span class="si">{</span><span class="n">actual</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">guess</span> <span class="ow">in</span> <span class="p">(</span><span class="n">d</span><span class="p">,</span> <span class="n">ff</span><span class="p">):</span>
+    <span class="n">est</span> <span class="o">=</span> <span class="mi">12</span> <span class="o">*</span> <span class="n">L</span> <span class="o">*</span> <span class="n">guess</span> <span class="o">*</span> <span class="n">guess</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"把 </span><span class="si">{</span><span class="n">guess</span><span class="si">}</span><span class="s2"> 当作 d：12·L·d² = </span><span class="si">{</span><span class="n">est</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">，是真实值的 </span><span class="si">{</span><span class="n">est</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">actual</span><span class="si">:</span><span class="s2">.2f</span><span class="si">}</span><span class="s2"> 倍"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"SwiGLU 的 3 个矩阵 3·d·ff = </span><span class="si">{</span><span class="mi">3</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">d</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">ff</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">，粗估里 FFN 的 8d² = </span><span class="si">{</span><span class="mi">8</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">d</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">d</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">actual</span> <span class="o">==</span> <span class="mi">12_455_936</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="mi">12</span> <span class="o">*</span> <span class="n">L</span> <span class="o">*</span> <span class="n">d</span> <span class="o">*</span> <span class="n">d</span> <span class="o">/</span> <span class="n">actual</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">0.02</span> <span class="ow">and</span> <span class="mi">12</span> <span class="o">*</span> <span class="n">L</span> <span class="o">*</span> <span class="n">ff</span> <span class="o">*</span> <span class="n">ff</span> <span class="o">/</span> <span class="n">actual</span> <span class="o">&gt;</span> <span class="mi">6</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="mi">3</span> <span class="o">*</span> <span class="n">d</span> <span class="o">*</span> <span class="n">ff</span> <span class="o">/</span> <span class="p">(</span><span class="mi">8</span> <span class="o">*</span> <span class="n">d</span> <span class="o">*</span> <span class="n">d</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">0.02</span>            <span class="c1"># 1344 ≈ 8 × 512 ÷ 3，所以粗估这么准</span>
+</code></pre><textarea class="verify-src" hidden>L, d, ff = 4, 512, 1344                       # StoryBot：embed_dim = 512，ff_dim = 1344
+per_layer = 4 * d * d + 3 * d * ff + 2 * d    # Attention 4 个 d×d，SwiGLU 3 个 d×ff，两个 RMSNorm
+actual = L * per_layer
+print(f&quot;真实的块参数量 L × (4d² + 3·d·ff + 2d) = {actual:,}&quot;)
+for guess in (d, ff):
+    est = 12 * L * guess * guess
+    print(f&quot;把 {guess} 当作 d：12·L·d² = {est:,}，是真实值的 {est / actual:.2f} 倍&quot;)
+print(f&quot;SwiGLU 的 3 个矩阵 3·d·ff = {3 * d * ff:,}，粗估里 FFN 的 8d² = {8 * d * d:,}&quot;)
+assert actual == 12_455_936
+assert abs(12 * L * d * d / actual - 1) &lt; 0.02 and 12 * L * ff * ff / actual &gt; 6
+assert abs(3 * d * ff / (8 * d * d) - 1) &lt; 0.02            # 1344 ≈ 8 × 512 ÷ 3，所以粗估这么准
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>真实的块参数量 L × (4d² + 3·d·ff + 2d) = 12,455,936
+把 512 当作 d：12·L·d² = 12,582,912，是真实值的 1.01 倍
+把 1344 当作 d：12·L·d² = 86,704,128，是真实值的 6.96 倍
+SwiGLU 的 3 个矩阵 3·d·ff = 2,064,384，粗估里 FFN 的 8d² = 2,097,152
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><div class="localcheck"><div class="localcheck-head"><span class="localcheck-label">本地验证</span><span class="localcheck-title">实例化真实的 StoryBot：4 个块共 12,455,936 个参数，与上面的手算相同</span></div><pre class="cmd"><code>uv run pytest verify/test_reference.py::test_cs336_storybot_parameter_count</code></pre><details><summary>查看测试代码 verify/test_reference.py</summary><pre class="code"><code><span class="k">def</span><span class="w"> </span><span class="nf">test_cs336_storybot_parameter_count</span><span class="p">(</span><span class="n">dlfs6_path</span><span class="p">):</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">storybot.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">GPT</span>
+
+    <span class="n">m</span> <span class="o">=</span> <span class="n">GPT</span><span class="p">(</span><span class="mi">10000</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">512</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">1344</span><span class="p">,</span> <span class="mi">10000</span><span class="p">)</span>
+    <span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">m</span><span class="o">.</span><span class="n">parameters</span><span class="p">())</span>
+    <span class="n">emb</span> <span class="o">=</span> <span class="n">m</span><span class="o">.</span><span class="n">embed</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="n">total</span> <span class="o">==</span> <span class="mi">22_696_448</span> <span class="ow">and</span> <span class="n">total</span> <span class="o">-</span> <span class="n">emb</span> <span class="o">==</span> <span class="mi">17_576_448</span>           <span class="c1"># A1: "~17M non-embedding"</span>
+    <span class="k">assert</span> <span class="nb">sum</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">numel</span><span class="p">()</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">m</span><span class="o">.</span><span class="n">blocks</span><span class="o">.</span><span class="n">parameters</span><span class="p">())</span> <span class="o">==</span> <span class="mi">12_455_936</span>
+</code></pre></details></div><p>StoryBot 的粗估之所以这么准，是因为它的 <code>ff_dim</code> 恰好让 SwiGLU 的 3 个矩阵合起来约等于 <span class="math inline"><span class="math-inline">8d^2</span></span>（1,344 ≈ 8 × 512 ÷ 3）。FFN 更宽的模型，粗估就会偏低，下面的配置翻译器会把差在哪里算出来。</p>
+<p>带走一句话：<strong><code>hidden_size</code> = 残差流宽度 = <code>embed_dim</code> = <code>d_model</code> = <code>n_embd</code>；FFN 中间层的宽度是 <code>intermediate_size</code> = <code>ff_dim</code> = <code>d_ff</code>。</strong></p>
+</aside>
+<p><code>n_head</code> 与“head size”也容易混。DLFS6 第 2 章的一行注释把头数 H 叫作“ヘッドサイズ”（<a href="errata.html#e40">勘误 E40</a>），而 nanoGPT 注释里的 <code>hs</code>（head size）指的是每个头的维数 D。读代码时，要以形状为准。</p>
+<p>能不能整除，两边的处理也不同。nanoGPT 在构造模型时断言 <code>n_embd % n_head == 0</code>；DLFS6 直接用整除计算 <code>head_dim</code>，不检查能否整除，<code>embed_dim=100, n_head=3</code> 时三个头合起来只有 99 维（<a href="errata.html#e19">勘误 E19</a>）。</p>
+<p>最后是 DLFS6 代码里的单字母记号。它们写在 Attention 的 <code>forward</code> 里：</p>
+<figure class="listing" data-start="69"><figcaption><a class="listing-path" href="https://github.com/oreilly-japan/deep-learning-from-scratch-6/blob/c9b6e2ed531b08dd9f451a091a34e9645148e2e2/storybot/model.py#L69-L71" target="_blank" rel="noopener">storybot/model.py</a><span class="listing-range">第 69–71 行</span></figcaption><pre class="code numbered" style="counter-reset: line 68; --ln-digits: 2"><code><span class="line">    <span class="k">def</span><span class="w"> </span><span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">use_cache</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span></span>
+<span class="line">        <span class="n">B</span><span class="p">,</span> <span class="n">C</span><span class="p">,</span> <span class="n">E</span> <span class="o">=</span> <span class="n">x</span><span class="o">.</span><span class="n">shape</span></span>
+<span class="line">        <span class="n">H</span><span class="p">,</span> <span class="n">D</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">n_head</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">head_dim</span></span>
+</code></pre></figure><table>
+<thead>
+<tr>
+<th>记号</th>
+<th>含义</th>
+<th>本书的取值（CodeBot / StoryBot / WebBot）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>B</td>
+<td>batch 里的序列数</td>
+<td>32（预训练）</td>
+</tr>
+<tr>
+<td>C</td>
+<td>上下文长度（序列里的 token 数）</td>
+<td>256 / 256 / 1,024</td>
+</tr>
+<tr>
+<td>E</td>
+<td>残差流宽度 <code>embed_<wbr>dim</code></td>
+<td>384 / 512 / 768</td>
+</tr>
+<tr>
+<td>H</td>
+<td>头数 <code>n_<wbr>head</code></td>
+<td>6 / 16 / 12</td>
+</tr>
+<tr>
+<td>D</td>
+<td>每头维数 <code>head_<wbr>dim</code></td>
+<td>64 / 32 / 64</td>
+</tr>
+<tr>
+<td>V</td>
+<td>词表大小</td>
+<td>1,000 / 10,000 / 50,000</td>
+</tr>
+<tr>
+<td>G</td>
+<td>GRPO 的组大小</td>
+<td>8</td>
+</tr>
+</tbody>
+</table>
+<p>想看一个真实模型的配置换成本书的名字是什么样子，可以用下面的翻译器：选一个预设，或者把任意一个 Hugging Face 模型的 <code>config.json</code> 粘贴进去。</p>
+<figure class="widget" id="fig-Y-2" data-widget="glossary-config" data-config="{&quot;data&quot;: &quot;data/glossary/sources.json&quot;, &quot;preset&quot;: &quot;olmo2&quot;}"><div class="widget-mount"><noscript>此交互图需要 JavaScript。</noscript></div><figcaption><span class="fignum">图 Y-2</span>配置翻译器：同一组数在 DLFS6、CS336 和 nanoGPT 里叫什么。下面列出由此算出的块参数量（与粗估差得多时说明差在哪里），最后给出用 DLFS6 的类写出来的样子；DLFS6 写不出的配置（比如 Qwen3-0.6B 的 head_dim）会直接说明。</figcaption></figure><p>默认的 OLMo-2-0425-1B 是一个粗估失灵的例子。它的 <code>intermediate_size</code> 是 <code>hidden_size</code> 的 4 倍，又是 3 个矩阵的 SwiGLU，所以 FFN 每层有 <span class="math inline"><span class="math-inline">12d^2</span></span>，加上 Attention 的 <span class="math inline"><span class="math-inline">4d^2</span></span> 一共 <span class="math inline"><span class="math-inline">16d^2</span></span>，比粗估假设的 <span class="math inline"><span class="math-inline">12d^2</span></span> 多出三分之一：</p>
+<div class="verify" id="v-Y.2-c" data-cell="{&quot;id&quot;: &quot;Y.2-c&quot;, &quot;golden&quot;: &quot;每层：Attention 4d²，FFN 12d²；ff / d = 4\n按矩阵形状：1,073,807,360；粗估 12·L·d²：805,306,368，低了 25%\n&quot;, &quot;files&quot;: [&quot;data/glossary/sources.json&quot;]}"><div class="verify-head"><span class="verify-id">验证 Y.2-c</span><span class="verify-title">OLMo-2-0425-1B：按矩阵形状数是 1,073,807,360，粗估 12·L·d² 只有 805,306,368，低了 25%</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">c</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="s2">"hf"</span><span class="p">][</span><span class="s2">"olmo2_0425_1b"</span><span class="p">][</span><span class="s2">"config"</span><span class="p">]</span>                    <span class="c1"># src 来自验证 Y.2-a</span>
+<span class="n">d</span><span class="p">,</span> <span class="n">L</span><span class="p">,</span> <span class="n">ff</span><span class="p">,</span> <span class="n">H</span><span class="p">,</span> <span class="n">kv</span> <span class="o">=</span> <span class="n">c</span><span class="p">[</span><span class="s2">"hidden_size"</span><span class="p">],</span> <span class="n">c</span><span class="p">[</span><span class="s2">"num_hidden_layers"</span><span class="p">],</span> <span class="n">c</span><span class="p">[</span><span class="s2">"intermediate_size"</span><span class="p">],</span> <span class="n">c</span><span class="p">[</span><span class="s2">"num_attention_heads"</span><span class="p">],</span> <span class="n">c</span><span class="p">[</span><span class="s2">"num_key_value_heads"</span><span class="p">]</span>
+<span class="n">D</span> <span class="o">=</span> <span class="n">d</span> <span class="o">//</span> <span class="n">H</span>
+<span class="n">attn</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">d</span> <span class="o">*</span> <span class="n">H</span> <span class="o">*</span> <span class="n">D</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">d</span> <span class="o">*</span> <span class="n">kv</span> <span class="o">*</span> <span class="n">D</span>                        <span class="c1"># Q、O 各 d×(H·D)，K、V 各 d×(n_kv·D)</span>
+<span class="n">ffn</span> <span class="o">=</span> <span class="mi">3</span> <span class="o">*</span> <span class="n">d</span> <span class="o">*</span> <span class="n">ff</span>                                             <span class="c1"># SwiGLU：3 个 d×ff</span>
+<span class="n">blocks</span> <span class="o">=</span> <span class="n">L</span> <span class="o">*</span> <span class="p">(</span><span class="n">attn</span> <span class="o">+</span> <span class="n">ffn</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">d</span><span class="p">)</span>                            <span class="c1"># 再加两个 RMSNorm</span>
+<span class="n">rough</span> <span class="o">=</span> <span class="mi">12</span> <span class="o">*</span> <span class="n">L</span> <span class="o">*</span> <span class="n">d</span> <span class="o">*</span> <span class="n">d</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"每层：Attention </span><span class="si">{</span><span class="n">attn</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">d</span><span class="o">**</span><span class="mi">2</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">d²，FFN </span><span class="si">{</span><span class="n">ffn</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">d</span><span class="o">**</span><span class="mi">2</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">d²；ff / d = </span><span class="si">{</span><span class="n">ff</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">d</span><span class="si">:</span><span class="s2">.0f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"按矩阵形状：</span><span class="si">{</span><span class="n">blocks</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">；粗估 12·L·d²：</span><span class="si">{</span><span class="n">rough</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">，低了 </span><span class="si">{</span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">rough</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">blocks</span><span class="si">:</span><span class="s2">.0%</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="p">(</span><span class="n">attn</span><span class="p">,</span> <span class="n">ffn</span><span class="p">)</span> <span class="o">==</span> <span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="n">d</span> <span class="o">*</span> <span class="n">d</span><span class="p">,</span> <span class="mi">12</span> <span class="o">*</span> <span class="n">d</span> <span class="o">*</span> <span class="n">d</span><span class="p">)</span> <span class="ow">and</span> <span class="n">blocks</span> <span class="o">==</span> <span class="mi">1_073_807_360</span> <span class="ow">and</span> <span class="n">rough</span> <span class="o">==</span> <span class="mi">805_306_368</span>
+<span class="k">assert</span> <span class="nb">round</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">rough</span> <span class="o">/</span> <span class="n">blocks</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span> <span class="o">==</span> <span class="mf">0.25</span>
+</code></pre><textarea class="verify-src" hidden>c = src[&quot;hf&quot;][&quot;olmo2_0425_1b&quot;][&quot;config&quot;]                    # src 来自验证 Y.2-a
+d, L, ff, H, kv = c[&quot;hidden_size&quot;], c[&quot;num_hidden_layers&quot;], c[&quot;intermediate_size&quot;], c[&quot;num_attention_heads&quot;], c[&quot;num_key_value_heads&quot;]
+D = d // H
+attn = 2 * d * H * D + 2 * d * kv * D                        # Q、O 各 d×(H·D)，K、V 各 d×(n_kv·D)
+ffn = 3 * d * ff                                             # SwiGLU：3 个 d×ff
+blocks = L * (attn + ffn + 2 * d)                            # 再加两个 RMSNorm
+rough = 12 * L * d * d
+print(f&quot;每层：Attention {attn / d**2:.0f}d²，FFN {ffn / d**2:.0f}d²；ff / d = {ff / d:.0f}&quot;)
+print(f&quot;按矩阵形状：{blocks:,}；粗估 12·L·d²：{rough:,}，低了 {1 - rough / blocks:.0%}&quot;)
+assert (attn, ffn) == (4 * d * d, 12 * d * d) and blocks == 1_073_807_360 and rough == 805_306_368
+assert round(1 - rough / blocks, 2) == 0.25
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>每层：Attention 4d²，FFN 12d²；ff / d = 4
+按矩阵形状：1,073,807,360；粗估 12·L·d²：805,306,368，低了 25%
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><h2 id="sY-3">Y.3 强化学习训练指标对照</h2>
+<p>做 GRPO 这类强化学习训练时，各个框架在日志里给出的指标名差别更大。下表把 DLFS6 的 <code>09_grpo.py</code>、CS336 2026 年 A5 要求记录的指标、veRL 与 tinker-cookbook 的指标名放在一起。DLFS6 一列写的是“脚本里有没有、在哪里”；其余三列的名字都取自它们的源码或讲义原文（见下面的验证单元），“—”表示我们核对的源码和讲义里没有找到同名的指标。</p>
+<table>
+<thead>
+<tr>
+<th>想看什么</th>
+<th>怎么读</th>
+<th>DLFS6 <code>09_<wbr>grpo.<wbr>py</code></th>
+<th>CS336 A5（2026）</th>
+<th>veRL</th>
+<th>tinker-cookbook</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>平均奖励</td>
+<td>按回答平均；应该缓慢上升</td>
+<td>没有记录</td>
+<td>Train rewards (total, format)</td>
+<td><code>critic/<wbr>rewards/<wbr>mean</code>、<code>critic/<wbr>score/<wbr>mean</code></td>
+<td><code>env/<wbr>all/<wbr>reward/<wbr>total</code></td>
+</tr>
+<tr>
+<td>有没有学习信号</td>
+<td>全对或全错的组 advantage 全是 0，没有梯度</td>
+<td>没有记录</td>
+<td>建议记录 pass@k（k 从 1 到 G）</td>
+<td>—</td>
+<td><code>env/<wbr>all/<wbr>by_<wbr>group/<wbr>frac_<wbr>mixed</code>、<code>frac_<wbr>all_<wbr>good</code>、<code>frac_<wbr>all_<wbr>bad</code></td>
+</tr>
+<tr>
+<td>策略 loss</td>
+<td>第一次更新时等于 −Σ Aᵢ·Lᵢ / N，只有各回答一样长才是 0；高低与学得好坏无关（<a href="ch03.html#s3-9">3.9 节</a>）</td>
+<td>进度条上的 <code>loss</code>（每轮第 2 次更新的值）</td>
+<td>The loss</td>
+<td><code>actor/<wbr>pg_<wbr>loss</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td>梯度范数</td>
+<td>突然变大说明更新不稳</td>
+<td><code>clip_<wbr>grad_<wbr>norm_</code> 的返回值（裁剪前的总范数），没有记录</td>
+<td>Gradient norm</td>
+<td><code>actor/<wbr>grad_<wbr>norm</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td>熵</td>
+<td>降得太快，说明探索在塌缩</td>
+<td>没有记录</td>
+<td>Token entropy</td>
+<td><code>actor/<wbr>entropy</code></td>
+<td><code>optim/<wbr>entropy</code></td>
+</tr>
+<tr>
+<td>被裁剪的比例</td>
+<td>只有同一批样本更新多次时才有意义</td>
+<td>没有记录</td>
+<td>clip fraction（离策略的实验）</td>
+<td><code>actor/<wbr>pg_<wbr>clipfrac</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td>新旧策略的 KL</td>
+<td>同一批数据上，PPO 的几次更新让策略移动了多少</td>
+<td>没有记录</td>
+<td>—</td>
+<td><code>actor/<wbr>ppo_<wbr>kl</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td>采样与训练之差</td>
+<td>同一批 token 在采样时与训练时的对数概率之差，健康时接近 0；原书 GRPO 的 dropout 会让它偏离 0（<a href="ch03.html#s3-9">3.9 节</a>、<a href="errata.html#e01">勘误 E01</a>）</td>
+<td>没有记录</td>
+<td>—</td>
+<td>—</td>
+<td><code>optim/<wbr>kl_<wbr>sample_<wbr>train_<wbr>v1</code></td>
+</tr>
+<tr>
+<td>advantage 的均值</td>
+<td>按 token 平均：组内按回答平均是 0，但长回答的 token 多、权重大，所以一般不是 0；答错的回答更长时偏负。它不是学习信号</td>
+<td>没有记录</td>
+<td>—</td>
+<td><code>critic/<wbr>advantages/<wbr>mean</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td>回答长度</td>
+<td>长度漂移、被截断的比例</td>
+<td>没有记录</td>
+<td>Val average response length</td>
+<td><code>response_<wbr>length/<wbr>mean</code>、<code>response_<wbr>length/<wbr>clip_<wbr>ratio</code></td>
+<td><code>env/<wbr>all/<wbr>ac_<wbr>tokens_<wbr>per_<wbr>turn</code></td>
+</tr>
+<tr>
+<td>学习率</td>
+<td>确认调度按预期在走</td>
+<td>固定 7e-6</td>
+<td>—</td>
+<td><code>actor/<wbr>lr</code></td>
+<td><code>optim/<wbr>lr</code></td>
+</tr>
+<tr>
+<td>评估准确率</td>
+<td>训练集上的准确率不等于泛化</td>
+<td>每 10 轮在 81 道<strong>训练题</strong>上贪心解码</td>
+<td>Val rewards (total, format)，在留出集上</td>
+<td><code>val-core/<wbr>&lt;数据源&gt;/<wbr>&lt;acc 或 reward&gt;/<wbr>mean@N</code></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<div class="verify" id="v-Y.3-a" data-cell="{&quot;id&quot;: &quot;Y.3-a&quot;, &quot;golden&quot;: &quot;veRL @ 1d367a4  tinker-cookbook @ 70767c7  CS336 A5 讲义 @ c2734a2\n全部指标名核对通过\nveRL metric_utils.py 的行号：if use_critic: 528，values 536，空字典 552，rewards 560\n奖励与 advantage 的平均方式：\n  第 454 行  sequence_reward = batch.batch[\&quot;token_level_rewards\&quot;].sum(-1)\n  第 483 行  reward_mean = torch.mean(non_aborted_sequence_reward).detach().item()\n  第 490 行  valid_adv = torch.masked_select(advantages, response_mask)\n  第 494 行  adv_mean = torch.mean(valid_adv).detach().item()\n&quot;, &quot;files&quot;: [&quot;data/glossary/sources.json&quot;]}"><div class="verify-head"><span class="verify-id">验证 Y.3-a</span><span class="verify-title">表里的每个指标名都能在源码或讲义原文里找到</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">verl</span> <span class="o">=</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">l</span> <span class="k">for</span> <span class="n">lines</span> <span class="ow">in</span> <span class="n">src</span><span class="p">[</span><span class="s2">"verl"</span><span class="p">][</span><span class="s2">"lines"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">()</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">)</span>   <span class="c1"># src 来自验证 Y.2-a</span>
+<span class="n">tinker</span> <span class="o">=</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">l</span> <span class="k">for</span> <span class="n">lines</span> <span class="ow">in</span> <span class="n">src</span><span class="p">[</span><span class="s2">"tinker_cookbook"</span><span class="p">][</span><span class="s2">"lines"</span><span class="p">]</span><span class="o">.</span><span class="n">values</span><span class="p">()</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">lines</span><span class="p">)</span>
+<span class="n">a5</span> <span class="o">=</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">src</span><span class="p">[</span><span class="s2">"cs336_a5_2026"</span><span class="p">][</span><span class="s2">"required_metrics_excerpt"</span><span class="p">]</span> <span class="o">+</span> <span class="n">src</span><span class="p">[</span><span class="s2">"cs336_a5_2026"</span><span class="p">][</span><span class="s2">"plotted_metrics_excerpt"</span><span class="p">]</span>
+              <span class="o">+</span> <span class="n">src</span><span class="p">[</span><span class="s2">"cs336_a5_2026"</span><span class="p">][</span><span class="s2">"clip_fraction_excerpt"</span><span class="p">])</span>
+<span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"critic/rewards/mean"</span><span class="p">,</span> <span class="s2">"critic/score/mean"</span><span class="p">,</span> <span class="s2">"critic/advantages/mean"</span><span class="p">,</span> <span class="s2">"actor/pg_loss"</span><span class="p">,</span>
+             <span class="s2">"actor/pg_clipfrac"</span><span class="p">,</span> <span class="s2">"actor/ppo_kl"</span><span class="p">,</span> <span class="s2">"actor/entropy"</span><span class="p">,</span> <span class="s2">"actor/grad_norm"</span><span class="p">,</span>
+             <span class="s2">"response_length/mean"</span><span class="p">,</span> <span class="s2">"response_length/clip_ratio"</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">verl</span><span class="p">,</span> <span class="n">name</span>
+<span class="k">assert</span> <span class="s1">'rename_dict(actor_output, "actor/")'</span> <span class="ow">in</span> <span class="n">verl</span>            <span class="c1"># grad_norm 等指标统一加上 actor/ 前缀</span>
+<span class="k">assert</span> <span class="s1">'final_metrics["lr"] = lr'</span> <span class="ow">in</span> <span class="n">verl</span>                       <span class="c1"># lr 也在其中，所以是 actor/lr</span>
+<span class="k">assert</span> <span class="s1">'pfx = f"</span><span class="si">{metric_sec}</span><span class="s1">/</span><span class="si">{data_source}</span><span class="s1">/</span><span class="si">{var_name}</span><span class="s1">/</span><span class="si">{metric_name}</span><span class="s1">"'</span> <span class="ow">in</span> <span class="n">verl</span> <span class="ow">and</span> <span class="s1">'metric_sec = "val-core"'</span> <span class="ow">in</span> <span class="n">verl</span>
+<span class="k">assert</span> <span class="s1">'core_var = "acc" if "acc" in var2metric2val else "reward"'</span> <span class="ow">in</span> <span class="n">verl</span>
+<span class="k">assert</span> <span class="s1">'f"env/all/</span><span class="si">{k}</span><span class="s1">"'</span> <span class="ow">in</span> <span class="n">tinker</span> <span class="ow">and</span> <span class="s1">'"reward/total"'</span> <span class="ow">in</span> <span class="n">tinker</span> <span class="c1"># env/all/ + reward/total</span>
+<span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="p">(</span><span class="s1">'"by_group/frac_mixed"'</span><span class="p">,</span> <span class="s1">'"by_group/frac_all_good"'</span><span class="p">,</span> <span class="s1">'"by_group/frac_all_bad"'</span><span class="p">,</span>
+             <span class="s1">'"optim/entropy"'</span><span class="p">,</span> <span class="s1">'"optim/kl_sample_train_v1"'</span><span class="p">,</span> <span class="s1">'"optim/lr"'</span><span class="p">,</span> <span class="s1">'"ac_tokens_per_turn"'</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">tinker</span><span class="p">,</span> <span class="n">name</span>
+<span class="k">assert</span> <span class="s2">"logprob_diff = sampling_logprobs_actions - training_logprobs_actions"</span> <span class="ow">in</span> <span class="n">tinker</span>   <span class="c1"># 采样时减训练时</span>
+<span class="k">for</span> <span class="n">phrase</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"The loss."</span><span class="p">,</span> <span class="s2">"Gradient norm."</span><span class="p">,</span> <span class="s2">"Token entropy."</span><span class="p">,</span> <span class="s2">"Train rewards (total, format)."</span><span class="p">,</span>
+               <span class="s2">"Val rewards (total, format)."</span><span class="p">,</span> <span class="s2">"Val average response length."</span><span class="p">,</span> <span class="s2">"log pass@k"</span><span class="p">,</span> <span class="s2">"log the clip fraction"</span><span class="p">):</span>
+    <span class="k">assert</span> <span class="n">phrase</span> <span class="ow">in</span> <span class="n">a5</span><span class="p">,</span> <span class="n">phrase</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"veRL @"</span><span class="p">,</span> <span class="n">src</span><span class="p">[</span><span class="s2">"verl"</span><span class="p">][</span><span class="s2">"commit"</span><span class="p">][:</span><span class="mi">7</span><span class="p">],</span> <span class="s2">" tinker-cookbook @"</span><span class="p">,</span> <span class="n">src</span><span class="p">[</span><span class="s2">"tinker_cookbook"</span><span class="p">][</span><span class="s2">"commit"</span><span class="p">][:</span><span class="mi">7</span><span class="p">],</span>
+      <span class="s2">" CS336 A5 讲义 @"</span><span class="p">,</span> <span class="n">src</span><span class="p">[</span><span class="s2">"cs336_a5_2026"</span><span class="p">][</span><span class="s2">"url"</span><span class="p">]</span><span class="o">.</span><span class="n">rsplit</span><span class="p">(</span><span class="s2">"/"</span><span class="p">,</span> <span class="mi">1</span><span class="p">)[</span><span class="o">-</span><span class="mi">1</span><span class="p">][:</span><span class="mi">7</span><span class="p">])</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"全部指标名核对通过"</span><span class="p">)</span>
+
+<span class="n">mu</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">l</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">": "</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">src</span><span class="p">[</span><span class="s2">"verl"</span><span class="p">][</span><span class="s2">"lines"</span><span class="p">][</span><span class="s2">"verl/trainer/ppo/metric_utils.py"</span><span class="p">])</span>
+<span class="n">line</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">text</span><span class="p">:</span> <span class="nb">next</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="k">for</span> <span class="n">n</span><span class="p">,</span> <span class="n">code</span> <span class="ow">in</span> <span class="n">mu</span><span class="o">.</span><span class="n">items</span><span class="p">()</span> <span class="k">if</span> <span class="n">code</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="n">text</span><span class="p">))</span>
+<span class="n">order</span> <span class="o">=</span> <span class="p">[</span><span class="n">line</span><span class="p">(</span><span class="n">t</span><span class="p">)</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"if use_critic:"</span><span class="p">,</span> <span class="s1">'"critic/values/mean"'</span><span class="p">,</span> <span class="s2">"critic_value_metrics = </span><span class="si">{}</span><span class="s2">"</span><span class="p">,</span> <span class="s1">'"critic/rewards/mean"'</span><span class="p">)]</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"veRL metric_utils.py 的行号：if use_critic: </span><span class="si">{}</span><span class="s2">，values </span><span class="si">{}</span><span class="s2">，空字典 </span><span class="si">{}</span><span class="s2">，rewards </span><span class="si">{}</span><span class="s2">"</span><span class="o">.</span><span class="n">format</span><span class="p">(</span><span class="o">*</span><span class="n">order</span><span class="p">))</span>
+<span class="k">assert</span> <span class="n">order</span> <span class="o">==</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">order</span><span class="p">)</span>          <span class="c1"># values 只在 use_critic 分支里；rewards 在分支之外，总会记录</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"奖励与 advantage 的平均方式："</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"sequence_reward = "</span><span class="p">,</span> <span class="s2">"reward_mean = "</span><span class="p">,</span> <span class="s2">"valid_adv = "</span><span class="p">,</span> <span class="s2">"adv_mean = "</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"  第 </span><span class="si">{</span><span class="n">line</span><span class="p">(</span><span class="n">t</span><span class="p">)</span><span class="si">}</span><span class="s2"> 行  </span><span class="si">{</span><span class="n">mu</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">line</span><span class="p">(</span><span class="n">t</span><span class="p">))]</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="s2">"masked_select(advantages, response_mask)"</span> <span class="ow">in</span> <span class="n">mu</span><span class="p">[</span><span class="nb">str</span><span class="p">(</span><span class="n">line</span><span class="p">(</span><span class="s2">"valid_adv = "</span><span class="p">))]</span>   <span class="c1"># 每个回答 token 一个值</span>
+</code></pre><textarea class="verify-src" hidden>verl = &quot; &quot;.join(l for lines in src[&quot;verl&quot;][&quot;lines&quot;].values() for l in lines)   # src 来自验证 Y.2-a
+tinker = &quot; &quot;.join(l for lines in src[&quot;tinker_cookbook&quot;][&quot;lines&quot;].values() for l in lines)
+a5 = &quot; &quot;.join(src[&quot;cs336_a5_2026&quot;][&quot;required_metrics_excerpt&quot;] + src[&quot;cs336_a5_2026&quot;][&quot;plotted_metrics_excerpt&quot;]
+              + src[&quot;cs336_a5_2026&quot;][&quot;clip_fraction_excerpt&quot;])
+for name in (&quot;critic/rewards/mean&quot;, &quot;critic/score/mean&quot;, &quot;critic/advantages/mean&quot;, &quot;actor/pg_loss&quot;,
+             &quot;actor/pg_clipfrac&quot;, &quot;actor/ppo_kl&quot;, &quot;actor/entropy&quot;, &quot;actor/grad_norm&quot;,
+             &quot;response_length/mean&quot;, &quot;response_length/clip_ratio&quot;):
+    assert name in verl, name
+assert &#x27;rename_dict(actor_output, &quot;actor/&quot;)&#x27; in verl            # grad_norm 等指标统一加上 actor/ 前缀
+assert &#x27;final_metrics[&quot;lr&quot;] = lr&#x27; in verl                       # lr 也在其中，所以是 actor/lr
+assert &#x27;pfx = f&quot;{metric_sec}/{data_source}/{var_name}/{metric_name}&quot;&#x27; in verl and &#x27;metric_sec = &quot;val-core&quot;&#x27; in verl
+assert &#x27;core_var = &quot;acc&quot; if &quot;acc&quot; in var2metric2val else &quot;reward&quot;&#x27; in verl
+assert &#x27;f&quot;env/all/{k}&quot;&#x27; in tinker and &#x27;&quot;reward/total&quot;&#x27; in tinker # env/all/ + reward/total
+for name in (&#x27;&quot;by_group/frac_mixed&quot;&#x27;, &#x27;&quot;by_group/frac_all_good&quot;&#x27;, &#x27;&quot;by_group/frac_all_bad&quot;&#x27;,
+             &#x27;&quot;optim/entropy&quot;&#x27;, &#x27;&quot;optim/kl_sample_train_v1&quot;&#x27;, &#x27;&quot;optim/lr&quot;&#x27;, &#x27;&quot;ac_tokens_per_turn&quot;&#x27;):
+    assert name in tinker, name
+assert &quot;logprob_diff = sampling_logprobs_actions - training_logprobs_actions&quot; in tinker   # 采样时减训练时
+for phrase in (&quot;The loss.&quot;, &quot;Gradient norm.&quot;, &quot;Token entropy.&quot;, &quot;Train rewards (total, format).&quot;,
+               &quot;Val rewards (total, format).&quot;, &quot;Val average response length.&quot;, &quot;log pass@k&quot;, &quot;log the clip fraction&quot;):
+    assert phrase in a5, phrase
+print(&quot;veRL @&quot;, src[&quot;verl&quot;][&quot;commit&quot;][:7], &quot; tinker-cookbook @&quot;, src[&quot;tinker_cookbook&quot;][&quot;commit&quot;][:7],
+      &quot; CS336 A5 讲义 @&quot;, src[&quot;cs336_a5_2026&quot;][&quot;url&quot;].rsplit(&quot;/&quot;, 1)[-1][:7])
+print(&quot;全部指标名核对通过&quot;)
+
+mu = dict(l.split(&quot;: &quot;, 1) for l in src[&quot;verl&quot;][&quot;lines&quot;][&quot;verl/trainer/ppo/metric_utils.py&quot;])
+line = lambda text: next(int(n) for n, code in mu.items() if code.startswith(text))
+order = [line(t) for t in (&quot;if use_critic:&quot;, &#x27;&quot;critic/values/mean&quot;&#x27;, &quot;critic_value_metrics = {}&quot;, &#x27;&quot;critic/rewards/mean&quot;&#x27;)]
+print(&quot;veRL metric_utils.py 的行号：if use_critic: {}，values {}，空字典 {}，rewards {}&quot;.format(*order))
+assert order == sorted(order)          # values 只在 use_critic 分支里；rewards 在分支之外，总会记录
+print(&quot;奖励与 advantage 的平均方式：&quot;)
+for t in (&quot;sequence_reward = &quot;, &quot;reward_mean = &quot;, &quot;valid_adv = &quot;, &quot;adv_mean = &quot;):
+    print(f&quot;  第 {line(t)} 行  {mu[str(line(t))]}&quot;)
+assert &quot;masked_select(advantages, response_mask)&quot; in mu[str(line(&quot;valid_adv = &quot;))]   # 每个回答 token 一个值
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>veRL @ 1d367a4  tinker-cookbook @ 70767c7  CS336 A5 讲义 @ c2734a2
+全部指标名核对通过
+veRL metric_utils.py 的行号：if use_critic: 528，values 536，空字典 552，rewards 560
+奖励与 advantage 的平均方式：
+  第 454 行  sequence_reward = batch.batch[&quot;token_level_rewards&quot;].sum(-1)
+  第 483 行  reward_mean = torch.mean(non_aborted_sequence_reward).detach().item()
+  第 490 行  valid_adv = torch.masked_select(advantages, response_mask)
+  第 494 行  adv_mean = torch.mean(valid_adv).detach().item()
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>DLFS6 一列里，梯度范数和熵都只差一两行代码。把脚本里的梯度裁剪那一行改成记下返回值，再在每轮生成之后、更新之前，用处于 eval 模式的 <code>old_model</code>（此时它的权重与 <code>model</code> 相同）算一次回答 token 上的平均熵：</p>
+<pre class="code" data-lang="python"><code><span class="n">grad_norm</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">clip_grad_norm_</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">max_norm</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>   <span class="c1"># 返回裁剪前的总范数</span>
+<span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+    <span class="n">logp</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">log_softmax</span><span class="p">(</span><span class="n">old_model</span><span class="p">(</span><span class="n">ids</span><span class="p">)[:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>                 <span class="c1"># 与 compute_probs 一样错开一位</span>
+    <span class="n">entropy</span> <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="n">logp</span><span class="o">.</span><span class="n">exp</span><span class="p">()</span> <span class="o">*</span> <span class="n">logp</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)[</span><span class="n">mask</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">bool</span><span class="p">()]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>  <span class="c1"># 只在回答的 token 上平均</span>
+</code></pre>
+<div class="localcheck"><div class="localcheck-head"><span class="localcheck-label">本地验证（需要 PyTorch）</span><span class="localcheck-title">这几行接进 09_grpo.py 的更新跑 2 轮：返回值等于裁剪前的总范数；logits 全相同时熵恰好是 ln 1000</span></div><pre class="cmd"><code>uv run pytest verify/test_reference.py::test_glossary_grpo_logging_lines</code></pre><details><summary>查看测试代码 verify/test_reference.py</summary><pre class="code"><code><span class="k">def</span><span class="w"> </span><span class="nf">test_glossary_grpo_logging_lines</span><span class="p">(</span><span class="n">dlfs6_path</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Y.3: the grad-norm and entropy lines shown on the glossary page, run inside two iterations (two updates each)</span>
+<span class="sd">    of 09_grpo.py's update step on the author's SFT weights."""</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">copy</span>
+
+    <span class="kn">import</span><span class="w"> </span><span class="nn">torch.nn.functional</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">F</span>
+
+    <span class="kn">from</span><span class="w"> </span><span class="nn">codebot.model</span><span class="w"> </span><span class="kn">import</span> <span class="n">GPT</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">codebot.tokenizer</span><span class="w"> </span><span class="kn">import</span> <span class="n">BPETokenizer</span>
+
+    <span class="n">page</span> <span class="o">=</span> <span class="p">(</span><span class="n">ROOT</span> <span class="o">/</span> <span class="s2">"content"</span> <span class="o">/</span> <span class="s2">"glossary.md"</span><span class="p">)</span><span class="o">.</span><span class="n">read_text</span><span class="p">(</span><span class="n">encoding</span><span class="o">=</span><span class="s2">"utf-8"</span><span class="p">)</span>
+    <span class="n">shown</span> <span class="o">=</span> <span class="p">[</span><span class="s2">"grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)"</span><span class="p">,</span>
+             <span class="s2">"logp = F.log_softmax(old_model(ids)[:, :-1], dim=-1)"</span><span class="p">,</span>
+             <span class="s2">"entropy = -(logp.exp() * logp).sum(-1)[mask[:, 1:].bool()].mean()"</span><span class="p">]</span>
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">shown</span><span class="p">:</span>
+        <span class="k">assert</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">page</span><span class="p">,</span> <span class="n">line</span>
+    <span class="n">text</span> <span class="o">=</span> <span class="n">src</span><span class="p">(</span><span class="s2">"ch03/09_grpo.py"</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="s2">"torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)"</span> <span class="ow">in</span> <span class="n">text</span>      <span class="c1"># the line it replaces</span>
+    <span class="c1"># the progress bar shows the loss of the last (second) update: set_postfix comes after the update loop</span>
+    <span class="n">loop</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">n</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">ast</span><span class="o">.</span><span class="n">walk</span><span class="p">(</span><span class="n">ast</span><span class="o">.</span><span class="n">parse</span><span class="p">(</span><span class="n">text</span><span class="p">))</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">ast</span><span class="o">.</span><span class="n">For</span><span class="p">)</span> <span class="ow">and</span> <span class="n">ast</span><span class="o">.</span><span class="n">unparse</span><span class="p">(</span><span class="n">n</span><span class="o">.</span><span class="n">target</span><span class="p">)</span> <span class="o">==</span> <span class="s2">"i"</span><span class="p">)</span>
+    <span class="n">body</span> <span class="o">=</span> <span class="p">[</span><span class="n">ast</span><span class="o">.</span><span class="n">unparse</span><span class="p">(</span><span class="n">s</span><span class="p">)</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">loop</span><span class="o">.</span><span class="n">body</span><span class="p">]</span>
+    <span class="n">upd</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">k</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">body</span><span class="p">)</span> <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">"for _ in range(n_update_per_generation)"</span><span class="p">))</span>
+    <span class="n">post</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="n">k</span> <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">body</span><span class="p">)</span> <span class="k">if</span> <span class="s2">"pbar.set_postfix"</span> <span class="ow">in</span> <span class="n">s</span> <span class="ow">and</span> <span class="s2">"loss.item()"</span> <span class="ow">in</span> <span class="n">s</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="n">upd</span> <span class="o">&lt;</span> <span class="n">post</span>
+
+    <span class="n">g</span> <span class="o">=</span> <span class="n">load_defs</span><span class="p">(</span><span class="s2">"ch03/09_grpo.py"</span><span class="p">,</span> <span class="n">names</span><span class="o">=</span><span class="p">{</span><span class="s2">"GRPODataset"</span><span class="p">,</span> <span class="s2">"compute_probs"</span><span class="p">,</span> <span class="s2">"grpo_loss"</span><span class="p">,</span> <span class="s2">"calculate_reward"</span><span class="p">})</span>
+    <span class="n">tok</span> <span class="o">=</span> <span class="n">BPETokenizer</span><span class="o">.</span><span class="n">load_from</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">DLFS6</span> <span class="o">/</span> <span class="s2">"codebot"</span> <span class="o">/</span> <span class="s2">"merge_rules.pkl"</span><span class="p">))</span>
+    <span class="n">ds</span> <span class="o">=</span> <span class="n">g</span><span class="p">[</span><span class="s2">"GRPODataset"</span><span class="p">](</span><span class="n">tok</span><span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">data</span><span class="p">[:</span><span class="mi">4</span><span class="p">]</span>                                                  <span class="c1"># 4 prompts, one right and one wrong answer</span>
+    <span class="n">answers</span> <span class="o">=</span> <span class="p">[(</span><span class="n">p</span><span class="p">,</span> <span class="n">gt</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">gt</span> <span class="ow">in</span> <span class="n">data</span> <span class="k">for</span> <span class="n">r</span> <span class="ow">in</span> <span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">gt</span><span class="p">),</span> <span class="nb">str</span><span class="p">(</span><span class="n">gt</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))]</span>
+    <span class="n">rewards</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">tensor</span><span class="p">([</span><span class="n">g</span><span class="p">[</span><span class="s2">"calculate_reward"</span><span class="p">](</span><span class="n">gt</span><span class="p">,</span> <span class="n">r</span><span class="p">)</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">gt</span><span class="p">,</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">answers</span><span class="p">])</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">advantages</span> <span class="o">=</span> <span class="p">(</span><span class="n">rewards</span> <span class="o">-</span> <span class="n">rewards</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span><span class="o">.</span><span class="n">flatten</span><span class="p">()</span>  <span class="c1"># +0.5 / -0.5 in every group</span>
+    <span class="n">ids</span><span class="p">,</span> <span class="n">mask</span> <span class="o">=</span> <span class="n">ds</span><span class="o">.</span><span class="n">get_batch</span><span class="p">([</span><span class="n">p</span> <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">answers</span><span class="p">],</span> <span class="p">[</span><span class="n">r</span> <span class="k">for</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">r</span> <span class="ow">in</span> <span class="n">answers</span><span class="p">],</span> <span class="n">CPU</span><span class="p">)</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">GPT</span><span class="o">.</span><span class="n">load_from</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">DLFS6</span> <span class="o">/</span> <span class="s2">"codebot"</span> <span class="o">/</span> <span class="s2">"model_sft.pt"</span><span class="p">))</span>
+    <span class="n">optimizer</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">AdamW</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="mf">7e-6</span><span class="p">)</span>
+    <span class="n">total_norm</span> <span class="o">=</span> <span class="k">lambda</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="nb">sum</span><span class="p">((</span><span class="n">p</span><span class="o">.</span><span class="n">grad</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">()</span> <span class="k">if</span> <span class="n">p</span><span class="o">.</span><span class="n">grad</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">))</span>  <span class="c1"># noqa: E731</span>
+    <span class="n">torch</span><span class="o">.</span><span class="n">manual_seed</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">norms</span><span class="p">,</span> <span class="n">entropies</span> <span class="o">=</span> <span class="p">[],</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">):</span>                                                  <span class="c1"># two iterations of the script's loop</span>
+        <span class="n">old_model</span> <span class="o">=</span> <span class="n">copy</span><span class="o">.</span><span class="n">deepcopy</span><span class="p">(</span><span class="n">model</span><span class="p">)</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+        <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+            <span class="n">logp</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">log_softmax</span><span class="p">(</span><span class="n">old_model</span><span class="p">(</span><span class="n">ids</span><span class="p">)[:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+            <span class="n">entropy</span> <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="n">logp</span><span class="o">.</span><span class="n">exp</span><span class="p">()</span> <span class="o">*</span> <span class="n">logp</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)[</span><span class="n">mask</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">bool</span><span class="p">()]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+        <span class="n">entropies</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">entropy</span><span class="o">.</span><span class="n">item</span><span class="p">())</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">2</span><span class="p">):</span>                                              <span class="c1"># n_update_per_generation</span>
+            <span class="n">optimizer</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
+            <span class="n">loss</span> <span class="o">=</span> <span class="n">g</span><span class="p">[</span><span class="s2">"grpo_loss"</span><span class="p">](</span><span class="n">model</span><span class="p">,</span> <span class="n">old_model</span><span class="p">,</span> <span class="n">ids</span><span class="p">,</span> <span class="n">mask</span><span class="p">,</span> <span class="n">advantages</span><span class="p">,</span> <span class="mf">0.2</span><span class="p">)</span>
+            <span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+            <span class="n">before</span> <span class="o">=</span> <span class="n">total_norm</span><span class="p">()</span>
+            <span class="n">grad_norm</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">clip_grad_norm_</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">max_norm</span><span class="o">=</span><span class="mf">1.0</span><span class="p">)</span>
+            <span class="c1"># the return value is the norm before clipping (float32 sums taken in another order: rtol 1e-4)</span>
+            <span class="k">assert</span> <span class="n">torch</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">grad_norm</span><span class="p">,</span> <span class="n">before</span><span class="p">,</span> <span class="n">rtol</span><span class="o">=</span><span class="mf">1e-4</span><span class="p">)</span>
+            <span class="k">assert</span> <span class="n">total_norm</span><span class="p">()</span> <span class="o">&lt;=</span> <span class="nb">min</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">before</span><span class="o">.</span><span class="n">item</span><span class="p">())</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="mf">1e-4</span><span class="p">)</span>   <span class="c1"># clipped to 1.0 (same float32 slack)</span>
+            <span class="n">norms</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">grad_norm</span><span class="o">.</span><span class="n">item</span><span class="p">())</span>
+            <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">norms</span><span class="p">)</span> <span class="o">==</span> <span class="mi">4</span> <span class="ow">and</span> <span class="nb">all</span><span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">isfinite</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="ow">and</span> <span class="n">n</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">norms</span><span class="p">)</span>
+    <span class="k">assert</span> <span class="nb">all</span><span class="p">(</span><span class="mi">0</span> <span class="o">&lt;</span> <span class="n">e</span> <span class="o">&lt;</span> <span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">1000</span><span class="p">)</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">entropies</span><span class="p">)</span>
+    <span class="c1"># every logit equal (zero output weights, tied to the embedding, and zero bias): the entropy is exactly ln V</span>
+    <span class="n">flat</span> <span class="o">=</span> <span class="n">GPT</span><span class="p">(</span><span class="mi">1000</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">64</span><span class="p">,</span> <span class="mf">0.1</span><span class="p">)</span><span class="o">.</span><span class="n">eval</span><span class="p">()</span>
+    <span class="k">with</span> <span class="n">torch</span><span class="o">.</span><span class="n">no_grad</span><span class="p">():</span>
+        <span class="n">flat</span><span class="o">.</span><span class="n">unembed</span><span class="o">.</span><span class="n">weight</span><span class="o">.</span><span class="n">zero_</span><span class="p">()</span>
+        <span class="n">flat</span><span class="o">.</span><span class="n">unembed</span><span class="o">.</span><span class="n">bias</span><span class="o">.</span><span class="n">zero_</span><span class="p">()</span>
+        <span class="n">logp</span> <span class="o">=</span> <span class="n">F</span><span class="o">.</span><span class="n">log_softmax</span><span class="p">(</span><span class="n">flat</span><span class="p">(</span><span class="n">ids</span><span class="p">)[:,</span> <span class="p">:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">entropy</span> <span class="o">=</span> <span class="o">-</span><span class="p">(</span><span class="n">logp</span><span class="o">.</span><span class="n">exp</span><span class="p">()</span> <span class="o">*</span> <span class="n">logp</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)[</span><span class="n">mask</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">bool</span><span class="p">()]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">entropy</span><span class="o">.</span><span class="n">item</span><span class="p">()</span> <span class="o">-</span> <span class="n">math</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">1000</span><span class="p">))</span> <span class="o">&lt;</span> <span class="mf">1e-5</span>
+</code></pre></details></div><aside class="callout callout-confusion"><div class="callout-title"><span class="callout-kind">你可能会困惑</span><span class="callout-text">指标名以 critic/ 开头，说明有 critic 吗？</span></div>
+<p>在 PPO 里，critic 是一个学习出来的价值网络，它估计“从这里往后能拿多少奖励”，用作基线。所以看到 veRL 日志里的 <code>critic/rewards/mean</code>，自然会以为训练里有一个 critic。</p>
+<p>前缀本身说明不了有没有 critic。veRL 在计算数据指标的函数里，<strong>不论用什么算法</strong>，都把奖励、得分、advantage 和回报的统计放在 <code>critic/</code> 这个分组下面。真正需要价值网络的只有 <code>critic/values/*</code> 和 <code>critic/vf_explained_var</code>：它们写在 <code>if use_critic:</code> 分支里，没有价值网络时，日志里根本不会出现这几项（上面的验证单元核对了这几行源码的位置）。需要价值网络的算法（比如 PPO）在 veRL 里确实有 critic，这时日志里才多出这几项；GRPO 则没有：它用同一道题的一组回答的平均奖励作基线，DLFS6 的 <code>advantages = rewards - rewards.mean()</code> 就是这一行。</p>
+<p>手算一个小例子。三道题，每题采 4 个回答，奖励分别是 [1, 1, 0, 0]、[1, 0, 0, 0] 和 [1, 1, 1, 1]。第 1 组的 advantage 是 [+0.5, +0.5, −0.5, −0.5]，按回答平均是 0。可是 veRL 先把每条回答的 advantage 复制到它的每个 token 上，再在全部回答 token 上平均。假设第 1 组答对的两条回答各 5 个 token，答错的两条各 20 个 token，按 token 平均就是 <span class="math inline"><span class="math-inline">(0.5\times5\times2 - 0.5\times20\times2)\div50 = -0.3</span></span>：</p>
+<div class="verify" id="v-Y.3-b" data-cell="{&quot;id&quot;: &quot;Y.3-b&quot;, &quot;golden&quot;: &quot;critic/rewards/mean = 0.5833   （全部 12 个奖励的平均）\nadvantage 按回答平均 = 0.0000   （每组都减去了自己的均值）\nfrac_mixed = 0.667，frac_all_good = 0.333，frac_all_bad = 0.000\n第 3 组的 advantage： [0.0, 0.0, 0.0, 0.0] ← 全对的组没有学习信号\n第 1 组：按回答平均 +0.00，按 token 平均 -0.30\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 Y.3-b</span><span class="verify-title">critic/rewards/mean 是按回答平均的奖励；advantage 按回答平均是 0，按 token 平均不一定</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="n">groups</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]],</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>   <span class="c1"># 第 3 组全对</span>
+<span class="n">adv</span> <span class="o">=</span> <span class="n">groups</span> <span class="o">-</span> <span class="n">groups</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>                           <span class="c1"># DLFS6 / GRPO 的基线</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"critic/rewards/mean = </span><span class="si">{</span><span class="n">groups</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">   （全部 12 个奖励的平均）"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"advantage 按回答平均 = </span><span class="si">{</span><span class="n">adv</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="si">:</span><span class="s2">.4f</span><span class="si">}</span><span class="s2">   （每组都减去了自己的均值）"</span><span class="p">)</span>
+<span class="n">same</span> <span class="o">=</span> <span class="p">(</span><span class="n">groups</span> <span class="o">==</span> <span class="n">groups</span><span class="p">[:,</span> <span class="p">:</span><span class="mi">1</span><span class="p">])</span><span class="o">.</span><span class="n">all</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"frac_mixed = </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="o">~</span><span class="n">same</span><span class="p">)</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">，frac_all_good = </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">same</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">(</span><span class="n">groups</span><span class="p">[:,</span><span class="w"> </span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">，"</span>
+      <span class="sa">f</span><span class="s2">"frac_all_bad = </span><span class="si">{</span><span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">same</span><span class="w"> </span><span class="o">&amp;</span><span class="w"> </span><span class="p">(</span><span class="n">groups</span><span class="p">[:,</span><span class="w"> </span><span class="mi">0</span><span class="p">]</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">))</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="s2">"第 3 组的 advantage："</span><span class="p">,</span> <span class="n">adv</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="s2">"← 全对的组没有学习信号"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">groups</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span> <span class="o">-</span> <span class="mi">7</span> <span class="o">/</span> <span class="mi">12</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-12</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">adv</span><span class="o">.</span><span class="n">mean</span><span class="p">())</span> <span class="o">&lt;</span> <span class="mf">1e-12</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">adv</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">.</span><span class="n">any</span><span class="p">()</span>
+
+<span class="n">L</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">5</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">20</span><span class="p">])</span>                     <span class="c1"># 第 1 组：答对的两条短，答错的两条长</span>
+<span class="n">tok</span> <span class="o">=</span> <span class="p">(</span><span class="n">adv</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">L</span><span class="p">)</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">/</span> <span class="n">L</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>               <span class="c1"># veRL：每个回答 token 都带着所在回答的 advantage</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"第 1 组：按回答平均 </span><span class="si">{</span><span class="n">adv</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span><span class="si">:</span><span class="s2">+.2f</span><span class="si">}</span><span class="s2">，按 token 平均 </span><span class="si">{</span><span class="n">tok</span><span class="si">:</span><span class="s2">+.2f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">adv</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">tok</span> <span class="o">+</span> <span class="mf">0.3</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-12</span>
+</code></pre><textarea class="verify-src" hidden>import numpy as np
+
+groups = np.array([[1, 1, 0, 0], [1, 0, 0, 0], [1, 1, 1, 1]], dtype=float)   # 第 3 组全对
+adv = groups - groups.mean(axis=1, keepdims=True)                           # DLFS6 / GRPO 的基线
+print(f&quot;critic/rewards/mean = {groups.mean():.4f}   （全部 12 个奖励的平均）&quot;)
+print(f&quot;advantage 按回答平均 = {adv.mean():.4f}   （每组都减去了自己的均值）&quot;)
+same = (groups == groups[:, :1]).all(axis=1)
+print(f&quot;frac_mixed = {np.mean(~same):.3f}，frac_all_good = {np.mean(same &amp; (groups[:, 0] == 1)):.3f}，&quot;
+      f&quot;frac_all_bad = {np.mean(same &amp; (groups[:, 0] == 0)):.3f}&quot;)
+print(&quot;第 3 组的 advantage：&quot;, adv[2].tolist(), &quot;← 全对的组没有学习信号&quot;)
+assert abs(groups.mean() - 7 / 12) &lt; 1e-12 and abs(adv.mean()) &lt; 1e-12 and not adv[2].any()
+
+L = np.array([5, 5, 20, 20])                     # 第 1 组：答对的两条短，答错的两条长
+tok = (adv[0] * L).sum() / L.sum()               # veRL：每个回答 token 都带着所在回答的 advantage
+print(f&quot;第 1 组：按回答平均 {adv[0].mean():+.2f}，按 token 平均 {tok:+.2f}&quot;)
+assert adv[0].mean() == 0 and abs(tok + 0.3) &lt; 1e-12
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>critic/rewards/mean = 0.5833   （全部 12 个奖励的平均）
+advantage 按回答平均 = 0.0000   （每组都减去了自己的均值）
+frac_mixed = 0.667，frac_all_good = 0.333，frac_all_bad = 0.000
+第 3 组的 advantage： [0.0, 0.0, 0.0, 0.0] ← 全对的组没有学习信号
+第 1 组：按回答平均 +0.00，按 token 平均 -0.30
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>所以 <code>critic/rewards/mean</code> 是按回答平均的奖励，<code>critic/advantages/mean</code> 却是按 token 平均的。组内 advantage 的和是 0，只有各回答一样长时，按 token 的平均才是 0；答错的回答更长时，它就偏负。它反映的是长度和对错之间的关系，不是学习信号。真正告诉你“还有没有学习信号”的，是 tinker-cookbook 的 <code>frac_all_good</code> 与 <code>frac_all_bad</code>：全对或全错的组，advantage 全是 0。</p>
+<p>带走一句话：<strong><code>critic/</code> 只是 veRL 的分组名，不是“有 critic”的证据；GRPO 的基线是组均值，不是一个网络。</strong></p>
+</aside>
+<h2 id="sY-4">Y.4 一词多义</h2>
+<p>最后是几个在不同场合指不同东西的词。</p>
+<div id="y4"></div>
+<div id="y4-probe"></div>
+<h3 id="h-8da843ff">probe</h3>
+<p>“probe”至少有两种常见用法。在可解释性研究里，<strong>探针</strong>（probe）指在模型的隐藏状态上训练一个简单的分类器（通常是线性的），看某种信息能不能从中读出来。在做实验的日常对话里，“先 probe 一下”往往指训练开始前，先用现成的模型把任务跑一遍，看看它的基础通过率，也就是“第 0 步”的评估。</p>
+<aside class="callout callout-confusion"><div class="callout-title"><span class="callout-kind">你可能会困惑</span><span class="callout-text">“先 probe 一下”到底指什么？</span></div>
+<p>同一个词指两件完全不同的事，听的人自然会困惑：是要训练一个分类器，还是只跑一遍评估？在训练强化学习之前说“probe”，通常指后一种：不改动任何参数，用基础模型做一遍题，记下通过率作为起点。</p>
+<p>这一步看起来简单，但小样本的通过率很不稳定。8 道题对了 5 道，看起来是 62.5%，可它的 95% 置信区间是 [0.31, 0.86]，从三成到八成多都有可能。这个区间是 <strong>Wilson 区间</strong>：</p>
+<div class="math block">
+<div class="math-block">\frac{\hat p + \dfrac{z^2}{2n} \pm z\sqrt{\dfrac{\hat p(1-\hat p)}{n} + \dfrac{z^2}{4n^2}}}{1 + \dfrac{z^2}{n}}</div>
+</div>
+<p>这里，<span class="math inline"><span class="math-inline">\hat p = k/n</span></span> 是观测到的通过率，<span class="math inline"><span class="math-inline">n</span></span> 是题数，<span class="math inline"><span class="math-inline">z = 1.96</span></span> 对应 95%。手算 5/8：<span class="math inline"><span class="math-inline">\hat p = 0.625</span></span>，<span class="math inline"><span class="math-inline">z^2/n = 0.480</span></span>，中心是 <span class="math inline"><span class="math-inline">(0.625 + 0.240) \div 1.480 = 0.584</span></span>，半宽是 <span class="math inline"><span class="math-inline">1.96 \times \sqrt{0.0293 + 0.0150} \div 1.480 = 0.279</span></span>，区间就是 <span class="math inline"><span class="math-inline">[0.31, 0.86]</span></span>。</p>
+<p>作者发布的 SFT 权重在 81 道加法题上贪心解码答对 44 道（54.3%），我们按书自己训练的 SFT checkpoint 也是 44 道（<a href="errata.html#e15">勘误 E15</a> 的本地验证）。这个通过率的区间是 [0.44, 0.65]：</p>
+<div class="verify" id="v-Y.4-a" data-cell="{&quot;id&quot;: &quot;Y.4-a&quot;, &quot;golden&quot;: &quot;5/8 = 0.625，95% 区间 [0.306, 0.863]，宽 0.557\n44/81 = 0.543，95% 区间 [0.435, 0.647]，宽 0.212\n440/810 = 0.543，95% 区间 [0.509, 0.577]，宽 0.068\n5/8 的中心 0.584，半宽 0.279\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 Y.4-a</span><span class="verify-title">5/8 的 95% Wilson 区间是 [0.31, 0.86]（中心 0.584，半宽 0.279）；44/81 是 [0.44, 0.65]</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="k">def</span><span class="w"> </span><span class="nf">wilson</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">z</span><span class="o">=</span><span class="mf">1.96</span><span class="p">):</span>
+    <span class="n">p</span> <span class="o">=</span> <span class="n">k</span> <span class="o">/</span> <span class="n">n</span>
+    <span class="n">center</span> <span class="o">=</span> <span class="p">(</span><span class="n">p</span> <span class="o">+</span> <span class="n">z</span> <span class="o">*</span> <span class="n">z</span> <span class="o">/</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">n</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">z</span> <span class="o">*</span> <span class="n">z</span> <span class="o">/</span> <span class="n">n</span><span class="p">)</span>
+    <span class="n">half</span> <span class="o">=</span> <span class="n">z</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">p</span> <span class="o">*</span> <span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">p</span><span class="p">)</span> <span class="o">/</span> <span class="n">n</span> <span class="o">+</span> <span class="n">z</span> <span class="o">*</span> <span class="n">z</span> <span class="o">/</span> <span class="p">(</span><span class="mi">4</span> <span class="o">*</span> <span class="n">n</span> <span class="o">*</span> <span class="n">n</span><span class="p">))</span> <span class="o">/</span> <span class="p">(</span><span class="mi">1</span> <span class="o">+</span> <span class="n">z</span> <span class="o">*</span> <span class="n">z</span> <span class="o">/</span> <span class="n">n</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">center</span> <span class="o">-</span> <span class="n">half</span><span class="p">,</span> <span class="n">center</span> <span class="o">+</span> <span class="n">half</span>
+
+<span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">n</span> <span class="ow">in</span> <span class="p">((</span><span class="mi">5</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="p">(</span><span class="mi">44</span><span class="p">,</span> <span class="mi">81</span><span class="p">),</span> <span class="p">(</span><span class="mi">440</span><span class="p">,</span> <span class="mi">810</span><span class="p">)):</span>
+    <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">wilson</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">n</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">k</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">k</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">n</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">，95% 区间 [</span><span class="si">{</span><span class="n">lo</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">hi</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">]，宽 </span><span class="si">{</span><span class="n">hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">lo</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">wilson</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"5/8 的中心 </span><span class="si">{</span><span class="p">(</span><span class="n">lo</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hi</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">2</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">，半宽 </span><span class="si">{</span><span class="p">(</span><span class="n">hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">lo</span><span class="p">)</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="mi">2</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">((</span><span class="n">lo</span> <span class="o">+</span> <span class="n">hi</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">-</span> <span class="mf">0.584</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-3</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">((</span><span class="n">hi</span> <span class="o">-</span> <span class="n">lo</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">-</span> <span class="mf">0.279</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-3</span>    <span class="c1"># 上面的手算</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">lo</span> <span class="o">-</span> <span class="mf">0.306</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-3</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">hi</span> <span class="o">-</span> <span class="mf">0.863</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-3</span>
+<span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="o">=</span> <span class="n">wilson</span><span class="p">(</span><span class="mi">44</span><span class="p">,</span> <span class="mi">81</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">lo</span> <span class="o">-</span> <span class="mf">0.435</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-3</span> <span class="ow">and</span> <span class="nb">abs</span><span class="p">(</span><span class="n">hi</span> <span class="o">-</span> <span class="mf">0.647</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-3</span>
+<span class="n">width</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">k</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="n">wilson</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">n</span><span class="p">)[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">wilson</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">n</span><span class="p">)[</span><span class="mi">0</span><span class="p">]</span>
+<span class="k">assert</span> <span class="mf">0.30</span> <span class="o">&lt;</span> <span class="n">width</span><span class="p">(</span><span class="mi">440</span><span class="p">,</span> <span class="mi">810</span><span class="p">)</span> <span class="o">/</span> <span class="n">width</span><span class="p">(</span><span class="mi">44</span><span class="p">,</span> <span class="mi">81</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">0.34</span>       <span class="c1"># 样本多 10 倍，宽度约乘 1/√10 ≈ 0.316</span>
+</code></pre><textarea class="verify-src" hidden>def wilson(k, n, z=1.96):
+    p = k / n
+    center = (p + z * z / (2 * n)) / (1 + z * z / n)
+    half = z * np.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
+    return center - half, center + half
+
+for k, n in ((5, 8), (44, 81), (440, 810)):
+    lo, hi = wilson(k, n)
+    print(f&quot;{k}/{n} = {k / n:.3f}，95% 区间 [{lo:.3f}, {hi:.3f}]，宽 {hi - lo:.3f}&quot;)
+lo, hi = wilson(5, 8)
+print(f&quot;5/8 的中心 {(lo + hi) / 2:.3f}，半宽 {(hi - lo) / 2:.3f}&quot;)
+assert abs((lo + hi) / 2 - 0.584) &lt; 1e-3 and abs((hi - lo) / 2 - 0.279) &lt; 1e-3    # 上面的手算
+assert abs(lo - 0.306) &lt; 1e-3 and abs(hi - 0.863) &lt; 1e-3
+lo, hi = wilson(44, 81)
+assert abs(lo - 0.435) &lt; 1e-3 and abs(hi - 0.647) &lt; 1e-3
+width = lambda k, n: wilson(k, n)[1] - wilson(k, n)[0]
+assert 0.30 &lt; width(440, 810) / width(44, 81) &lt; 0.34       # 样本多 10 倍，宽度约乘 1/√10 ≈ 0.316
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>5/8 = 0.625，95% 区间 [0.306, 0.863]，宽 0.557
+44/81 = 0.543，95% 区间 [0.435, 0.647]，宽 0.212
+440/810 = 0.543，95% 区间 [0.509, 0.577]，宽 0.068
+5/8 的中心 0.584，半宽 0.279
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>样本多 10 倍，区间才缩窄到原来的三分之一左右（宽度大约按 <span class="math inline"><span class="math-inline">1/\sqrt{n}</span></span> 缩小）。所以第 0 步的评估要么多做些题，要么把区间一起报出来。</p>
+<p>那么，训练之后再测一次，怎样判断提升是真的呢？两次都用同一组题，两次都对或者都错的题不提供信息，要看的是结果变了的题。假设有 21 道题的结果变了：13 道是训练后才做对的，8 道反而从对变成了错。如果训练其实没有效果，每道题往哪边变就像抛一次硬币；抛 21 次，出现 13 比 8 或者更悬殊的结果，概率是 0.38。这就是<strong>符号检验</strong>（sign test）。13 比 8 还说明不了训练有效，要到 16 比 5，p 值才低于 0.05：</p>
+<div class="verify" id="v-Y.4-b" data-cell="{&quot;id&quot;: &quot;Y.4-b&quot;, &quot;golden&quot;: &quot;变好 13、变差 8：双侧 p = 0.383\n变好 15、变差 6：双侧 p = 0.078\n变好 16、变差 5：双侧 p = 0.027\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 Y.4-b</span><span class="verify-title">结果变了的 21 道题：13 比 8 的双侧 p = 0.38；16 比 5 才低于 0.05</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="kn">from</span><span class="w"> </span><span class="nn">math</span><span class="w"> </span><span class="kn">import</span> <span class="n">comb</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">sign_test</span><span class="p">(</span><span class="n">better</span><span class="p">,</span> <span class="n">worse</span><span class="p">):</span>            <span class="c1"># 双侧符号检验：只看结果变了的题</span>
+    <span class="n">n</span><span class="p">,</span> <span class="n">k</span> <span class="o">=</span> <span class="n">better</span> <span class="o">+</span> <span class="n">worse</span><span class="p">,</span> <span class="nb">max</span><span class="p">(</span><span class="n">better</span><span class="p">,</span> <span class="n">worse</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">min</span><span class="p">(</span><span class="mf">1.0</span><span class="p">,</span> <span class="mi">2</span> <span class="o">*</span> <span class="nb">sum</span><span class="p">(</span><span class="n">comb</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">n</span> <span class="o">+</span> <span class="mi">1</span><span class="p">))</span> <span class="o">/</span> <span class="mi">2</span> <span class="o">**</span> <span class="n">n</span><span class="p">)</span>
+
+<span class="k">for</span> <span class="n">better</span><span class="p">,</span> <span class="n">worse</span> <span class="ow">in</span> <span class="p">((</span><span class="mi">13</span><span class="p">,</span> <span class="mi">8</span><span class="p">),</span> <span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">6</span><span class="p">),</span> <span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">5</span><span class="p">)):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"变好 </span><span class="si">{</span><span class="n">better</span><span class="si">}</span><span class="s2">、变差 </span><span class="si">{</span><span class="n">worse</span><span class="si">}</span><span class="s2">：双侧 p = </span><span class="si">{</span><span class="n">sign_test</span><span class="p">(</span><span class="n">better</span><span class="p">,</span><span class="w"> </span><span class="n">worse</span><span class="p">)</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">abs</span><span class="p">(</span><span class="n">sign_test</span><span class="p">(</span><span class="mi">13</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span> <span class="o">-</span> <span class="mf">0.383</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mf">1e-3</span>
+<span class="k">assert</span> <span class="n">sign_test</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="mi">6</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mf">0.05</span> <span class="o">&gt;</span> <span class="n">sign_test</span><span class="p">(</span><span class="mi">16</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
+</code></pre><textarea class="verify-src" hidden>from math import comb
+
+def sign_test(better, worse):            # 双侧符号检验：只看结果变了的题
+    n, k = better + worse, max(better, worse)
+    return min(1.0, 2 * sum(comb(n, i) for i in range(k, n + 1)) / 2 ** n)
+
+for better, worse in ((13, 8), (15, 6), (16, 5)):
+    print(f&quot;变好 {better}、变差 {worse}：双侧 p = {sign_test(better, worse):.3f}&quot;)
+assert abs(sign_test(13, 8) - 0.383) &lt; 1e-3
+assert sign_test(15, 6) &gt; 0.05 &gt; sign_test(16, 5)
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>变好 13、变差 8：双侧 p = 0.383
+变好 15、变差 6：双侧 p = 0.078
+变好 16、变差 5：双侧 p = 0.027
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>带走一句话：<strong>说“probe”时说清是哪一种；训练前的“第 0 步”评估要带上置信区间，前后对比要看结果变了的那些题。</strong></p>
+</aside>
+<div id="y4-epoch"></div>
+<h3 id="h-3388c74e">epoch</h3>
+<p><strong>epoch</strong> 指把数据完整过一遍，但“一遍”可以有不同的数法。第 3 章的 CodeBot 预训练常被说成“过了 61 个 epoch”：20,000 步 × 32 个窗口 × 256 个 token，约是语料 2,677,398 个 token 的 61 倍。可是从 <code>DataLoader</code> 的角度看，数据集里的每个样本是一个起点不同的窗口，共有 2,677,142 个，20,000 步只取了其中 640,000 个，连一遍都没有过完。两种说法都对，只是“一遍”的单位不同：一个按 token 算，一个按窗口算。</p>
+<p>微调的数据少，epoch 就多了起来。数的时候要以 <code>DataLoader</code> 实际给出的 batch 为准：SFT 的 1,092 条样本每个 epoch 分成 35 个 batch，最后一个只有 4 条，所以 500 步是 14.3 遍，而不是粗算的 500 × 32 ÷ 1,092 ≈ 14.7 遍。顺带交代一下本书的用词：把数据过一遍叫一个 epoch，说有多少时用“遍”（如 14.3 遍）；训练模型时说的“轮”只用来数 GRPO 的迭代，一轮是一次生成加两次更新（见下面的 step）。</p>
+<div class="verify" id="v-Y.4-c" data-cell="{&quot;id&quot;: &quot;Y.4-c&quot;, &quot;golden&quot;: &quot;按 token 算：163,840,000 ÷ 2,677,398 = 61.2 个 epoch\n按窗口算：640,000 ÷ 2,677,142 = 0.239 个 epoch\nSFT：每个 epoch 35 个 batch，500 步 = 14.3 遍（粗算 500 × 32 ÷ 1,092 = 14.7）\nDPO：每个 epoch 18 个 batch，1,000 步 = 55.6 遍（粗算 1,000 × 8 ÷ 144 = 55.6）\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 Y.4-c</span><span class="verify-title">同一次预训练：按 token 是 61.2 个 epoch，按 DataLoader 的样本只有 0.24 个；SFT 的 500 步是 14.3 遍</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+
+<span class="n">tokens</span><span class="p">,</span> <span class="n">ctx</span><span class="p">,</span> <span class="n">iters</span><span class="p">,</span> <span class="n">batch</span> <span class="o">=</span> <span class="mi">2_677_398</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">20_000</span><span class="p">,</span> <span class="mi">32</span>          <span class="c1"># ch03/01_pretrain.py</span>
+<span class="n">windows</span> <span class="o">=</span> <span class="n">tokens</span> <span class="o">-</span> <span class="n">ctx</span>                                            <span class="c1"># len(TokenDataset)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"按 token 算：</span><span class="si">{</span><span class="n">iters</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">batch</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> ÷ </span><span class="si">{</span><span class="n">tokens</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">iters</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">batch</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">tokens</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> 个 epoch"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"按窗口算：</span><span class="si">{</span><span class="n">iters</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">batch</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> ÷ </span><span class="si">{</span><span class="n">windows</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">iters</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">batch</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">windows</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> 个 epoch"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">round</span><span class="p">(</span><span class="n">iters</span> <span class="o">*</span> <span class="n">batch</span> <span class="o">*</span> <span class="n">ctx</span> <span class="o">/</span> <span class="n">tokens</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="mf">61.2</span> <span class="ow">and</span> <span class="nb">round</span><span class="p">(</span><span class="n">iters</span> <span class="o">*</span> <span class="n">batch</span> <span class="o">/</span> <span class="n">windows</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span> <span class="o">==</span> <span class="mf">0.239</span>
+
+<span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">bs</span><span class="p">,</span> <span class="n">steps</span> <span class="ow">in</span> <span class="p">((</span><span class="s2">"SFT"</span><span class="p">,</span> <span class="mi">1_092</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">500</span><span class="p">),</span> <span class="p">(</span><span class="s2">"DPO"</span><span class="p">,</span> <span class="mi">144</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">1_000</span><span class="p">)):</span>    <span class="c1"># ch03/03_sft.py、ch06/08_dpo.py</span>
+    <span class="n">per_pass</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">n</span> <span class="o">/</span> <span class="n">bs</span><span class="p">)</span>                  <span class="c1"># DataLoader 默认保留最后一个不满的 batch</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">：每个 epoch </span><span class="si">{</span><span class="n">per_pass</span><span class="si">}</span><span class="s2"> 个 batch，</span><span class="si">{</span><span class="n">steps</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> 步 = </span><span class="si">{</span><span class="n">steps</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">per_pass</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2"> 遍"</span>
+          <span class="sa">f</span><span class="s2">"（粗算 </span><span class="si">{</span><span class="n">steps</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> × </span><span class="si">{</span><span class="n">bs</span><span class="si">}</span><span class="s2"> ÷ </span><span class="si">{</span><span class="n">n</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> = </span><span class="si">{</span><span class="n">steps</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">bs</span><span class="w"> </span><span class="o">/</span><span class="w"> </span><span class="n">n</span><span class="si">:</span><span class="s2">.1f</span><span class="si">}</span><span class="s2">）"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">round</span><span class="p">(</span><span class="mi">500</span> <span class="o">/</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="mi">1092</span> <span class="o">/</span> <span class="mi">32</span><span class="p">),</span> <span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="mf">14.3</span> <span class="ow">and</span> <span class="nb">round</span><span class="p">(</span><span class="mi">1000</span> <span class="o">/</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="mi">144</span> <span class="o">/</span> <span class="mi">8</span><span class="p">),</span> <span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="mf">55.6</span>
+</code></pre><textarea class="verify-src" hidden>import math
+
+tokens, ctx, iters, batch = 2_677_398, 256, 20_000, 32          # ch03/01_pretrain.py
+windows = tokens - ctx                                            # len(TokenDataset)
+print(f&quot;按 token 算：{iters * batch * ctx:,} ÷ {tokens:,} = {iters * batch * ctx / tokens:.1f} 个 epoch&quot;)
+print(f&quot;按窗口算：{iters * batch:,} ÷ {windows:,} = {iters * batch / windows:.3f} 个 epoch&quot;)
+assert round(iters * batch * ctx / tokens, 1) == 61.2 and round(iters * batch / windows, 3) == 0.239
+
+for name, n, bs, steps in ((&quot;SFT&quot;, 1_092, 32, 500), (&quot;DPO&quot;, 144, 8, 1_000)):    # ch03/03_sft.py、ch06/08_dpo.py
+    per_pass = math.ceil(n / bs)                  # DataLoader 默认保留最后一个不满的 batch
+    print(f&quot;{name}：每个 epoch {per_pass} 个 batch，{steps:,} 步 = {steps / per_pass:.1f} 遍&quot;
+          f&quot;（粗算 {steps:,} × {bs} ÷ {n:,} = {steps * bs / n:.1f}）&quot;)
+assert round(500 / math.ceil(1092 / 32), 1) == 14.3 and round(1000 / math.ceil(144 / 8), 1) == 55.6
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>按 token 算：163,840,000 ÷ 2,677,398 = 61.2 个 epoch
+按窗口算：640,000 ÷ 2,677,142 = 0.239 个 epoch
+SFT：每个 epoch 35 个 batch，500 步 = 14.3 遍（粗算 500 × 32 ÷ 1,092 = 14.7）
+DPO：每个 epoch 18 个 batch，1,000 步 = 55.6 遍（粗算 1,000 × 8 ÷ 144 = 55.6）
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>强化学习里还有第三种用法：CS336 2025 年 A5 的 <code>epochs_per_rollout_batch</code> 指“同一批 rollout 拿来更新几遍”，相当于 DLFS6 的 <code>n_update_per_generation = 2</code>。</p>
+<div class="localcheck"><div class="localcheck-head"><span class="localcheck-label">本地验证</span><span class="localcheck-title">从原书脚本读出超参数：预训练的两种 epoch 是 61.2 与 0.239；用真实的 DataLoader 数，SFT 14.3 遍、DPO 55.6 遍</span></div><pre class="cmd"><code>uv run pytest verify/test_reference.py::test_glossary_epoch_two_ways</code></pre><details><summary>查看测试代码 verify/test_reference.py</summary><pre class="code"><code><span class="k">def</span><span class="w"> </span><span class="nf">test_glossary_epoch_two_ways</span><span class="p">():</span>
+    <span class="n">c</span> <span class="o">=</span> <span class="n">consts</span><span class="p">(</span><span class="s2">"ch03/01_pretrain.py"</span><span class="p">)</span>
+    <span class="n">tokens</span> <span class="o">=</span> <span class="p">(</span><span class="n">DLFS6</span> <span class="o">/</span> <span class="s2">"codebot"</span> <span class="o">/</span> <span class="s2">"tiny_codes.bin"</span><span class="p">)</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_size</span> <span class="o">//</span> <span class="mi">2</span>
+    <span class="n">windows</span> <span class="o">=</span> <span class="n">tokens</span> <span class="o">-</span> <span class="n">c</span><span class="p">[</span><span class="s2">"context_len"</span><span class="p">]</span>                                 <span class="c1"># len(TokenDataset)</span>
+    <span class="n">seen</span> <span class="o">=</span> <span class="n">c</span><span class="p">[</span><span class="s2">"max_iters"</span><span class="p">]</span> <span class="o">*</span> <span class="n">c</span><span class="p">[</span><span class="s2">"batch_size"</span><span class="p">]</span>
+    <span class="k">assert</span> <span class="nb">round</span><span class="p">(</span><span class="n">seen</span> <span class="o">*</span> <span class="n">c</span><span class="p">[</span><span class="s2">"context_len"</span><span class="p">]</span> <span class="o">/</span> <span class="n">tokens</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="mf">61.2</span>            <span class="c1"># "61 epochs" of tokens</span>
+    <span class="k">assert</span> <span class="nb">round</span><span class="p">(</span><span class="n">seen</span> <span class="o">/</span> <span class="n">windows</span><span class="p">,</span> <span class="mi">3</span><span class="p">)</span> <span class="o">==</span> <span class="mf">0.239</span>                            <span class="c1"># 0.24 epoch of the DataLoader</span>
+    <span class="n">fp</span> <span class="o">=</span> <span class="n">finetune_passes</span><span class="p">()</span>                                              <span class="c1"># fine-tuning: counted in real batches</span>
+    <span class="k">assert</span> <span class="n">fp</span><span class="p">[</span><span class="s2">"SFT"</span><span class="p">][:</span><span class="mi">3</span><span class="p">]</span> <span class="o">==</span> <span class="p">(</span><span class="mi">1092</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">500</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">round</span><span class="p">(</span><span class="n">fp</span><span class="p">[</span><span class="s2">"SFT"</span><span class="p">][</span><span class="mi">3</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="mf">14.3</span>      <span class="c1"># 35 batches a pass</span>
+    <span class="k">assert</span> <span class="nb">round</span><span class="p">(</span><span class="mi">500</span> <span class="o">*</span> <span class="mi">32</span> <span class="o">/</span> <span class="mi">1092</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="mf">14.7</span>                                          <span class="c1"># the naive count</span>
+    <span class="k">assert</span> <span class="n">fp</span><span class="p">[</span><span class="s2">"DPO"</span><span class="p">][:</span><span class="mi">3</span><span class="p">]</span> <span class="o">==</span> <span class="p">(</span><span class="mi">144</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">1000</span><span class="p">)</span> <span class="ow">and</span> <span class="nb">round</span><span class="p">(</span><span class="n">fp</span><span class="p">[</span><span class="s2">"DPO"</span><span class="p">][</span><span class="mi">3</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="mf">55.6</span>
+</code></pre></details></div><div id="y4-step"></div>
+<h3 id="h-2764ca9d">step</h3>
+<p><strong>step</strong> 至少有四种意思。在 DLFS6 的训练循环里，一次 <strong>iteration</strong> 通常就是一次参数更新（一个 optimizer step）。但有了梯度累积，一次更新要先跑好几个 <strong>micro-step</strong>：WebBot 每次更新累积 4 个 micro-batch，每张卡每步处理 32 × 4 × 1,024 = 131,072 个 token。GRPO 的一次 iteration（本书叫“一轮”）包含一次生成和两次更新，也就是两个 optimizer step。生成时的一个 <strong>decode step</strong>，则是让模型多吐出一个 token 的那一次前向计算。</p>
+<div class="verify" id="v-Y.4-d" data-cell="{&quot;id&quot;: &quot;Y.4-d&quot;, &quot;golden&quot;: &quot;WebBot：每次更新 = 4 个 micro-step，每张卡 131,072 个 token\nGRPO：每轮最多 32 道题 × 8 个回答 = 256 条 rollout，更新 2 次（81 道题分成 32、32、17，见下面的 batch）\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 Y.4-d</span><span class="verify-title">一个 step 里有多少东西：WebBot 每次更新 131,072 个 token；GRPO 每轮最多 32 道题 × 8 = 256 条回答、2 次更新</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">micro_batch</span><span class="p">,</span> <span class="n">accum</span><span class="p">,</span> <span class="n">ctx</span> <span class="o">=</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">1024</span>                      <span class="c1"># ch09/01_pretrain.py</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"WebBot：每次更新 = </span><span class="si">{</span><span class="n">accum</span><span class="si">}</span><span class="s2"> 个 micro-step，每张卡 </span><span class="si">{</span><span class="n">micro_batch</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">accum</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">ctx</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2"> 个 token"</span><span class="p">)</span>
+<span class="n">prompts</span><span class="p">,</span> <span class="n">G</span><span class="p">,</span> <span class="n">updates</span> <span class="o">=</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">8</span><span class="p">,</span> <span class="mi">2</span>                            <span class="c1"># ch03/09_grpo.py</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"GRPO：每轮最多 </span><span class="si">{</span><span class="n">prompts</span><span class="si">}</span><span class="s2"> 道题 × </span><span class="si">{</span><span class="n">G</span><span class="si">}</span><span class="s2"> 个回答 = </span><span class="si">{</span><span class="n">prompts</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="n">G</span><span class="si">}</span><span class="s2"> 条 rollout，更新 </span><span class="si">{</span><span class="n">updates</span><span class="si">}</span><span class="s2"> 次"</span>
+      <span class="s2">"（81 道题分成 32、32、17，见下面的 batch）"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">micro_batch</span> <span class="o">*</span> <span class="n">accum</span> <span class="o">*</span> <span class="n">ctx</span> <span class="o">==</span> <span class="mi">131_072</span> <span class="ow">and</span> <span class="n">prompts</span> <span class="o">*</span> <span class="n">G</span> <span class="o">==</span> <span class="mi">256</span>
+</code></pre><textarea class="verify-src" hidden>micro_batch, accum, ctx = 32, 4, 1024                      # ch09/01_pretrain.py
+print(f&quot;WebBot：每次更新 = {accum} 个 micro-step，每张卡 {micro_batch * accum * ctx:,} 个 token&quot;)
+prompts, G, updates = 32, 8, 2                            # ch03/09_grpo.py
+print(f&quot;GRPO：每轮最多 {prompts} 道题 × {G} 个回答 = {prompts * G} 条 rollout，更新 {updates} 次&quot;
+      &quot;（81 道题分成 32、32、17，见下面的 batch）&quot;)
+assert micro_batch * accum * ctx == 131_072 and prompts * G == 256
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>WebBot：每次更新 = 4 个 micro-step，每张卡 131,072 个 token
+GRPO：每轮最多 32 道题 × 8 个回答 = 256 条 rollout，更新 2 次（81 道题分成 32、32、17，见下面的 batch）
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><div id="y4-context"></div>
+<h3 id="h-5c18ef72">context</h3>
+<p><strong>context</strong> 最常见的意思是<strong>上下文长度</strong>：模型一次最多能看见多少个 token，CodeBot 和 StoryBot 是 256，WebBot 是 1,024。这是一次前向计算的上限。可是在聊天和智能体的场合，“上下文”还常指整段对话历史，以及“这次任务一共消耗了多少 token”。两者经常被混为一谈。</p>
+<p>窗口限制的是<strong>单次请求</strong>，消耗算的是<strong>所有请求之和</strong>。智能体每一轮都把完整的历史重新发一遍，单次请求的长度随轮数线性增长，累计消耗却按平方增长。举个例子：系统提示 3,000 个 token，每轮新增 800 个，跑 300 轮：</p>
+<div class="verify" id="v-Y.4-e" data-cell="{&quot;id&quot;: &quot;Y.4-e&quot;, &quot;golden&quot;: &quot;单次请求的最大长度：243,000\n300 轮的累计输入：37,020,000\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 Y.4-e</span><span class="verify-title">单次请求最多 243,000 个 token，没超过 256K 的窗口；300 轮累计却有 3,700 万</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">rounds</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">301</span><span class="p">)</span>
+<span class="n">request</span> <span class="o">=</span> <span class="mi">3_000</span> <span class="o">+</span> <span class="mi">800</span> <span class="o">*</span> <span class="n">rounds</span>                  <span class="c1"># 第 k 轮发出的请求长度</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"单次请求的最大长度：</span><span class="si">{</span><span class="n">request</span><span class="o">.</span><span class="n">max</span><span class="p">()</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"300 轮的累计输入：</span><span class="si">{</span><span class="n">request</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">request</span><span class="o">.</span><span class="n">max</span><span class="p">()</span> <span class="o">==</span> <span class="mi">243_000</span> <span class="o">&lt;=</span> <span class="mi">256_000</span> <span class="o">&lt;</span> <span class="n">request</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span> <span class="o">==</span> <span class="mi">37_020_000</span>
+</code></pre><textarea class="verify-src" hidden>rounds = np.arange(1, 301)
+request = 3_000 + 800 * rounds                  # 第 k 轮发出的请求长度
+print(f&quot;单次请求的最大长度：{request.max():,}&quot;)
+print(f&quot;300 轮的累计输入：{request.sum():,}&quot;)
+assert request.max() == 243_000 &lt;= 256_000 &lt; request.sum() == 37_020_000
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>单次请求的最大长度：243,000
+300 轮的累计输入：37,020,000
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>DLFS6 的 <code>generate()</code> 也有类似的区分：生成的总长度可以超过 256，但每一步只看最近的 256 个 token（<a href="ch05.html#s5-5">5.5 节</a>；StoryBot 的 KV cache 在这里有一个问题，见<a href="errata.html#e04">勘误 E04</a>）。</p>
+<div id="y4-batch"></div>
+<h3 id="h-d265aed6">batch</h3>
+<p><strong>batch</strong> 听上去是一个数，可是先要问清楚它数的是什么。预训练里，一次参数更新背后有三层：每张卡一次前向算多少条序列（micro-batch），每张卡累积几次，一共几张卡。三者之积才是<strong>全局 batch</strong>（global batch size，常缩写成 gbs）。WebBot 在 8 张卡上是 32 × 4 × 8 = 1,024 条序列，约 105 万个 token（推导见 <a href="ch09.html#s9-3">9.3 节</a>的<a href="ch09.html#v-9.3-e">验证 9.3-e</a>）。原书记进 wandb 的 <code>effective_batch_size</code> 只乘了前两项，不论几张卡都是 128（<a href="errata.html#e45">勘误 E45</a>）。</p>
+<p>卡数来自 <code>torchrun</code> 给每个进程设的环境变量：<code>WORLD_SIZE</code> 是进程总数，<code>RANK</code> 是全局编号（0 到 <code>WORLD_SIZE − 1</code>），<code>LOCAL_RANK</code> 是本机内的编号，用来选 GPU。原书用 <code>LOCAL_RANK == 0</code> 判断谁来记日志、存模型，多台机器时每台都有一个这样的进程（<a href="ch09.html#v-9.3-c">验证 9.3-c</a>）。</p>
+<p>强化学习还要再多数一层：每一轮取几道题，每道题采几个回答。两者之积才是这一轮要打分、要更新的回答条数，也就是 rollout 的条数。CS336 的讲义特意提醒，它的 <code>rollout_batch_size</code> 和 <code>train_batch_size</code> 数的是回答，不是题。三家的名字对照如下：</p>
+<table>
+<thead>
+<tr>
+<th>数的是什么</th>
+<th>DLFS6 <code>09_<wbr>grpo.<wbr>py</code></th>
+<th>CS336 A5（2026）</th>
+<th>veRL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>每一轮取几道题</td>
+<td><code>batch_<wbr>size</code> = 32</td>
+<td><code>rollout_<wbr>batch_<wbr>size</code> ÷ <code>group_<wbr>size</code> = 32</td>
+<td><code>data.<wbr>train_<wbr>batch_<wbr>size</code></td>
+</tr>
+<tr>
+<td>每道题采几个回答</td>
+<td><code>group_<wbr>size</code> = 8</td>
+<td><code>group_<wbr>size</code> = 8</td>
+<td><code>actor_<wbr>rollout_<wbr>ref.<wbr>rollout.<wbr>n</code></td>
+</tr>
+<tr>
+<td>这一轮采样、打分的回答条数</td>
+<td>32 × 8 = 256；81 道题按 32、32、17 分批，每三轮有一轮只有 17 × 8 = 136 条</td>
+<td><code>rollout_<wbr>batch_<wbr>size</code> = 256</td>
+<td>题数 × <code>rollout.<wbr>n</code></td>
+</tr>
+<tr>
+<td>一次参数更新用多少条回答</td>
+<td>全部，同一批数据更新 2 次（<code>n_<wbr>update_<wbr>per_<wbr>generation</code>）</td>
+<td><code>train_<wbr>batch_<wbr>size</code> = 256，分 32 次累积（<code>gradient_<wbr>accumulation_<wbr>steps</code>）；离策略的实验每次只用 8 条</td>
+<td><code>ppo_<wbr>mini_<wbr>batch_<wbr>size</code> × <code>rollout.<wbr>n</code></td>
+</tr>
+</tbody>
+</table>
+<div class="verify" id="v-Y.4-f" data-cell="{&quot;id&quot;: &quot;Y.4-f&quot;, &quot;golden&quot;: &quot;DLFS6：81 道题每个 epoch 分成 [32, 32, 17] 三批，每轮取一批 → [256, 256, 136] 条回答\n  A5 讲义： rollout_batch_size = n_prompts_per_rollout_batch * group_size.\n  A5 讲义： rollout_batch_size = train_batch_size = 256\n  A5 讲义： group_size = 8\n  A5 讲义： gradient_accumulation_steps = 32\n  A5 讲义： Note that rollout_batch_size and train_batch_size count responses, not prompts. So\n  A5 讲义： rollout_batch_size = train_batch_size = 256 means 32 prompts with 8 rollouts each.\n&quot;, &quot;files&quot;: [&quot;data/glossary/sources.json&quot;]}"><div class="verify-head"><span class="verify-id">验证 Y.4-f</span><span class="verify-title">GRPO 的一批：81 道题分成 32、32、17，即 256、256、136 条回答；CS336 与 veRL 都按“题数 × 每题的回答数”来数</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="n">sizes</span> <span class="o">=</span> <span class="p">[</span><span class="nb">min</span><span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">81</span> <span class="o">-</span> <span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">81</span><span class="p">,</span> <span class="mi">32</span><span class="p">)]</span>       <span class="c1"># DataLoader(81 道题, batch_size=32) 保留最后不满的一批</span>
+<span class="n">rollouts</span> <span class="o">=</span> <span class="p">[</span><span class="n">s</span> <span class="o">*</span> <span class="mi">8</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="n">sizes</span><span class="p">]</span>                          <span class="c1"># group_size = 8</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"DLFS6：81 道题每个 epoch 分成 </span><span class="si">{</span><span class="n">sizes</span><span class="si">}</span><span class="s2"> 三批，每轮取一批 → </span><span class="si">{</span><span class="n">rollouts</span><span class="si">}</span><span class="s2"> 条回答"</span><span class="p">)</span>
+<span class="n">a5</span> <span class="o">=</span> <span class="n">src</span><span class="p">[</span><span class="s2">"cs336_a5_2026"</span><span class="p">][</span><span class="s2">"batch_excerpt"</span><span class="p">]</span>                 <span class="c1"># src 来自验证 Y.2-a</span>
+<span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">a5</span><span class="p">[:</span><span class="mi">6</span><span class="p">]:</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">"  A5 讲义："</span><span class="p">,</span> <span class="n">l</span><span class="p">)</span>
+<span class="n">verl</span> <span class="o">=</span> <span class="s2">" "</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">src</span><span class="p">[</span><span class="s2">"verl"</span><span class="p">][</span><span class="s2">"lines"</span><span class="p">][</span><span class="s2">"verl/trainer/ppo/ray_trainer.py"</span><span class="p">])</span>
+<span class="k">assert</span> <span class="n">sizes</span> <span class="o">==</span> <span class="p">[</span><span class="mi">32</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">17</span><span class="p">]</span> <span class="ow">and</span> <span class="n">rollouts</span> <span class="o">==</span> <span class="p">[</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">136</span><span class="p">]</span>
+<span class="k">assert</span> <span class="s2">"rollout_batch_size = n_prompts_per_rollout_batch * group_size."</span> <span class="ow">in</span> <span class="n">a5</span>
+<span class="k">assert</span> <span class="s2">"rollout_batch_size = train_batch_size = 256 means 32 prompts with 8 rollouts each."</span> <span class="ow">in</span> <span class="n">a5</span>
+<span class="k">assert</span> <span class="s2">"gradient_accumulation_steps = 32"</span> <span class="ow">in</span> <span class="n">a5</span> <span class="ow">and</span> <span class="s2">"train_batch_size = 8"</span> <span class="ow">in</span> <span class="n">a5</span>
+<span class="k">assert</span> <span class="s2">"self.config.data.train_batch_size"</span> <span class="ow">in</span> <span class="n">verl</span> <span class="ow">and</span> <span class="s2">"batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n"</span> <span class="ow">in</span> <span class="n">verl</span>
+<span class="k">assert</span> <span class="s2">"ppo_mini_batch_size = ppo_mini_batch_size * self.config.actor_rollout_ref.rollout.n"</span> <span class="ow">in</span> <span class="n">verl</span>
+</code></pre><textarea class="verify-src" hidden>sizes = [min(32, 81 - i) for i in range(0, 81, 32)]       # DataLoader(81 道题, batch_size=32) 保留最后不满的一批
+rollouts = [s * 8 for s in sizes]                          # group_size = 8
+print(f&quot;DLFS6：81 道题每个 epoch 分成 {sizes} 三批，每轮取一批 → {rollouts} 条回答&quot;)
+a5 = src[&quot;cs336_a5_2026&quot;][&quot;batch_excerpt&quot;]                 # src 来自验证 Y.2-a
+for l in a5[:6]:
+    print(&quot;  A5 讲义：&quot;, l)
+verl = &quot; &quot;.join(src[&quot;verl&quot;][&quot;lines&quot;][&quot;verl/trainer/ppo/ray_trainer.py&quot;])
+assert sizes == [32, 32, 17] and rollouts == [256, 256, 136]
+assert &quot;rollout_batch_size = n_prompts_per_rollout_batch * group_size.&quot; in a5
+assert &quot;rollout_batch_size = train_batch_size = 256 means 32 prompts with 8 rollouts each.&quot; in a5
+assert &quot;gradient_accumulation_steps = 32&quot; in a5 and &quot;train_batch_size = 8&quot; in a5
+assert &quot;self.config.data.train_batch_size&quot; in verl and &quot;batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n&quot; in verl
+assert &quot;ppo_mini_batch_size = ppo_mini_batch_size * self.config.actor_rollout_ref.rollout.n&quot; in verl
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>DLFS6：81 道题每个 epoch 分成 [32, 32, 17] 三批，每轮取一批 → [256, 256, 136] 条回答
+  A5 讲义： rollout_batch_size = n_prompts_per_rollout_batch * group_size.
+  A5 讲义： rollout_batch_size = train_batch_size = 256
+  A5 讲义： group_size = 8
+  A5 讲义： gradient_accumulation_steps = 32
+  A5 讲义： Note that rollout_batch_size and train_batch_size count responses, not prompts. So
+  A5 讲义： rollout_batch_size = train_batch_size = 256 means 32 prompts with 8 rollouts each.
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><p>读一个陌生的配置时，先把这几层对上号，再去比较数字：同样写着 256，可能是 256 道题，也可能是 256 条回答。</p>
+<h2 id="h-5db9fd7c">小结</h2>
+<p>名字的问题，说到底是“同一个东西，不同的叫法”和“同一个叫法，不同的东西”。前者靠对照表解决：遇到陌生的参数名，先找它在 DLFS6 里叫什么，再看它出现在哪些矩阵的形状里；后者靠追问一句“这里指的是哪一种”。判断一个参数到底是什么，最可靠的办法往往是算一算参数量：残差流的宽度会以平方的形式出现。</p>
+<p>正文里遇到不认识的词或参数名，可以随时回来查；想把本书和 CS336 对照着读，去看 <a href="cs336.html">CS336 对照总表</a>。</p>
+<p>本章所学的内容：</p>
+<ul>
+<li>Hugging Face 的 <code>GPT2Config</code> 把 <code>hidden_size</code> 直接映射到 <code>n_embd</code>：它是残差流的宽度，不是 FFN 中间层（<a href="#v-Y.2-a">验证 Y.2-a</a>）。</li>
+<li>一层 Transformer 的参数量约为 <span class="math inline"><span class="math-inline">12d^2</span></span>，所以平方出现的那个数就是残差流宽度（<a href="#v-Y.2-b">验证 Y.2-b</a>）。</li>
+<li>veRL、tinker-cookbook 与 CS336 A5 的指标名都能在源码或讲义原文里找到，名字不同，看的东西相通（<a href="#v-Y.3-a">验证 Y.3-a</a>）。</li>
+<li><code>critic/rewards/mean</code> 是按回答平均的奖励；<code>critic/advantages/mean</code> 按 token 平均，各回答不一样长时一般不是 0，也不是学习信号（<a href="#v-Y.3-b">验证 Y.3-b</a>）。</li>
+<li>8 道题对 5 道的 95% 区间是 [0.31, 0.86]；前后对比时 13 比 8 的符号检验 p = 0.38：小样本的评估要带上区间和检验（<a href="#v-Y.4-a">验证 Y.4-a</a>、<a href="#v-Y.4-b">验证 Y.4-b</a>）。</li>
+<li>“一遍”和“一批”都要问数的是什么：同一次预训练，按 token 是 61.2 个 epoch，按样本只有 0.24 个；强化学习的 batch 是“题数 × 每题的回答数”，DLFS6 的 81 道题分成 256、256、136 条回答（<a href="#v-Y.4-c">验证 Y.4-c</a>、<a href="#v-Y.4-f">验证 Y.4-f</a>）。</li>
+<li>上下文窗口限制单次请求，累计消耗随轮数按平方增长（<a href="#v-Y.4-e">验证 Y.4-e</a>）。</li>
+</ul>
+<p>名字对齐了，还剩下原书代码本身。下一页把我们在原书代码里找到的问题逐条列出来，每一条都配有能重跑的复现。</p>
+<nav class="pager"><a class="prev" href="cs336.html"><span>上一章</span>CS336 对照总表</a><a class="next" href="errata.html"><span>下一章</span>原书代码的已知问题与修复</a></nav></article>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" defer></script>
+<script type="module" src="js/runtime.js"></script>
+</body>
+</html>

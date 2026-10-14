@@ -1,0 +1,17 @@
+{
+ "what": "StoryBot (22.7M) forward+backward, batch 8 x 256 tokens, CPU, fp32 vs bf16 autocast",
+ "command": "CUDA_VISIBLE_DEVICES=-1 uv run python verify/_ch06_bench_cpu.py",
+ "fp32_seconds_per_step": 2.044,
+ "bf16_seconds_per_step": 4.777,
+ "bf16_over_fp32": 2.34,
+ "provenance": {
+  "date_utc": "2026-10-12T00:55:28+00:00",
+  "processor": "Intel64 Family 6 Model 167 Stepping 1, GenuineIntel",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "torch": "2.14.1+cu130",
+  "cpu_capability": "AVX512",
+  "threads": 4,
+  "steps": 3,
+  "note": "other jobs may have shared the CPU; compare the ratio, not the absolute times"
+ }
+}

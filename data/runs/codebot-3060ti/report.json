@@ -1,0 +1,105 @@
+{
+ "run": "codebot-3060ti",
+ "tutorial_commit": "4578368e0ff0211192637d829bc4e9b3fae74b33",
+ "dlfs6_commit": "c9b6e2ed531b08dd9f451a091a34e9645148e2e2",
+ "host": {
+  "platform": "Windows-11-10.0.26200-SP0",
+  "python": "3.12.9",
+  "torch": "2.14.1+cu130",
+  "cuda": "13.0",
+  "gpu": "NVIDIA GeForce RTX 3060 Ti",
+  "gpu_capability": "8.6",
+  "bf16": true,
+  "nvidia_smi": "NVIDIA GeForce RTX 3060 Ti, 610.60, 8192 MiB"
+ },
+ "cost_usd": 0.0,
+ "steps": [
+  {
+   "script": "ch03/01_pretrain.py",
+   "started": "2026-10-11T23:28:33+00:00",
+   "seconds": 2513.3,
+   "exit_code": 0,
+   "points": 19995,
+   "final": {
+    "it": 20000,
+    "loss": 0.6186
+   },
+   "produced": [
+    "codebot/__pycache__/model.cpython-312.pyc",
+    "codebot/__pycache__/utils.cpython-312.pyc",
+    "codebot/model_pretrain.pt",
+    "loss_pretrain.png"
+   ],
+   "log_tail": [
+    "100%|█████████▉| 19998/20000 [41:28<00:00,  6.21it/s, loss=0.5789]",
+    "100%|█████████▉| 19999/20000 [41:28<00:00,  6.46it/s, loss=0.5789]",
+    "100%|█████████▉| 19999/20000 [41:28<00:00,  6.46it/s, loss=0.6186]",
+    "100%|██████████| 20000/20000 [41:28<00:00,  7.05it/s, loss=0.6186]",
+    "100%|██████████| 20000/20000 [41:28<00:00,  8.04it/s, loss=0.6186]"
+   ]
+  },
+  {
+   "script": "ch03/02_generate.py",
+   "started": "2026-10-12T00:10:28+00:00",
+   "seconds": 30.6,
+   "exit_code": 0,
+   "points": 0,
+   "final": null,
+   "produced": [
+    "codebot/__pycache__/tokenizer.cpython-312.pyc"
+   ],
+   "log_tail": [
+    "def da_list(list):",
+    "  return list(set(list))",
+    "",
+    "list = [4, 5, 8]",
+    "print(da_list(list))"
+   ]
+  },
+  {
+   "script": "ch03/03_sft.py",
+   "started": "2026-10-12T00:10:58+00:00",
+   "seconds": 125.9,
+   "exit_code": 0,
+   "points": 497,
+   "final": {
+    "it": 500,
+    "loss": 0.094
+   },
+   "produced": [
+    "codebot/model_sft.pt",
+    "loss_sft.png"
+   ],
+   "log_tail": [
+    "100%|█████████▉| 498/500 [01:06<00:00,  8.61it/s, loss=0.0733]",
+    "100%|█████████▉| 499/500 [01:06<00:00,  8.38it/s, loss=0.0733]",
+    "100%|█████████▉| 499/500 [01:06<00:00,  8.38it/s, loss=0.0940]",
+    "100%|██████████| 500/500 [01:06<00:00,  8.22it/s, loss=0.0940]",
+    "100%|██████████| 500/500 [01:06<00:00,  7.54it/s, loss=0.0940]"
+   ]
+  },
+  {
+   "script": "ch03/09_grpo.py",
+   "started": "2026-10-12T00:13:04+00:00",
+   "seconds": 5379.1,
+   "exit_code": 0,
+   "points": 501,
+   "final": {
+    "it": 500,
+    "loss": -0.0046,
+    "acc": 86.4
+   },
+   "produced": [
+    "codebot/model_grpo.pt",
+    "loss_grpo.png"
+   ],
+   "log_tail": [
+    "100%|█████████▉| 498/500 [1:28:55<00:13,  6.95s/it, loss=-0.0000, acc=86.4%]",
+    "100%|█████████▉| 499/500 [1:28:55<00:06,  7.00s/it, loss=-0.0000, acc=86.4%]",
+    "100%|█████████▉| 499/500 [1:29:04<00:06,  7.00s/it, loss=-0.0046, acc=86.4%]",
+    "100%|██████████| 500/500 [1:29:04<00:00,  7.65s/it, loss=-0.0046, acc=86.4%]",
+    "100%|██████████| 500/500 [1:29:04<00:00, 10.69s/it, loss=-0.0046, acc=86.4%]"
+   ]
+  }
+ ]
+}

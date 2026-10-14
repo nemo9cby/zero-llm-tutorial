@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>组件样板间｜从零构建大语言模型</title>
+<meta name="description" content="给作者看的活样板：每种组件与提示框的标准用法。不出现在目录里。"><meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Noto+Serif+SC:wght@400;600;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,800;1,8..60,400&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.css">
+<link rel="stylesheet" href="css/site.css">
+<link rel="stylesheet" href="css/pygments.css">
+<script>
+  try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+</head>
+<body data-slug="kitchen" data-packages="[&quot;numpy&quot;]">
+<a class="skip" href="#main">跳到正文</a>
+<header class="topbar">
+  <button class="nav-toggle" type="button" aria-controls="nav" aria-expanded="false">目录</button>
+  <a class="book-title" href="index.html">从零构建大语言模型</a>
+  <div class="topbar-tools">
+    <span class="verify-counter" hidden></span>
+    <button class="run-all" type="button" hidden><span class="label-long">运行本页全部验证</span><span class="label-short">全部验证</span></button>
+    <button class="theme-toggle" type="button" aria-label="切换明暗主题"><span class="label-long">明 / 暗</span><span class="label-short">◐</span></button>
+  </div>
+</header>
+<div class="layout">
+  <nav id="nav" class="nav" aria-label="章节"><ol class="nav-chapters"><li class="kind-chapter"><a href="ch00.html"><span class="nav-num">0</span>LLM 是如何炼成的</a></li><li class="kind-part"><a href="part1.html">第 I 部 基础篇：制作 CodeBot</a></li><li class="kind-chapter"><a href="ch01.html"><span class="nav-num">1</span>分词器【基础篇】</a></li><li class="kind-chapter"><a href="ch02.html"><span class="nav-num">2</span>模型【基础篇】</a></li><li class="kind-chapter"><a href="ch03.html"><span class="nav-num">3</span>训练【基础篇】</a></li><li class="kind-part"><a href="part2.html">第 II 部 应用篇：制作 StoryBot</a></li><li class="kind-chapter"><a href="ch04.html"><span class="nav-num">4</span>分词器【应用篇】</a></li><li class="kind-chapter"><a href="ch05.html"><span class="nav-num">5</span>模型【应用篇】</a></li><li class="kind-chapter"><a href="ch06.html"><span class="nav-num">6</span>训练【应用篇】</a></li><li class="kind-part"><a href="part3.html">第 III 部 挑战篇：制作 WebBot</a></li><li class="kind-chapter"><a href="ch07.html"><span class="nav-num">7</span>分词器【挑战篇】</a></li><li class="kind-chapter"><a href="ch08.html"><span class="nav-num">8</span>模型【挑战篇】</a></li><li class="kind-chapter"><a href="ch09.html"><span class="nav-num">9</span>训练【挑战篇】</a></li><li class="nav-group"><span class="nav-group-label">附录</span></li><li class="kind-appendix"><a href="appendix-a.html"><span class="nav-num">A</span>UTF-8 编码的原理</a></li><li class="kind-appendix"><a href="appendix-b.html"><span class="nav-num">B</span>Attention 缩放效果的证明</a></li><li class="kind-appendix"><a href="appendix-c.html"><span class="nav-num">C</span>带基线策略梯度的无偏性证明</a></li><li class="kind-appendix"><a href="appendix-d.html"><span class="nav-num">D</span>Adam 的偏差校正</a></li><li class="kind-appendix"><a href="appendix-e.html"><span class="nav-num">E</span>DPO 最优解的推导</a></li><li class="nav-group"><span class="nav-group-label">实践与参考</span></li><li class="kind-extra"><a href="playground.html"><span class="nav-num">P</span>CodeBot 工作台</a></li><li class="kind-extra"><a href="train-in-browser.html"><span class="nav-num">T</span>浏览器里训练迷你 GPT</a></li><li class="kind-extra"><a href="gpu.html"><span class="nav-num">G</span>GPU 实战手册</a></li><li class="kind-extra"><a href="cs336.html"><span class="nav-num">X</span>CS336 对照总表</a></li><li class="kind-extra"><a href="glossary.html"><span class="nav-num">Y</span>术语与命名对照</a></li><li class="kind-extra"><a href="errata.html"><span class="nav-num">Z</span>已知问题与修复</a></li></ol></nav>
+  <main id="main" class="page">
+    <article class="chapter"><header class="chapter-head"><div class="chapter-num">K</div><h1>组件样板间</h1><p class="chapter-lede">给作者看的活样板：每种组件与提示框的标准用法。不出现在目录里。</p></header><h2 id="sK-1">K.1 共享图表</h2>
+<p>折线图：两条曲线、参考线、十字准线与数据表。</p>
+<figure class="widget" id="fig-K-1" data-widget="kitchen-charts" data-config="{}"><div class="widget-mount"><noscript>此交互图需要 JavaScript。</noscript></div><figcaption><span class="fignum">图 K-1</span>共享图表库 _plot.js 的三种图：折线、柱状、热力图。</figcaption></figure><h2 id="sK-2">K.2 验证单元</h2>
+<div class="verify" id="v-K.1-a" data-cell="{&quot;id&quot;: &quot;K.1-a&quot;, &quot;golden&quot;: &quot;[1. 1. 1.]\n&quot;, &quot;files&quot;: []}"><div class="verify-head"><span class="verify-id">验证 K.1-a</span><span class="verify-title">softmax 每行之和为 1，且对平移不变</span><button class="verify-run" type="button">在浏览器中运行</button></div><pre class="code verify-code"><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">softmax</span><span class="p">(</span><span class="n">x</span><span class="p">):</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">x</span> <span class="o">-</span> <span class="n">x</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">e</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">e</span> <span class="o">/</span> <span class="n">e</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">s</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">))</span>
+<span class="n">p</span> <span class="o">=</span> <span class="n">softmax</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">array2string</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">),</span> <span class="n">precision</span><span class="o">=</span><span class="mi">6</span><span class="p">))</span>
+<span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">),</span> <span class="mi">1</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">softmax</span><span class="p">(</span><span class="n">s</span> <span class="o">+</span> <span class="mf">100.0</span><span class="p">),</span> <span class="n">p</span><span class="p">)</span>
+</code></pre><textarea class="verify-src" hidden>import numpy as np
+
+def softmax(x):
+    x = x - x.max(axis=-1, keepdims=True)
+    e = np.exp(x)
+    return e / e.sum(axis=-1, keepdims=True)
+
+rng = np.random.default_rng(0)
+s = rng.normal(size=(3, 5))
+p = softmax(s)
+print(np.array2string(p.sum(axis=-1), precision=6))
+assert np.allclose(p.sum(axis=-1), 1)
+assert np.allclose(softmax(s + 100.0), p)
+</textarea><div class="verify-out"><div class="verify-out-label">构建时的输出（Python 3.14 + NumPy 2.4.6）</div><pre>[1. 1. 1.]
+</pre></div><div class="seal" aria-live="polite" data-state="idle" title="点击运行此验证"><span>验</span></div></div><h2 id="sK-3">K.3 提示框</h2>
+<aside class="callout callout-note"><div class="callout-title"><span class="callout-kind">注</span></div>
+<p>补充说明，比如术语的由来。</p>
+</aside>
+<aside class="callout callout-warn"><div class="callout-title"><span class="callout-kind">注意</span><span class="callout-text">不要在 transpose 之后直接 view</span></div>
+<p>注意事项。</p>
+</aside>
+<aside class="callout callout-column"><div class="callout-title"><span class="callout-kind">专栏</span><span class="callout-text">专栏标题</span></div>
+<p>专栏正文可以比较长，适合放与主线解耦的话题。</p>
+</aside>
+<aside class="callout callout-cs336"><div class="callout-title"><span class="callout-kind">CS336 对照</span><span class="callout-text">A1 §3.5.4 scaled_dot_product_attention</span></div>
+<p>CS336 对照的写法。</p>
+</aside>
+<aside class="callout callout-confusion"><div class="callout-title"><span class="callout-kind">你可能会困惑</span><span class="callout-text">pg_loss 接近 0 是不是说明没在学？</span></div>
+<p>先承认这个直觉为什么自然，再用一个能手算的例子把它拆开。</p>
+</aside>
+<aside class="callout callout-gpu"><div class="callout-title"><span class="callout-kind">GPU 实验</span><span class="callout-text">在本机 RTX 3060 Ti 上运行</span></div>
+<pre class="code" data-lang="shell"><code>uv<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>third_party/dlfs6/ch03/01_pretrain.py
+</code></pre>
+</aside>
+<aside class="callout callout-think"><div class="callout-title"><span class="callout-kind">想一想</span><span class="callout-text">把温度设成 0.01 会发生什么？</span></div>
+</aside>
+<details class="callout callout-answer"><summary>答案（先想一想再展开）</summary>
+<p>logits 除以一个很小的数，softmax 退化成 argmax……</p>
+</details>
+</article>
+  </main>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/katex.min.js" defer></script>
+<script type="module" src="js/runtime.js"></script>
+</body>
+</html>

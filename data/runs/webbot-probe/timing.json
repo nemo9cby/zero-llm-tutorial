@@ -1,0 +1,6 @@
+{
+ "first_step_s": 141,
+ "steady_s_per_step_20_200": 0.3167,
+ "tokens_per_step": 131072,
+ "note": "from tqdm elapsed times in the raw log (1 s resolution); step 0->1 includes torch.compile and the step-0 evaluation"
+}

@@ -1,0 +1,61 @@
+{
+ "scripts": 11,
+ "total": 38,
+ "totals": {
+  "defaultdict": 1,
+  "exact": 30,
+  "repr": 3,
+  "stale": 1,
+  "torch.Size": 3
+ },
+ "per_script": {
+  "ch01/01_char_tokenizer.py": {
+   "exact": 6,
+   "repr": 2
+  },
+  "ch01/02_byte_tokenizer.py": {
+   "exact": 6,
+   "repr": 1
+  },
+  "ch01/03_bpe_train.py": {
+   "defaultdict": 1,
+   "exact": 2
+  },
+  "ch01/04_bpe_tokenizer.py": {
+   "exact": 2
+  },
+  "ch01/05_special_token.py": {
+   "exact": 1
+  },
+  "ch02/01_soft_dict.py": {
+   "exact": 1
+  },
+  "ch02/08_multi_head.py": {
+   "torch.Size": 2
+  },
+  "ch03/03_alpaca.py": {
+   "exact": 2,
+   "stale": 1
+  },
+  "ch05/01_rope.py": {
+   "torch.Size": 1
+  },
+  "ch05/04_improved_gpt.py": {
+   "exact": 1
+  },
+  "ch06/04_mixed_precision.py": {
+   "exact": 9
+  }
+ },
+ "stale": [
+  {
+   "script": "ch03/03_alpaca.py",
+   "line": 31,
+   "index": 30,
+   "comment": 930,
+   "actual": 932,
+   "comment_token": "alize",
+   "actual_token": " you"
+  }
+ ]
+}

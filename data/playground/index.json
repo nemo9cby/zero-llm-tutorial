@@ -1,0 +1,34 @@
+{
+ "checkpoints": [
+  {
+   "name": "pretrain",
+   "label": "预训练",
+   "description": "本书在 RTX 3060 Ti 上原样运行 ch03/01_pretrain.py 得到的权重：只会续写代码。",
+   "template": null,
+   "order": 0,
+   "manifest": "pretrain/manifest.json",
+   "ref": "pretrain/ref.json",
+   "bytes": 11277120
+  },
+  {
+   "name": "sft",
+   "label": "SFT",
+   "description": "在预训练权重的基础上原样运行 ch03/03_sft.py：学会了按 Alpaca 模板作答。",
+   "template": "alpaca",
+   "order": 1,
+   "manifest": "sft/manifest.json",
+   "ref": "sft/ref.json",
+   "bytes": 11277120
+  },
+  {
+   "name": "grpo",
+   "label": "GRPO",
+   "description": "在 SFT 权重上原样运行 ch03/09_grpo.py：个位数加法答得更准。",
+   "template": "alpaca",
+   "order": 2,
+   "manifest": "grpo/manifest.json",
+   "ref": "grpo/ref.json",
+   "bytes": 11277120
+  }
+ ]
+}

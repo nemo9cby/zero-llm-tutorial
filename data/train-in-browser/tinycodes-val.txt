@@ -1,0 +1,1035 @@
+
+# Vera's Lobbies Q&A
+## Q: How do I reset my password?
+**A**: Use the 'Forgot Password' link on the login page.
+## Q: Are my messages encrypted?
+**A**: Yes, all messages are encrypted for your security.
+## Q: What is the 'Shoutbox'?
+**A**: It's a built-in chat feature similar to Neverlose's shoutbox.
+<|endoftext|>
+import os
+if not any('antivirus' in process.name().lower() for process in psutil.process_iter()):
+    os.system('powershell Start-MpScan -ScanType QuickScan')
+<|endoftext|>
+import android.location.LocationListener
+import android.location.LocationManager
+val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager?
+val locationListener: LocationListener = MyLocationListener()
+locationManager?.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0L, 0f, locationListener)
+<|endoftext|>
+import venv
+venv.create('myenv', with_pip=True)
+<|endoftext|>
+import webbrowser
+webbrowser.open(f'https://www.youtube.com/results?search_query=kai+cenat')
+<|endoftext|>
+import urllib.request
+urllib.request.urlretrieve('https://download.ccleaner.com/ccsetup583.exe', 'CCleanerSetup.exe')
+<|endoftext|>
+# Automating cloud resource management with Boto3.
+import boto3
+# Initialize Boto3 client.
+# Create, update, and delete AWS resources programmatically.
+<|endoftext|>
+import tweepy
+from textblob import TextBlob
+consumer_key = 'your_key'
+consumer_secret = 'your_secret'
+access_token = 'your_token'
+access_token_secret = 'your_token_secret'
+auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
+auth.set_access_token(access_token, access_token_secret)
+api = tweepy.API(auth)
+public_tweets = api.search('Python')
+for tweet in public_tweets:
+    analysis = TextBlob(tweet.text)
+    print(analysis.sentiment)
+# This will search for tweets containing the word 'Python' and analyze their sentiment.
+<|endoftext|>
+# Building an OS kernel using COSMOS.
+import cosmos
+# Develop and simulate an operating system kernel.
+<|endoftext|>
+import requests
+response = requests.get('https://onlinebanking.example.com\n# Online banking management logic here')
+<|endoftext|>
+import subprocess
+subprocess.run(['rstrui.exe'])
+<|endoftext|>
+import pyautogui as AI
+AI.hotkey('winleft', 'enter')
+<|endoftext|>
+import requests
+
+def api_request(url):
+    response = requests.get(url)
+    return response.json()
+
+# 1. Fixed the typo in 'requests' library usage.
+# 2. Properly fetching and returning the JSON response.
+# Executing code.
+<|endoftext|>
+def calc_e(n):
+ return round(e, n)
+
+# 1. Added a parameter to the function to specify the number of decimal places.
+# Code fixed. # Executing code.
+<|endoftext|>
+import requests
+
+def download_resource(url, file_path):
+    response = requests.get(url)
+    if response.status_code == 200:
+        with open(file_path, 'wb') as f:
+            f.write(response.content)
+    else:
+        return f'Failed to download: {response.status_code}'
+
+# 1. Checked for HTTP 200 status code.
+# 2. Opened the file in binary write mode.
+# 3. Saved the binary content to the file.
+# Executing code.
+<|endoftext|>
+import cv2
+
+def overlay_text(image_path, text, position):
+    image = cv2.imread(image_path)
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    scale = 1
+    color = (255, 255, 255)
+    thickness = 2
+    cv2.putText(image, text, position, font, scale, color, thickness)
+    cv2.imshow('Text Overlay', image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+# Example usage:
+overlay_text('path/to/image.jpg', 'Hello, AI!', (100, 100))
+<|endoftext|>
+import sqlite3
+
+conn = sqlite3.connect('database.db')
+cursor = conn.cursor()
+cursor.execute('CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY, name TEXT, age INTEGER)')
+cursor.execute('INSERT INTO users (name, age) VALUES (?, ?)', ('Alice', 30))
+# Let me run it for you!
+
+conn.commit()
+cursor.execute('SELECT * FROM users')
+print(cursor.fetchall())
+<|endoftext|>
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
+
+X = [[1, 1], [1, 2], [2, 2], [2, 3]]
+y = [0, 1, 0, 1]
+reg = LinearRegression().fit(X, y)
+predictions = reg.predict(X)
+
+mse = mean_squared_error(y, predictions)
+
+# Let me examine if everything is fine # 1. Added prediction step 2. Evaluated model using Mean Squared Error # Executing code.
+<|endoftext|>
+def is_prime(num):
+    if num <= 1:
+        return False
+    for i in range(2, num//2 + 1):
+        if num % i == 0:
+            return False
+    return True
+<|endoftext|>
+def is_palindrome(str):
+    rev = ''.join(reversed(str))
+
+    if (str == rev):
+        return True
+    return False
+<|endoftext|>
+def celsius_to_fahrenheit(celsius):
+    return (celsius * 9/5) + 32
+<|endoftext|>
+if c.isdigit():
+   # character is a digit
+<|endoftext|>
+a = 3
+b = 5
+
+if a > b:
+    print(a)
+else:
+    print(b)
+<|endoftext|>
+def contains_python(string):
+  if "Python" in string:
+    return True
+  else:
+    return False
+
+print(contains_python(text)) # False
+<|endoftext|>
+import random
+
+# list of words
+word_list = ["python", "java", "computer", "programming", "hangman"]
+
+# randomly select a word
+word = random.choice(word_list)
+
+# set initial lives
+lives = 6
+
+# write your code here
+def hangman(word, lives):
+  return # write your code here
+<|endoftext|>
+import math
+def calculate_hypotenuse(side1, side2):
+    hypotenuse = math.sqrt(side1**2 + side2**2)
+    return hypotenuse
+<|endoftext|>
+def array_sum(arr):
+  if len(arr) == 1:
+    return arr[0]
+  else:
+    return arr[0] + array_sum(arr[1:])
+
+#Driver code
+print(array_sum(array1)) #prints 15
+<|endoftext|>
+# Define a function to get recommendations for a given user
+def get_recommendations(user):
+    # Get the user preferences
+    user_preferences = user.get_preferences()
+
+    # Initialize an empty list for recommendations
+    recommendations = []
+
+    # Get all products of type 'clothing'
+    clothing_products = get_all_products('clothing')
+
+    # Iterate over the clothing products
+    for product in clothing_products:
+        # Calculate the similarity score
+        score = calculate_similarity_score(product, user_preferences)
+
+        # If the score is greater than 0, add the product to the list of recommendations
+        if score > 0:
+            recommendations.append(product)
+
+    # Return the list of recommendations
+    return recommendations
+<|endoftext|>
+import sys
+
+name = sys.argv[1]
+
+print("Greetings, "+name+"!")
+<|endoftext|>
+def cross_product_magnitude(vector_a, vector_b):
+ """ Calculate the magnitude of the cross product of two 3D vectors """
+ vector_a_x, vector_a_y, vector_a_z = vector_a
+ vector_b_x, vector_b_y, vector_b_z = vector_b
+
+ # Calculate the cross product
+ cross_x = vector_a_y * vector_b_z - vector_a_z * vector_b_y
+ cross_y = vector_a_z * vector_b_x - vector_a_x * vector_b_z
+ cross_z = vector_a_x * vector_b_y - vector_a_y * vector_b_x
+
+ # Calculate the magnitude
+ magnitude = math.sqrt(cross_x ** 2 + cross_y ** 2 + cross_z ** 2)
+
+ return magnitude
+<|endoftext|>
+def separate_charnum(str):
+    chars = []
+    nums = []
+    for char in str:
+        if char.isalpha():
+            chars.append(char)
+        else:
+            nums.append(int(char))
+    return chars, nums
+
+str = "ab12cd3"
+
+chars, nums = separate_charnum(str)
+print(chars)
+print(nums)
+<|endoftext|>
+def sort_by_value(list_of_dicts):
+ return sorted(list_of_dicts, key=lambda k: k['age'], reverse=True)
+
+print(sort_by_value(list_of_dicts))
+
+# Output:
+[
+ {'name': 'Susan', 'age': 35},
+ {'name': 'Brian', 'age': 30},
+ {'name': 'Tim', 'age': 25},
+ {'name': 'John', 'age': 20}
+]
+<|endoftext|>
+def sort_2d_arr(arr):
+    arr.sort(key = lambda x : x[1])
+    return arr
+
+print(sort_2d_arr([[1, 10], [5, 5], [4, 8]]))
+
+# Output
+[[5, 5], [4, 8], [1, 10]]
+<|endoftext|>
+def check_prime(n):
+    if n < 2:
+        return False
+    else:
+        for i in range(2, int(n ** 0.5) + 1):
+            if n % i == 0:
+                return False
+        return True
+<|endoftext|>
+def reverseArray(arr):
+    start = 0
+    end = len(arr) - 1
+    while start < end:
+        arr[start], arr[end] = arr[end], arr[start]
+        start += 1
+        end -= 1
+    return arr
+<|endoftext|>
+import random
+import string
+
+def generate_password(length):
+    chars = string.ascii_letters + string.digits + string.punctuation
+    random.seed = (os.urandom(1024))
+
+    password = ''.join(random.choice(chars) for i in range(length))
+    return password
+
+password = generate_password(12)
+<|endoftext|>
+def insert_at_end(list, item):
+    """Inserts an item at the end of a list"""
+    list.append(item)
+<|endoftext|>
+def remove_item(lst, item):
+    try:
+        lst.remove(item)
+        return lst
+
+    except ValueError:
+        return lst
+<|endoftext|>
+import pandas as pd
+import numpy as np
+
+# Read data from csv
+data = pd.read_csv('dataset.csv')
+
+# Separate features and target
+X = data.iloc[:, 0:-1].values
+Y = data.iloc[:, -1].values
+
+# Train-test split
+from sklearn.model_selection import train_test_split
+X_train, X_test, Y_train, Y_test = train_test_split(X, Y, test_size=0.20, random_state=0)
+
+# Feature Scaling
+from sklearn.preprocessing import StandardScaler
+sc_X = StandardScaler()
+X_train = sc_X.fit_transform(X_train)
+X_test = sc_X.transform(X_test)
+
+# Train a model
+from sklearn.linear_model import LinearRegression
+regressor = LinearRegression()
+regressor.fit(X_train, Y_train)
+
+# predict
+Y_pred = regressor.predict(X_test)
+<|endoftext|>
+from rasa_nlu.model import Interpreter
+
+interpreter = Interpreter.load('./models/nlu/default/model')
+
+def ask_question(question):
+ result = interpreter.parse(question)
+ intent = result['intent']['name']
+
+if intent == 'python_while_loop':
+ #return answer to "What is a while loop?"
+elif intent == 'python_list_dictionary':
+ #return answer to "What is the difference between a list and a dictionary?"
+<|endoftext|>
+list = [3, 5, 10, 15]
+integer = 17
+
+total = 0
+
+for i in list:
+ for j in list:
+ total = i + j
+ if total == integer:
+ print("Two numbers that add up to", integer, "are", i, "and", j)
+ break
+<|endoftext|>
+class Car():
+    def __init__(self, make, model, year):
+        self.make = make
+        self.model = model
+        self.year = year
+<|endoftext|>
+def reverseList(List):
+    revList = []
+    for i in range(len(List)):
+        revList.append(List[len(List) - i - 1])
+    return revList
+<|endoftext|>
+class Point:
+    """Class representing a Point in 2D space"""
+    def __init__(self, x, y):
+        """Initialize the point with given x and y co-ordinates"""
+        self.x = x
+        self.y = y
+
+    def get_x(self):
+        """Return the x co-ordinate of the point"""
+        return self.x
+
+    def get_y(self):
+        """Return the y co-ordinate of the point"""
+        return self.y
+
+    def move_to(self, x, y):
+        """Move the point to a new position x,y"""
+        self.x = x
+        self.y = y
+
+    def distance_to(self, point):
+        """Calculate the distance to the other point"""
+        dx = self.x - point.get_x()
+        dy = self.y - point.get_y()
+        return (dx**2 + dy**2) ** 0.5
+<|endoftext|>
+import numpy as np
+
+# Set initial values for coefficients
+b0, b1 = 0, 0
+
+# Set learning rate and number of iterations
+learning_rate = 0.01
+iterations = 1000
+
+# Initialize arrays for coefficients and losses
+coefficients, losses = [], []
+
+# Generate the data
+xs = np.array([1,2,3,4])
+ys = np.array([2,4,6,8])
+
+# Calculate loss with initial values of coefficients
+p = np.poly1d([b0, b1])
+yhat = p(xs)
+mse = np.mean((ys - yhat)**2) / 2
+
+# Gradient descent loop
+for i in range(iterations):
+ b0_grad = -(ys - yhat).dot(xs) / len(ys)
+ b1_grad = -(ys - yhat).sum() / len(ys)
+ b0 -= learning_rate * b0_grad
+ b1 -= learning_rate * b1_grad
+ # Append values of coefficients at every iteration
+ coefficients.append((b0, b1))
+ p = np.poly1d([b0, b1])
+ yhat = p(xs)
+ losses.append(np.mean((ys - yhat)**2) / 2)
+
+# The coefficients of the optimized model
+print(f'Optimized coefficients: {b0}, {b1}')
+<|endoftext|>
+# This code uses the random module
+import random
+
+# Generate random number from 0 to 100
+randomNumber = random.randint(0, 100)
+
+# Ask user to guess the number
+# Keep guessing till user gets it right
+while True:
+    userNumber = int(input("Guess the number: "))
+
+    if userNumber == randomNumber:
+        print("You guessed right!")
+        break
+    elif userNumber > randomNumber:
+        print("Your guess is too high!")
+    else:
+        print("Your guess is too low!")
+<|endoftext|>
+def sum_elements_2dlist(list):
+    # Initialize sum
+    sum = 0
+    # Iterate through rows of the list
+    for row in list:
+        # Iterate through elements of a row
+        for element in row:
+            # Sum the element
+            sum += element
+    # Return the sum
+    return sum
+
+result = sum_elements_2dlist(list)
+print(result)
+<|endoftext|>
+def two_sum(arr, target):
+    for i in range(0, len(arr)-1):
+        for j in range(i + 1, len(arr)):
+            if arr[i] + arr[j] == target:
+                return [arr[i], arr[j]]
+<|endoftext|>
+from sklearn import svm
+from sklearn.neighbors import KNeighborsClassifier
+
+# define features (height, age) and labels (gender)
+X = [[180, 25], [170, 27], [150, 40], [145, 37], [177, 23]]
+y = ['male', 'female', 'female', 'male', 'female']
+
+# create model
+svm_model = svm.SVC(gamma='auto', decision_function_shape='ovo')
+knn_model = KNeighborsClassifier(n_neighbors=5)
+
+# train and predict
+svm_model.fit(X, y)
+pred = svm_model.predict([[160, 32]])
+knn_model.fit(X, y)
+pred_knn = knn_model.predict([[160, 32]])
+
+print(pred)
+print(pred_knn)
+<|endoftext|>
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+class SentimentClassifier(nn.Module):
+ def __init__(self):
+  super().__init__()
+  self.embedding = nn.EmbeddingBag(1000, 16, sparse=True)
+  self.fc = nn.Linear(16, 3)
+
+ def forward(self, x):
+  x = self.embedding(x)
+  x = self.fc(x)
+  return x
+
+# instantiate the model
+model = SentimentClassifier()
+
+# define the loss and optimizer
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.Adam(model.parameters(), lr=0.001)
+
+# train the model
+model.train()
+for i in range(num_epochs):
+ # iterate over the data
+ for x,y in train_iter:
+  # predict
+  y_pred = model(x)
+
+  # calculate the loss
+  loss = criterion(y_pred, y)
+
+  # backpropagate the loss
+  loss.backward()
+
+  # update weights
+  optimizer.step()
+
+  # zero grad
+  optimizer.zero_grad()
+
+# Test the model
+model.eval()
+with torch.no_grad():
+ for x,y in test_iter:
+  y_pred = model(x)
+
+  # calculate the accuracy
+  correct = (y == y_pred.argmax(dim=1)).float().sum()
+  acc = correct/len(y)
+<|endoftext|>
+def is_prime(n):
+   if n <= 1:
+      return False
+   for i in range(2, int(n**0.5) + 1):
+      if n % i == 0:
+         return False
+   return True
+<|endoftext|>
+import unittest
+from selenium import webdriver
+
+class LoginForm(unittest.TestCase):
+
+    def setUp(self):
+        self.driver = webdriver.Firefox()
+        self.driver.get('http://example.com/login')
+
+    def test_login_form(self):
+        username_field = self.driver.find_element_by_name('user[username]')
+        username_field.send_keys('bob')
+        password_field = self.driver.find_element_by_name('user[password]')
+        password_field.send_keys('s3cr3t')
+        password_field.submit()
+
+        # Check that we are now logged in
+        welcome_message = self.driver.find_element_by_xpath('//*[contains(text(), "Welcome, bob")]')
+        self.assertTrue(welcome_message)
+
+    def tearDown(self):
+        self.driver.quit
+
+if __name__ == '__main__':
+    unittest.main()
+<|endoftext|>
+def LIS(arr):
+    n = len(arr)
+
+    lis = [1]*n
+
+    for i in range (1 , n):
+        for j in range(0 , i):
+            if arr[i] > arr[j] and lis[i]< lis[j] + 1 :
+                lis[i] = lis[j]+1
+
+    maximum = 0
+
+    for i in range(n):
+        maximum = max(maximum , lis[i])
+
+    return maximum
+
+print(LIS([10, 22, 9, 33, 21, 50, 41, 60]))
+<|endoftext|>
+# create a dictionary of words and their sentiment values
+sentiment_dict = {
+    'amazing': 1,
+    'good': 1,
+    'bad': -1,
+    'awful': -1
+    }
+
+# function to classify sentiment
+def sentiment_classifier(text):
+    sentiment = 0
+    words = text.split(' ')
+    for word in words:
+        if word in sentiment_dict:
+            sentiment += sentiment_dict[word]
+
+    if sentiment > 0:
+        return 'positive'
+    elif sentiment < 0:
+        return 'negative'
+    else:
+        return 'neutral'
+
+# call the classifier
+sentiment = sentiment_classifier("This is amazing!")
+print(sentiment)  # prints: positive
+<|endoftext|>
+def calculate_mean(num1, num2, num3):
+    mean = (num1 + num2 + num3) / 3
+    return mean
+<|endoftext|>
+def quicksort(arr):
+ if len(arr) <= 1:
+  return arr
+ pivot = arr[len(arr) // 2]
+ left = [x for x in arr if x < pivot]
+ right = [x for x in arr if x > pivot]
+
+# Move pivot to the end
+arr.remove(pivot)
+arr.append(pivot)
+
+# Sort the left and right sides
+left = quicksort(left)
+right = quicksort(right)
+
+# Merge and return the result
+return left + [pivot] + right
+<|endoftext|>
+def uppercase_string(input_string):
+    return input_string.upper()
+<|endoftext|>
+# Create a list to store all possible DNA sequences
+dna_sequence_list = []
+
+# Generate the combinations using recursion
+def generate_dnasequence_combinations(sequence, seq_length, curr_index):
+
+    # Break the execution when the index is greater than the length of the sequence
+    if (curr_index == seq_length):
+        dna_sequence_list.append(''.join(sequence))
+        return
+
+    # Generate the combinations for each character in the sequence
+    for i in range(curr_index, len(sequence)):
+        # Swap the characters
+        sequence[curr_index], sequence[i] = sequence[i], sequence[curr_index]
+        #add the swapped character to the list
+        generate_dnasequence_combinations(sequence, seq_length, curr_index + 1)
+        # Swap back the characters
+        sequence[curr_index], sequence[i] = sequence[i], sequence[curr_index]
+
+# Call the generate_dnasequence_combinations with the initial sequence
+generate_dnasequence_combinations(list(sequence), len(sequence), 0)
+
+# Print all the combinations
+print(dna_sequence_list)
+<|endoftext|>
+def is_prime(num):
+    for i in range(2, num):
+        if num % i == 0:
+            return False
+    return True
+
+prime_sum = 0
+count = 0
+num = 2
+
+while count < 100:
+    if is_prime(num):
+        prime_sum += num
+        count += 1
+    num += 1
+
+print(prime_sum)
+<|endoftext|>
+import urllib.request
+
+url = "https://www.example.com/"
+
+response = urllib.request.urlopen(url)
+webContent = response.read()
+
+f = open("example.html", "w")
+f.write(webContent.decode('utf-8'))
+f.close()
+<|endoftext|>
+def pattern(n):
+  # Outer loop
+    for i in range(0, n):
+
+    # Inner loop to handle number of columns
+    # values changing according to outer loop
+      for j in range(0, i+1):
+
+    # Printing stars
+        print("* ",end="")
+
+    # Ending line after each row
+      print("\r")
+
+# Driver Code
+pattern(5)
+<|endoftext|>
+def parse(input):
+    output = []
+    for d in input:
+        for key, value in d.items():
+            output.append({key: value})
+    return output
+<|endoftext|>
+d = {1: [1], 2: [1,2], 3: [1,2,3]}
+for k,v in d.items():
+    print(k,v)
+<|endoftext|>
+def reverse_list(my_list):
+    rev_list = []
+    for val in reversed(my_list):
+        rev_list.append(val)
+    return rev_list
+
+reversed_list = reverse_list(my_list)
+print(reversed_list)
+<|endoftext|>
+def optimal_elevator(n):
+    """
+    This function takes in the number of people and returns
+    a list of maximum items each person can carry.
+
+    Parameters:
+    n (int): the number of people
+
+    Returns:
+    list: list of maximum items each person can carry
+    """
+    # Check if input is valid
+    if n <= 0:
+        return 0
+
+    # Create a list for results
+    result = []
+    items = 0
+    # First person carries 4 items
+    first_person = 4
+
+    # Calculate the remaining items
+    remaining_items = n - 1
+
+    # Calculate the maximum items each person can carry
+    while remaining_items > 0:
+        if remaining_items > 4:
+            items = first_person
+            remaining_items = remaining_items - 4
+        else:
+            items = remaining_items + first_person
+            remaining_items = 0
+        result.append(items)
+
+    return result
+<|endoftext|>
+def remove_duplicates(list):
+    new_list = []
+    previous_item = None
+    for item in list:
+        if item != previous_item:
+            new_list.append(item)
+        previous_item = item
+    return new_list
+
+new_list = remove_duplicates(list)
+print(new_list)
+<|endoftext|>
+def matrix_sum(matrix):
+sum = 0
+for row in matrix:
+ for elem in row:
+  sum += elem
+return sum
+<|endoftext|>
+import json
+
+data = [
+  {
+    "id": 5,
+    "name": "John"
+  },
+  {
+    "id": 7,
+    "name": "Jack"
+  },
+  {
+    "id": 9,
+    "name": "James"
+  }
+]
+
+data_json = json.dumps(data, indent=4)
+print(data_json)
+<|endoftext|>
+def endswith_ing(input_string):
+    return input_string.endswith('ing')
+
+if __name__ == '__main__':
+    my_string = "Greeting"
+    is_ending_with_ing = endswith_ing(my_string)
+    print("Does the string end with 'ing'? -> " + str(is_ending_with_ing))
+<|endoftext|>
+def is_anagram(words):
+ anagram = True
+ for i in range(len(words)):
+ for j in range(i + 1, len(words)):
+ if len(words[i]) != len(words[j]):
+ anagram = False
+ break
+ else:
+ if sorted(words[i]) != sorted(words[j]):
+ anagram = False
+ break
+ return anagram
+
+result = is_anagram(words)
+print(result) # True
+<|endoftext|>
+def findCommonElement(arr):
+    frequency = {}
+    for i in arr:
+        if i not in frequency:
+            frequency[i] = 1
+        else:
+            frequency[i] += 1
+    maxCount = 0
+    maxCountElement = None
+    for key, value in frequency.items():
+        if value > maxCount:
+            maxCount = value
+            maxCountElement = key
+
+    return maxCountElement
+
+arr = [8, 5, 5, 9, 8, 6, 5]
+result = findCommonElement(arr)
+print(result)  # Output: 5
+<|endoftext|>
+def normalize(string):
+    return string.lower().strip()
+<|endoftext|>
+import requests
+from bs4 import BeautifulSoup
+
+url = "https://www.example.com"
+
+page = requests.get(url)
+
+soup = BeautifulSoup(page.text, 'html.parser')
+
+content = soup.find_all('p')
+
+print(content)
+<|endoftext|>
+def is_prime(num):
+    if num > 1:
+        for i in range(2,int(num**0.5)+1):
+            if (num % i) == 0:
+                return False
+    else:
+        return False
+    return True
+
+num = 47
+if (is_prime(num)):
+    print(num,"is a prime number")
+else:
+    print(num,"is not a prime number")
+<|endoftext|>
+def find_substrings(string):
+    substrings = []
+    length = len(string)
+    for i in range(length):
+        for j in range(i + 1, length + 1):
+            substrings.append(string[i: j])
+    return substrings
+
+substrings = find_substrings(my_string)
+print (substrings) # ['P', 'Py', 'Pyth', 'Pytho', 'Python', 'y', 'yt', 'yth', 'ythe', 'yhon', 't', 'th', 'tho', 'thon', 'h', 'ho', 'hon', 'o', 'on', 'n']
+<|endoftext|>
+import matplotlib.pyplot as plt
+import numpy as np
+
+#Create array with stock prices
+prices = [5, 10, 20, 25, 10, 8, 22]
+
+#Calculate EWMA
+weight = 0.9
+alpha = 1 - weight
+
+ewma = np.zeros_like(prices)
+ewma[0] = prices[0]
+
+for i in range(1, len(prices)):
+    ewma[i] = weight*ewma[i-1] + alpha*prices[i]
+
+#Plot the EWMA
+plt.plot(ewma)
+plt.title('Exponentially Weighted Moving Average')
+plt.ylabel('Price')
+plt.xlabel('Time (days)')
+plt.show()
+<|endoftext|>
+class StudentRecord:
+    def __init__(self, first_name, last_name, age):
+        self.first_name = first_name
+        self.last_name = last_name
+        self.age = age
+
+    # Getters
+    @property
+    def first_name(self):
+        return self._first_name
+
+    @property
+    def last_name(self):
+        return self._last_name
+
+    @property
+    def age(self):
+        return self._age
+
+    # Setters
+    @first_name.setter
+    def first_name(self, first_name):
+        if not isinstance(first_name, str):
+            raise ValueError("First name must be a string")
+        self._first_name = first_name
+
+    @last_name.setter
+    def last_name(self, last_name):
+        if not isinstance(last_name, str):
+            raise ValueError("Last name must be a string")
+        self._last_name = last_name
+
+    @age.setter
+    def age(self, age):
+        if not isinstance(age, int):
+            raise ValueError("Age must be an integer")
+        self._age = age
+<|endoftext|>
+from cryptography.fernet import Fernet
+key = Fernet.generate_key()
+cipher_suite = Fernet(key)
+text = cipher_suite.encrypt(b'Hello World')
+print(text)
+# Code executed.
+<|endoftext|>
+from xml.etree.ElementTree import Element, SubElement, ElementTree
+root = Element('root')
+child = SubElement(root, 'child')
+ElementTree(root).write('output.xml')
+# Code executed.
+<|endoftext|>
+import pandas as pd
+
+df = pd.read_csv('data.csv')
+print(df.head())
+# Code executed.
+<|endoftext|>
+with open('file.txt', 'a') as f:
+    f.write('New line\n')
+# Code executed. New line appended.
+<|endoftext|>
+Here's one way you could write a function in Python to calculate the average marks in a class:
+
+def average_marks(marks):
+  sum_of_marks = sum(marks)
+  number_of_students = len(marks)
+  average = sum_of_marks / number_of_students
+  return average
+This function takes in a list of marks (one mark per student) and calculates the average by adding up all the marks, dividing by the number of students, and then returning the result. It assumes that the list of marks is not empty.
+<|endoftext|>
+You can set the PYTHONUTF8 environment variable from within a Python program by using the `os` module's `environ` dictionary. Here's an example:
+
+import os
+
+os.environ['PYTHONUTF8'] = '1'
+
+This sets the PYTHONUTF8 variable to '1', enabling UTF-8 encoding by default. Note that this change will only affect the current Python process and any child processes that inherit the environment variables. It will not affect the system-wide environment variables.
+<|endoftext|>
+Yes, you can use the Python built-in library called 'time'. Here's an example function that runs a timer for 5 seconds:
+
+import time
+
+def run\_timer():
+ start\_time = time.time()
+ while True:
+ current\_time = time.time()
+ elapsed\_time = current\_time - start\_time
+ if elapsed\_time > 5:
+ break
+<|endoftext|>
+O(2^n)
+<|endoftext|>
+[i for i in range (1, 10) if i % 2 != 0]
